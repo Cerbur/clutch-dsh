@@ -61,7 +61,9 @@ step tool admission、独立 native/PTC executor 和 `agent.model` owner。
 接缝混同为同一套请求可变性保证。浏览器验收使用独立 `DSH_HOME=~/.dsh-test`
 服务和临时 Git Workspace；不向业务仓库写入测试任务。
 
-侧栏导航通过正式 `sidebar.workspaces` 插槽挂载，沿用现有 footer 入口。
+侧栏导航通过正式 `sidebar.workspaces` 插槽挂载；模式入口由 `view/SidebarViewSwitch.tsx`
+portal 挂载到 DSH 公开的 Workspace 工具栏（`data-sidebar-workspace-header`）与窄栏列表区
+（`data-sidebar-list-area`），不再注册 `sidebar.footer.action`。
 `node --test test/sidebar-workspace-slot.test.mjs` 使用安装依赖中的真实 DSH SlotRegistry、
 React 和 jsdom，验证优先级替换、退出恢复、折叠、声明重建、卸载清理，以及主对话和
 共享 Surface owner 的身份保持。原生列表 renderer 的 owner props 由测试提供；它不替代

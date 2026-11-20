@@ -1049,13 +1049,19 @@ test('renders a retry surface instead of treating Worktree failures as an empty 
 });
 
 test('declares the Worktree locale seat and routes visible copy through t', async () => {
-  const actionSource = await readFile(
-    new URL('../src/client/view/WorktreeModeAction.tsx', import.meta.url),
+  const switchSource = await readFile(
+    new URL('../src/client/view/SidebarViewSwitch.tsx', import.meta.url),
+    'utf8',
+  );
+  const seatSource = await readFile(
+    new URL('../src/client/view/sidebar-workspace-slot.tsx', import.meta.url),
     'utf8',
   );
   const surfaceSource = (await readSurfaceSources()).combined;
 
-  assert.match(actionSource, /PropsLocale/);
+  assert.match(seatSource, /PropsLocale/);
+  assert.match(seatSource, /t\('mode\.exit'\)/);
+  assert.match(switchSource, /label: string/);
   assert.match(surfaceSource, /PropsLocale/);
   assert.match(surfaceSource, /WORKTREE_NS/);
   assert.match(surfaceSource, /formatWorktreeViewError/);
@@ -1446,9 +1452,17 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   assert.match(types, /readonly readError\?: WorktreeViewError/);
 });
 
-test('renders the Worktree footer action like the native Settings row', async () => {
-  const actionSource = await readFile(
-    new URL('../src/client/view/WorktreeModeAction.tsx', import.meta.url),
+test('mounts the Worktree entry in the native Workspace toolbar and rail', async () => {
+  const switchSource = await readFile(
+    new URL('../src/client/view/SidebarViewSwitch.tsx', import.meta.url),
+    'utf8',
+  );
+  const seatSource = await readFile(
+    new URL('../src/client/view/sidebar-workspace-slot.tsx', import.meta.url),
+    'utf8',
+  );
+  const overlaySource = await readFile(
+    new URL('../src/client/overlay/WorktreeOverlay.tsx', import.meta.url),
     'utf8',
   );
   const styleSource = await readFile(
@@ -1456,27 +1470,19 @@ test('renders the Worktree footer action like the native Settings row', async ()
     'utf8',
   );
 
-  assert.match(actionSource, /IconBranchOutline16/);
-  assert.match(actionSource, /<IconBranchOutline16 size=\{wide \? 16 : 18\} \/>/);
-  assert.match(
-    actionSource,
-    /wide && <span className=\{styles\.actionLabel\}>\{t\('mode\.label'\)\}<\/span>/,
-  );
-  assert.doesNotMatch(actionSource, /wide \? 'Worktree' : 'WT'/);
-  assert.match(styleSource, /\.action \{[\s\S]*justify-content: flex-start;[\s\S]*height: 42px;/);
-  assert.match(
-    styleSource,
-    /\.action\[data-collapsed='true'\] \{[\s\S]*width: 36px;[\s\S]*height: 36px;[\s\S]*border-radius: 50%;/,
-  );
-  const footerLabelStart = styleSource.indexOf('.actionLabel {');
-  const footerLabelEnd = styleSource.indexOf('\n}', footerLabelStart);
-  assert.notEqual(footerLabelStart, -1);
-  assert.notEqual(footerLabelEnd, -1);
-  assert.equal((styleSource.match(/\.actionLabel\s*\{/g) ?? []).length, 1);
-  assert.match(
-    styleSource.slice(footerLabelStart, footerLabelEnd),
-    /display: inline-flex;[\s\S]*min-width: 0;[\s\S]*align-items: center;[\s\S]*height: 22px;[\s\S]*font-weight: 400;[\s\S]*line-height: 22px;/,
-  );
+  assert.match(switchSource, /data-sidebar-workspace-header/);
+  assert.match(switchSource, /data-sidebar-list-area/);
+  assert.match(switchSource, /createPortal/);
+  assert.match(switchSource, /IconBranchOutline16/);
+  assert.match(switchSource, /data-worktree-mode-action/);
+  assert.match(overlaySource, /SidebarViewSwitch/);
+  assert.doesNotMatch(overlaySource, /sidebar\.footer\.action/);
+  assert.match(seatSource, /data-worktree-rail-exit/);
+  assert.match(seatSource, /switchViewMode\('workspace-session'\)/);
+  assert.match(styleSource, /\.headerSwitch \{[\s\S]*width: 28px;[\s\S]*height: 28px;/);
+  assert.match(styleSource, /\.railSwitch \{[\s\S]*width: 36px;[\s\S]*height: 36px;/);
+  assert.doesNotMatch(styleSource, /\.action \{/);
+  assert.doesNotMatch(styleSource, /\.actionLabel \{/);
 });
 
 test('does not render a plugin WT rail control when the sidebar collapses', async () => {

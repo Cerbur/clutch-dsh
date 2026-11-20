@@ -842,9 +842,13 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
 浮窗可见性同时依赖 Sidebar 的 `bounds.ready`：锚点丢失或几何失效时，即使 `collapsed=false`
 也关闭 portal 并释放计时和键盘监听；几何恢复不自动重开，等待用户再次点击铃铛。
 
-- Worktree 侧栏只通过 DSH `sidebar.workspaces` 插槽替换浏览区域。现有 footer 入口控制模式；
+- Worktree 侧栏只通过 DSH `sidebar.workspaces` 插槽替换浏览区域。模式入口位于原生 Workspace
+  工具栏（`data-sidebar-workspace-header`，宽侧栏）与窄栏列表区（`data-sidebar-list-area`，
+  收起状态），由 `view/SidebarViewSwitch.tsx` portal 挂载；不注册 `sidebar.footer.action`。
   Worktree 模式注册 `priority: -10` 的 seat，退出时释放注册，由 DSH 恢复原生 occupant。
-  不注销原生注册、不重复声明其子插槽、不按 DOM 顺序、数组下标、文字或坐标寻找挂载点。
+  不注销原生注册、不重复声明其子插槽、不按 DOM 顺序、数组下标、文字、私有类名或坐标寻找挂载点；
+  折叠状态只读取公开的 `data-sidebar-collapsed`。此方案取代 2026-08-21 的 footer action
+  视觉设计：模式入口不再注册到 `sidebar.footer.action`，其他插件的底栏行几何保持不变。
   Slot owner 的 `wide` 决定折叠状态；CSS 正常布局决定尺寸。仅测量插件自己的 seat 判断铃铛
   portal 是否可见，ResizeObserver 不负责定位，不修改原生节点的 style、inert 或 aria-hidden。
   列表通过 React portal 渲染到 seat；数据、操作、Hero 和 Dashboard owner 保持在持久的
@@ -852,10 +856,11 @@ Worktree 侧栏顶部提供浏览器本地的活跃范围选择器（今日 / �
   occupant 切换卸载，原生注册、Controller 和 Session 数据仍由 DSH 持有。导航透明背景继承
   原生侧栏材质。此方案取代历史计划的 New Session/footer 覆盖定位与侧栏遮蔽逻辑。
 - Dashboard 保留 browser-safe 的 `src/client/layout/app-frame.ts`：从触发源回溯
-  `[data-shell-overlay]`，再从插件 footer action 或公开 Sidebar pane 回溯 frame 直属侧栏；
+  `[data-shell-overlay]`，再从插件模式入口 marker `data-worktree-mode-action` 或公开 Sidebar pane
+  回溯 frame 直属侧栏；
   右栏只按 `[data-rightbar-col]` 和 `data-rightbar-collapsed` 定位，不要求物理相邻。Center
   无公开 marker，通过排除已知栏目及插槽、验证唯一覆盖内容轨道并延伸至 overlay 底部的有限矩形定位，
-  不遮蔽标题栏和 resize handle。侧栏列通过 footer action 或公开 pane 锚点定位，
+  不遮蔽标题栏和 resize handle。侧栏列通过模式入口 marker 或公开 pane 锚点定位，
   不猜测首尾子节点。合法的额外壳层节点与栏目 DOM 排序不影响定位。
   布局变动重新解析锚点，替换时释放旧遮蔽及观察；暂时无尺寸的候选保持观察以支持 resize 恢复。
   缺失、歧义或无效几何均恢复原生内容。此规则取代历史计划中的位置推断，不改变数据所有权和刷新作用域。

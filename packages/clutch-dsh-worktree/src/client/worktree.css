@@ -1,50 +1,125 @@
-.action {
-  display: flex;
+.headerSwitch {
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  width: calc(100% + 4px);
-  height: 42px;
-  margin: 4px -2px;
+  justify-content: center;
   box-sizing: border-box;
+  width: 28px;
+  height: 28px;
   border: 0;
-  border-radius: 12px;
-  padding: 0 10px 0 8px;
+  border-radius: var(--dsw-radius-sm);
+  padding: 0;
   background: transparent;
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  line-height: 22px;
-  text-align: left;
-  overflow: hidden;
 }
 
-.action:hover,
-.action[data-active='true'] {
+.headerSwitch:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.action[data-collapsed='true'] {
-  width: 36px;
-  height: 36px;
-  margin: 8px 0 10px;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border-radius: 50%;
+.headerSwitch:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
 }
 
-.actionLabel {
+.railSwitch {
+  flex: none;
   display: inline-flex;
-  min-width: 0;
   align-items: center;
-  height: 22px;
-  overflow: hidden;
-  font-weight: 400;
-  line-height: 22px;
-  white-space: nowrap;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  margin: 0 0 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  padding: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
 }
+
+.railSwitch:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.railSwitch:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.entryGuide {
+  position: fixed;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 280px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-button-elevated-fill);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 20%);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.entryGuideArrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  border-left: 1px solid var(--dsw-alias-border-l2);
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  transform: rotate(45deg);
+}
+
+.entryGuide[data-placement='below'] .entryGuideArrow {
+  top: -6px;
+}
+
+.entryGuide[data-placement='above'] .entryGuideArrow {
+  bottom: -6px;
+  transform: rotate(225deg);
+}
+
+.entryGuideTitle {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.entryGuideBody {
+  margin: 0 0 10px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.entryGuideDismiss {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 24px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  padding: 0 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.entryGuideDismiss:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.entryGuideDismiss:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
 
 .workspaceSeat {
   display: flex;

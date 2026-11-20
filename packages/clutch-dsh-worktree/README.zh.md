@@ -55,8 +55,12 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 
 ### 浏览任务
 
-点击侧栏底部的 **Worktree**，打开 Workspace 下的 Local/Main 或 Worktree 分组，
-选择会话继续对话。再次点击底部入口，可返回原生 Workspace 导航。
+点击 Workspace 标题栏中的分支按钮（侧栏折叠时使用窄栏中的按钮），打开 Workspace 下的
+Local/Main 或 Worktree 分组，选择会话继续对话。使用 Worktree 面板标题栏的退出按钮，
+或折叠状态下的窄栏退出按钮，可返回原生 Workspace 导航。
+
+入口旁会显示一次性引导，说明如何打开 Worktree 模式；关闭引导或直接进入模式后，该浏览器
+不再显示，因此此前已在 Worktree 模式中的用户会在首次退出后看到一次。
 
 使用**今天**、**24 小时**、**7 天**或**全部**筛选会话。运行中、等待交互和当前查看的会话
 始终可见。范围菜单支持隐藏不活跃分组、选择显示哪些时间范围。筛选不会归档或删除内容。

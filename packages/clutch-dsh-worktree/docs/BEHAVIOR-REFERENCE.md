@@ -81,7 +81,8 @@ An open Workspace containing the current Session uses the native blue folder; ot
 folders use the native gray. Hover over a long Session title or Worktree name to reveal its
 tail at native speed; leaving restores the start. Reduced motion reveals the tail immediately.
 
-1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
+1. Start DSH Web and select the branch control in the native Workspace header, or its control
+   in the collapsed rail.
 2. Search or select a Workspace in the Worktree tree.
 3. Select Local/Main or a Worktree to browse its Sessions. The view is additive; DSH's native
    Workspace and Session navigation remains available. Each group initially shows five rows;
@@ -89,13 +90,19 @@ tail at native speed; leaving restores the start. Reduced motion reveals the tai
 4. Use **Collapse All** in the header to collapse other unrelated Workspaces and Worktrees;
    the Workspace and Worktree containing the current Session remain expanded.
 
-Collapsing the native Sidebar also hides the Worktree panel on Web and desktop. macOS desktop
-keeps no collapsed rail; use the native titlebar control to reopen it. Row animation respects
+Collapsing the native Sidebar hides the full Worktree panel on Web and desktop; on Web the
+collapsed rail keeps a branch exit control so the mode stays recoverable. macOS desktop keeps
+no collapsed rail; use the native titlebar control to reopen it. Row animation respects
 reduced motion and settles immediately during search, drag, and initial loading.
 Worktree replaces only the Workspace browsing region through DSH's `sidebar.workspaces` slot.
 The brand, New Session button, plugin menus, footer, and current conversation stay in place.
-Select the same footer entry again to restore the native Workspace browser. Sidebar placement
-and folding follow DSH's slot contract, without locating native rows by text, DOM order, or coordinates.
+Use the surface header's exit control, or the rail exit while collapsed, to restore the native
+Workspace browser. The entry is mounted only inside DSH's documented
+`data-sidebar-workspace-header` and `data-sidebar-list-area` markers, so it injects no native
+row and no footer row. Sidebar placement and folding follow DSH's slot contract, without
+locating native rows by text, DOM order, or coordinates. A one-time guide sits beside the entry
+until that browser dismisses or uses it; closing it, pressing Escape, clicking outside it, or
+opening Worktree mode records the read locally and sends nothing to the Host.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
 
