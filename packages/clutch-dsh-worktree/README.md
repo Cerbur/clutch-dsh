@@ -86,7 +86,7 @@ branch-attached, non-root Worktrees that are not already managed appear in the p
 Use **+** on Local/Main for a Session in the original Workspace. A matching blank Session may
 be reused. Forking a Worktree Session keeps the new Session in the same Worktree.
 
-In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
+In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. The current blank Session shows the icon before its first message. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
 
 After removal from management, the Session header still shows the branch checked out in its working directory. Choosing **Continue in the project** changes the header to the project checkout’s branch.
 
@@ -182,7 +182,7 @@ DSH may return a Session to the project before Forge offers recovery. You can co
 
 When Worktree first loads in a profile, it makes one attempt to enable the installed, compatible official Forge bundle. If you later turn Forge off, restarting DSH, browsing lists, and opening an existing Session leave it off. Creating a new Worktree Session from the sidebar, Dashboard, or an Agent tool turns Forge back on for that profile without asking. Opening **Diff** still asks before enabling Forge.
 
-Session creation waits for the Forge panel and Worktree service to be running. If you disabled either component individually, re-enable it in **Plugins**. Worktree does not download Forge. If activation fails or requires a restart, no Session is created. Resolve the issue or restart DSH, then retry.
+Session creation waits for the Forge panel and Worktree service to be running. If you disabled either component individually, re-enable it in **Plugins**. Worktree does not download Forge. If activation fails or requires a restart, no Session is created. Resolve the issue or restart DSH, then retry. If setup stops before the new Session enters the checkout, the Session stays in the original Workspace. After resolving the reported issue, click **+** on the Worktree again.
 
 With official Forge enabled, new Sessions keep native Worktree records after removal from management or uninstall. Forge can restore missing checkouts inside its configured pool or let you **Continue in Project**. Restoration cannot recover uncommitted files.
 

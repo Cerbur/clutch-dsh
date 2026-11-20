@@ -30,6 +30,7 @@ const RECORD = 'plugin:client-ui-forge/worktree';
 export async function initializeForgeSession(
   ctx: Context, agent: ForgeAgent, record: WorktreeRecord, signal: AbortSignal,
   bind: (control: AbortSignal) => Promise<void>,
+  onDirectoryEntry?: () => void,
 ): Promise<void> {
   // Resolve the host runtime without merging its Cordis SessionStore into the
   // browser's Context in this package's shared compilation.
@@ -70,6 +71,7 @@ export async function initializeForgeSession(
     let created = false;
     try {
       // Directory notices insert into the native inbox. No open Forge request may exist yet.
+      onDirectoryEntry?.();
       await directories.set(agent, record.absolutePath, control);
       control.throwIfAborted();
       appendPluginRecord(agent.session, RECORD, { action: 'request', from: null });

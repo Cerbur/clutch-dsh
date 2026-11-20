@@ -1,5 +1,5 @@
 import type { WorktreeManager, WorktreeRecord, WorktreeSessionCreationResult } from '../contract/index.js';
-import type { WorktreeToolSessionPort } from './native-session.js';
+import { WorktreeDirectoryEntryNotStarted, type WorktreeToolSessionPort } from './native-session.js';
 
 /** Native creation owns Workspace membership; native directory publication precedes binding and input. */
 export async function createBoundWorktreeSession(input: {
@@ -15,8 +15,10 @@ export async function createBoundWorktreeSession(input: {
     ? { cwd: record.absolutePath, workspaceId: record.workspaceId }
     : { cwd: record.absolutePath }, signal);
   let bound = false;
+  let initializationStarted = false;
   try {
     check();
+    initializationStarted = true;
     const bind = async () => {
       check();
       await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId }, 'new-session');
@@ -29,6 +31,8 @@ export async function createBoundWorktreeSession(input: {
     }
     return { sessionId, bound: true };
   } catch (error) {
-    return { sessionId, bound, error: (error instanceof Error ? error.message : String(error)).slice(0, 700) };
+    return { sessionId, bound, error: (error instanceof Error ? error.message : String(error)).slice(0, 700),
+      ...((!initializationStarted && sessions.enterWorkingDirectory) || error instanceof WorktreeDirectoryEntryNotStarted
+        ? { retryCreation: true } : {}) };
   }
 }

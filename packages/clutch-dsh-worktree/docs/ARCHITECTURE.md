@@ -1151,7 +1151,7 @@ from 不使用可变的 Dashboard baseBranch。先写 request 会让目录通知
 
 官方 Forge 独立解释记录，clutch 卸载或移出管理不删除它。标签取决于当前目录仍在记录的
 checkout 内；Continue in Project 返回源 Git 根后标签消失。官方恢复只接受其配置池内的路径，
-默认池为源 Git 根的 .agents/worktrees；旧池/外部导入路径可带标签并回到项目，但不承诺磁盘恢复。
+首次创建共享父池 .agents/worktrees 的一方按 Forge 约定写入默认忽略规则，已有父池保留原规则。旧池/外部导入路径可带标签并回到项目，但不承诺磁盘恢复。
 官方组件停用时记录仍保留，显示与恢复需重新启用官方组件。多 Session 共用一个 checkout；
 已在等待恢复的 Session 仍需逐个触发原生恢复。未提交文件不在恢复范围。
 
@@ -1173,7 +1173,7 @@ profile 变更，否则 HMR 的重载与 profile 锁可能互相等待。Forge �
 
 每个 profile 的首次尝试由 Home/clutch-dsh-worktree/forge-activation/
 sha256(profileContext.dir).json 记录（version 与 bundle），独立于 Workspace 关系索引。
-排他创建、写入并 fsync 后才请求启用，避免 HMR 重复启用；已有损坏文件保留且显式失败。
+先在同一目录写入并 fsync 临时文件，再用硬链接排他发布到最终路径。并发加载只允许发布成功的一方执行首次启用。已有损坏文件保留且显式失败。
 已启用、缺失或不兼容的 bundle 也记为已尝试。手动关闭后，普通重启、列表读取及已有 Session 的操作均保留关闭状态。
 
 侧栏、Dashboard 和 Agent 工具显式创建新 Worktree Session 时，Host 可按需启用已安装且兼容的官方 bundle，
@@ -1186,8 +1186,8 @@ DSH rc.1 起面板 `forge-panel` 与工具共享 `worktree` 服务。用官方 b
 `entryId` 和模块名关联 `listPlugins()`；两行都须 enabled 且 fiberPhase=active，并存在 forgePanel。
 `patchId` 表示能否通过 profile 修改条目，不是运行时身份。若旧布局声明 `forge-worktree`，则只认该隔离行，
 不能用同名模块或 `forgePanel.ctx` 看到的全局服务替代。并发准入共享进行中的读取，不缓存已完成的结果。
-manager 热替换使旧读取失效；新 manager 重新检查首次尝试标记，不重复启用。
+共享的运行状态读取及启动时的 bundle 清单读取最多等待 15 秒。清单读取超时后释放待处理的选择，迟到的响应不会再触发启用。Stop、调用方取消或 manager 卸载会结束相应的等待并释放 maintenance。新 manager 重新检查首次尝试标记，不重复启用。
 新建流程在绑定锁内拒绝已归档 Worktree；既有 Session 的补绑和幂等复用不受影响。原生 Stop 到达时，
 已提交的绑定不回滚；初始化停止，不再派发首条任务。
 失败使用 WORKTREE_FORGE_UNAVAILABLE 和 NativeSessionCreationPreflightError，创建前失败
-不留 Session，恢复后同一 requestId 可重试。停止后的迟到检查不得放行。
+不留 Session，恢复后同一 requestId 可重试。如果原生 Session 已建好但在调用 workingDirectory.set 前取消或出错，该次请求的结果按原 requestId 保留。侧栏收到确定结果后提示再次点击 +，下一次点击使用新 requestId，先前的空 Session 留在原 Workspace。停止后的迟到检查不得放行。

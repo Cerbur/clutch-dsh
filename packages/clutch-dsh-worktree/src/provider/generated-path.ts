@@ -34,11 +34,27 @@ export async function assertGeneratedPath(dshHome: string, root: string, target:
   }
 }
 
-/** Only the plugin-owned pool gets an ignore file; existing repository ignore files are untouched. */
+/** The creator of the shared Forge pool supplies its default ignore rule. */
 export async function prepareWorktreePool(dshHome: string, root: string, target: string): Promise<void> {
   if (!sameLexicalPath(path.dirname(path.resolve(target)), workspaceWorktreePool(root))) return;
   await assertGeneratedPath(dshHome, root, target);
   const pool = workspaceWorktreePool(root);
+  const shared = path.dirname(pool);
+  await mkdir(path.dirname(shared), { recursive: true });
+  await assertGeneratedPath(dshHome, root, target);
+  let createdShared = false;
+  try {
+    await mkdir(shared);
+    createdShared = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  await assertGeneratedPath(dshHome, root, target);
+  if (createdShared) {
+    try { await writeFile(path.join(shared, '.gitignore'), '*\n', { flag: 'wx' }); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
   await mkdir(pool, { recursive: true });
   await assertGeneratedPath(dshHome, root, target);
   const physicalRoot = await realpath(root);

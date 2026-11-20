@@ -89,6 +89,8 @@ export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTra
       ? t(domainKey, { rootPath: detail(error, 'rootPath') })
       : t(domainKey);
   switch (error.code) {
+    case 'WORKTREE_SESSION_ENTRY_NOT_STARTED':
+      return t('error.worktreeEntryNotStarted', { sessionId: detail(error, 'sessionId'), reason: error.message });
     case 'CLIENT_DISPOSED':
       return t('error.connectionDisposed');
     case 'gateway/service-unavailable':

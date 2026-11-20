@@ -734,7 +734,7 @@ export function WorktreeSessionRow({
           </span>
         </span>
       )}
-      {!blank && worktreeBranch !== undefined && (
+      {worktreeBranch !== undefined && (
         <span
           className={styles.sessionWorktreeIcon}
           role="img"

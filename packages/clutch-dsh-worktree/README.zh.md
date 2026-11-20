@@ -80,7 +80,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 Local/Main 上的 **+** 在原 Workspace 中打开会话；存在匹配的空白会话时可能直接复用。
 Fork 一个 Worktree 会话时，新会话仍属于同一 Worktree。
 
-在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
+在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。当前空会话在发送第一条消息前也会显示图标。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
 
 移出管理后，会话标题栏仍显示其工作目录实际检出的分支。在 Forge 中选择**回到项目继续**后，标题栏会切换为项目目录的分支。
 
@@ -162,7 +162,7 @@ DSH 可能在 Forge 提供恢复选项前将会话切回项目目录。你可以
 
 Worktree 在每个配置档首次加载时，会尝试启用一次已安装且兼容的官方 Forge 组合包。之后手动关闭 Forge，重启 DSH、浏览列表或打开已有会话都会保持关闭。从侧栏、Dashboard 或 Agent 工具新建 Worktree 会话时，会直接为当前配置档重新启用 Forge，无需确认。打开 **Diff** 时若需启用 Forge，仍会单独询问。
 
-新建会话会等到 Forge 面板和 Worktree 服务都已运行。如果单独关闭了其中一项，请在**插件**中重新启用。Worktree 不会下载 Forge。启用失败或需要重启时不会创建会话，请解决问题或重启 DSH 后重试。
+新建会话会等到 Forge 面板和 Worktree 服务都已运行。如果单独关闭了其中一项，请在**插件**中重新启用。Worktree 不会下载 Forge。启用失败或需要重启时不会创建会话，请解决问题或重启 DSH 后重试。如果 DSH 已建好会话，但在进入 checkout 前中断，会话会留在原 Workspace。解决提示中的问题后，再次点击 Worktree 的 **+** 即可。
 
 启用官方 Forge 后，新会话在移出管理或卸载插件后仍保留原生 Worktree 记录。Forge 可以恢复配置池内缺失的 checkout，或让你选择 **Continue in Project（回到项目继续）**。恢复无法找回未提交文件。
 

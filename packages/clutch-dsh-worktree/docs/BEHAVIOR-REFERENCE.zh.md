@@ -32,7 +32,7 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 手动绑定恢复同样遵循此规则。历史子目录 Worktree 中的新 Session 也能获取共享指令；
 离开绑定目录后仍会停止注入这些指令。
 
-新 Worktree 位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`，属于 DSH 默认 Worktree 池。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 记录执行目录和官方 Forge Worktree 事实。它们保留正常原生权限及用户的显式限制；子目录 Workspace 访问位于其目录之外的新 checkout 时，可能需要原生审批。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
+新 Worktree 位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`，属于 DSH 默认 Worktree 池。如果初始化在进入 checkout 前中断，空会话留在原 Workspace。解决提示中的问题后可再次点击 **+**。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 记录执行目录和官方 Forge Worktree 事实。它们保留正常原生权限及用户的显式限制；子目录 Workspace 访问位于其目录之外的新 checkout 时，可能需要原生审批。专属子池有自己的忽略文件。如果共享父池由 Clutch 首次创建，Clutch 同时写入 Forge 默认的忽略规则，使同级 checkout 不会出现在源仓库的 Git 状态中。已有父池保留原有规则。
 
 每个 DSH profile 首次加载 Worktree 时，会将已安装的官方 Forge bundle 作为独立插件自动启用。卸载 Worktree 后，Forge 保持启用。新建的 Worktree Session 在**移出管理**或卸载本插件后仍保留原生 Worktree 记录；当前目录仍位于该 checkout 内时显示标签。官方 Forge 提供配置池内缺失 checkout 的恢复以及 **Continue in Project（回到项目继续）**。回到项目指向源 Git 根目录，并移除当前 Worktree 标签。官方 Forge 必须保持启用；它独立解释这些记录，不依赖本插件或其索引。
 
@@ -44,7 +44,7 @@ Worktree 不会下载 Forge，也不会覆盖单独关闭的组件。创建 Sess
 
 不迁移已有 Session，旧 checkout 路径保持原位。在导入或旧 checkout 中新建的 Session 可以获得标签，但官方磁盘恢复要求路径位于 DSH 配置池内；否则请回到项目继续。恢复不能找回未提交文件。多个 Session 等待同一缺失 checkout 时，需要分别恢复每个 Session。
 
-在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
+在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。当前空会话在发送第一条消息前也会显示图标。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
 
 移出管理后，会话标题栏仍显示其工作目录实际检出的分支。在 Forge 中选择**回到项目继续**后，标题栏会切换为项目目录的分支。
 

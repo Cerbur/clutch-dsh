@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
-import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, unlink } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { link, mkdir, open, readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createWorktreeError } from '../contract/index.js';
@@ -51,21 +51,23 @@ async function claimActivation(dshHome: string, profile: string): Promise<boolea
   const key = createHash('sha256').update(profile).digest('hex');
   const filename = path.join(dshHome, 'clutch-dsh-worktree', 'forge-activation', key + '.json');
   await mkdir(path.dirname(filename), { recursive: true });
-  let handle;
-  try { handle = await open(filename, 'wx', 0o600); } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    const saved = JSON.parse(await readFile(filename, 'utf8')) as { version?: unknown; bundle?: unknown };
-    if (saved.version !== 1 || saved.bundle !== FORGE_BUNDLE) throw new Error('Invalid Forge activation preference', { cause: error });
-    return false;
-  }
+  const temporary = filename + '.' + randomUUID() + '.tmp';
+  const handle = await open(temporary, 'wx', 0o600);
   try {
-    await handle.writeFile(JSON.stringify({ version: 1, bundle: FORGE_BUNDLE }) + '\n');
-    await handle.sync();
-  } catch (error) {
-    await unlink(filename).catch(() => undefined);
-    throw error;
-  } finally { await handle.close(); }
-  return true;
+    try {
+      await handle.writeFile(JSON.stringify({ version: 1, bundle: FORGE_BUNDLE }) + '\n');
+      await handle.sync();
+    } finally { await handle.close(); }
+    try {
+      await link(temporary, filename);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      const saved = JSON.parse(await readFile(filename, 'utf8')) as { version?: unknown; bundle?: unknown };
+      if (saved.version !== 1 || saved.bundle !== FORGE_BUNDLE) throw new Error('Invalid Forge activation preference', { cause: error });
+      return false;
+    }
+    return true;
+  } finally { await unlink(temporary); }
 }
 
 function unavailable(reason: UnavailableReason, diagnostic = '') {
@@ -99,8 +101,7 @@ export function registerForgeActivation(ctx: Context, dshHome: string): ForgeSes
   let reason: UnavailableReason = 'starting';
   let diagnostic = '';
   let disposed = false;
-  let managerGeneration = 0;
-  let inventory: Promise<boolean> | undefined;
+  let assertReady: ForgeSessionGate['assertReady'] | undefined;
   let ensureForCreation: ForgeSessionGate['ensureForCreation'] | undefined;
   ctx.effect(() => () => { disposed = true; }, 'clutch-dsh-worktree: Forge activation observer');
 
@@ -110,9 +111,19 @@ export function registerForgeActivation(ctx: Context, dshHome: string): ForgeSes
     const manager = managerCtx.get('pluginManager') as PluginManager;
     const demand = new Set<AbortSignal>();
     let claimed = false;
+    let pendingClaim: Promise<boolean> | undefined;
     let selection: Promise<Selection> | undefined;
     let warmingUntil = 0;
-    managerGeneration++;
+    let inventory: Promise<boolean> | undefined;
+    function liveInventory(selected?: Bundle): Promise<boolean> {
+      if (inventory) return inventory;
+      const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(readinessTimeout)]);
+      const read = selected ? hasLiveForgeRows(manager, selected) : readBundle(manager).then(bundle => {
+        signal.throwIfAborted();
+        return hasLiveForgeRows(manager, bundle);
+      });
+      return inventory = waitFor(read, signal).finally(() => { inventory = undefined; });
+    }
     reason = 'starting';
     diagnostic = '';
     // Do not await HMR/profile mutation from plugin initialization: reconciliation
@@ -120,9 +131,11 @@ export function registerForgeActivation(ctx: Context, dshHome: string): ForgeSes
     async function selectBundle(): Promise<Selection> {
       const profile = ctx.get('profileContext') as { dir?: string } | undefined;
       if (!profile?.dir || !path.isAbsolute(profile.dir)) { reason = 'unavailable'; return 'blocked'; }
-      const bundle = await readBundle(manager);
+      // Retire a stalled inventory read before claiming the profile or changing its selection.
+      const readSignal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(readinessTimeout)]);
+      const bundle = await waitFor(readBundle(manager), readSignal);
       if (!active()) return 'blocked';
-      const first = !claimed && await claimActivation(dshHome, profile.dir);
+      const first = !claimed && await (pendingClaim = claimActivation(dshHome, profile.dir));
       claimed = true;
       if (!active()) return 'blocked';
       diagnostic = '';
@@ -151,6 +164,22 @@ export function registerForgeActivation(ctx: Context, dshHome: string): ForgeSes
       return 'blocked' as const;
     }).finally(() => { selection = undefined; });
     const timer = setTimeout(() => { if (active() && !claimed) void select(); }, 0);
+
+    assertReady = async (caller) => {
+      const signal = caller ? AbortSignal.any([lifetime.signal, caller]) : lifetime.signal;
+      try {
+        signal.throwIfAborted();
+        const live = await waitFor(liveInventory(), signal);
+        signal.throwIfAborted();
+        if (live && active() && ctx.get('forgePanel')) return;
+      } catch (error) {
+        if (!active()) throw unavailable('unavailable');
+        caller?.throwIfAborted();
+        if (error instanceof Error && error.name === 'TimeoutError') throw unavailable('starting', 'Forge readiness check timed out');
+        throw unavailable('failed', describe(error));
+      }
+      throw unavailable(reason, diagnostic);
+    };
 
     ensureForCreation = async (caller) => {
       const deadline = AbortSignal.timeout(readinessTimeout);
@@ -187,40 +216,18 @@ export function registerForgeActivation(ctx: Context, dshHome: string): ForgeSes
         throw unavailable('failed', describe(error));
       } finally { demand.delete(signal); }
     };
-    managerCtx.effect(() => () => {
+    managerCtx.effect(() => async () => {
       lifetime.abort();
       ensureForCreation = undefined;
-      managerGeneration++;
-      inventory = undefined;
+      assertReady = undefined;
       clearTimeout(timer);
+      // Finish only our local publication. Profile RPCs may be waiting for this disposal.
+      await pendingClaim?.catch(() => undefined);
     }, 'clutch-dsh-worktree: deferred Forge activation');
   });
 
-  function liveInventory(selected?: Bundle): Promise<boolean> {
-    const manager = ctx.get('pluginManager') as PluginManager | undefined;
-    if (!manager || disposed) return Promise.resolve(false);
-    const generation = managerGeneration;
-    return inventory ??= (selected ? hasLiveForgeRows(manager, selected) : readBundle(manager).then(bundle => hasLiveForgeRows(manager, bundle))).finally(() => {
-      if (generation === managerGeneration) inventory = undefined;
-    });
-  }
-
   return {
     ensureForCreation: (signal) => ensureForCreation?.(signal) ?? Promise.reject(unavailable('unavailable')),
-    async assertReady() {
-      const manager = ctx.get('pluginManager') as PluginManager | undefined;
-      const generation = managerGeneration;
-      let inventoryError: string | undefined;
-      if (!disposed && manager) {
-        try {
-          if (await liveInventory() && !disposed && generation === managerGeneration && ctx.get('forgePanel')) return;
-        } catch (error) {
-          inventoryError = describe(error);
-        }
-      }
-      const current = disposed || generation !== managerGeneration || !ctx.get('pluginManager') ? 'unavailable'
-        : inventoryError !== undefined ? 'failed' : reason;
-      throw unavailable(current, inventoryError ?? diagnostic);
-    },
+    assertReady: (signal) => assertReady?.(signal) ?? Promise.reject(unavailable('unavailable')),
   };
 }

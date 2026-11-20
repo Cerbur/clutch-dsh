@@ -108,10 +108,13 @@ interface NativeContext {
 /** Only thrown by capability preflight, before invoking native Session creation. */
 export class NativeSessionCreationPreflightError extends Error {}
 
+/** Native creation succeeded, but directory entry and Forge initialization never started. */
+export class WorktreeDirectoryEntryNotStarted extends Error {}
+
 /** Only the pre-create check may change profile selection. */
 export interface ForgeSessionGate {
   ensureForCreation(signal?: AbortSignal): Promise<void>;
-  assertReady(): Promise<void>;
+  assertReady(signal?: AbortSignal): Promise<void>;
 }
 
 /** Browser creation needs no commands, tools or model provider. */
@@ -134,16 +137,23 @@ export function createNativeWorktreeSessionDirectoryPort(ctx: Context, forge?: F
     },
     initializeWorktreeSession: async (sessionId, record, signal, bind) => {
       if (!fresh.delete(sessionId)) throw new Error('Only a newly created Session may receive Forge Worktree records');
-      await forge?.assertReady();
-      const result = await controller.resolveAgent(sessionId);
-      if ('error' in result) throw result.error;
-      if (result.agent.session.id !== sessionId || native.agents.get(sessionId) !== result.agent)
-        throw new Error('Native Session identity changed before Forge initialization');
-      await initializeForgeSession(ctx, result.agent as unknown as ForgeAgent, record, signal, async (control) => {
-        await forge?.assertReady();
-        control.throwIfAborted();
-        await bind();
-      });
+      let entryStarted = false;
+      try {
+        signal.throwIfAborted();
+        await forge?.assertReady(signal);
+        const result = await controller.resolveAgent(sessionId);
+        if ('error' in result) throw result.error;
+        if (result.agent.session.id !== sessionId || native.agents.get(sessionId) !== result.agent)
+          throw new Error('Native Session identity changed before Forge initialization');
+        await initializeForgeSession(ctx, result.agent as unknown as ForgeAgent, record, signal, async (control) => {
+          await forge?.assertReady(control);
+          control.throwIfAborted();
+          await bind();
+        }, () => { entryStarted = true; });
+      } catch (error) {
+        if (entryStarted) throw error;
+        throw new WorktreeDirectoryEntryNotStarted(error instanceof Error ? error.message : String(error), { cause: error });
+      }
     },
     enterWorkingDirectory: async (sessionId, cwd, signal) => {
       signal.throwIfAborted();
@@ -160,7 +170,7 @@ export function createNativeWorktreeSessionDirectoryPort(ctx: Context, forge?: F
       signal.throwIfAborted();
     },
     assertWorkingDirectory: async (sessionId, cwd, signal) => {
-      await forge?.assertReady();
+      await forge?.assertReady(signal);
       signal.throwIfAborted();
       const directories = ctx.get('workingDirectory') as { get(session: NativeAgent['session']): string } | undefined;
       const agent = native.agents.get(sessionId);

@@ -22,9 +22,11 @@ async function failure(gate) {
 }
 async function fixture(t, options = {}) {
   const home = options.home ?? await mkdtemp(path.join(tmpdir(), 'forge-activation-'));
-  if (!options.home) t.after(() => rm(home, { recursive: true, force: true }));
   const ctx = new Context();
-  t.after(() => ctx.fiber.dispose());
+  t.after(async () => {
+    await ctx.fiber.dispose();
+    if (!options.home) await rm(home, { recursive: true, force: true });
+  });
   let available = options.live ?? false;
   const bundle = { name: FORGE_BUNDLE, enabled: options.enabled ?? false, availability: 'installation', rows: forgeRows(), ...options.bundle };
   const calls = [];
@@ -185,6 +187,31 @@ test('corrupt activation preference fails closed and is never overwritten', asyn
   assert.deepEqual(f.calls, []);
 });
 
+test('a timed-out bootstrap inventory releases selection and its late reply cannot enable Forge', async (t) => {
+  const deadline = new globalThis.AbortController();
+  const timeout = t.mock.method(globalThis.AbortSignal, 'timeout', () => deadline.signal);
+  const f = await fixture(t);
+  const reading = Promise.withResolvers();
+  const stalled = Promise.withResolvers();
+  const list = f.manager.listBundles;
+  f.manager.listBundles = () => {
+    f.manager.listBundles = list;
+    reading.resolve();
+    return stalled.promise;
+  };
+  await reading.promise;
+  timeout.mock.restore();
+  deadline.abort(new Error('bootstrap inventory timed out'));
+  await f.gate.ensureForCreation();
+  assert.deepEqual(f.calls, [[FORGE_BUNDLE, true]]);
+  f.bundle.enabled = false;
+  f.setLive(false);
+  stalled.resolve([f.bundle]);
+  await delay(0);
+  assert.deepEqual(f.calls, [[FORGE_BUNDLE, true]]);
+  assert.equal(f.bundle.enabled, false);
+});
+
 test('unload while inventory is pending prevents a later activation', async (t) => {
   const f = await fixture(t);
   const barrier = Promise.withResolvers();
@@ -306,8 +333,8 @@ test('a ready inventory arriving after unload cannot admit a new Session', async
   f.manager.listBundles = () => barrier.promise;
   const pending = failure(f.gate);
   await f.plugin.dispose();
-  barrier.resolve([f.bundle]);
   assert.equal((await pending).details.reason, 'unavailable');
+  barrier.resolve([f.bundle]);
 });
 
 test('unloading only the manager provider cancels pending activation without unloading Worktree', async (t) => {
@@ -333,7 +360,22 @@ test('unloading the manager rejects its in-flight ready inventory while Forge re
   f.manager.listBundles = () => barrier.promise;
   const pending = failure(f.gate);
   await f.managerOwner.dispose();
-  barrier.resolve([f.bundle]);
   assert.ok(f.ctx.get('forgePanel'), 'the independently owned panel stays mounted');
   assert.equal((await pending).details.reason, 'unavailable');
+  barrier.resolve([f.bundle]);
+});
+
+test('concurrent first loads atomically claim one activation per profile', async (t) => {
+  const home = await mkdtemp(path.join(tmpdir(), 'forge-claim-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const fixtures = await Promise.all(Array.from({ length: 8 }, () => fixture(t, { home })));
+  await until(async () => {
+    const errors = await Promise.all(fixtures.map(f => failure(f.gate)));
+    return errors.every(error => !error || error.details.reason === 'disabled');
+  });
+  assert.equal(fixtures.flatMap(f => f.calls).length, 1);
+  const dir = path.join(home, 'clutch-dsh-worktree', 'forge-activation');
+  const [claim] = await readdir(dir);
+  assert.deepEqual(await readdir(dir), [claim]);
+  assert.deepEqual(JSON.parse(await readFile(path.join(dir, claim), 'utf8')), { version: 1, bundle: FORGE_BUNDLE });
 });

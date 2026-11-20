@@ -25,7 +25,7 @@
 - **DSH 是唯一原始数据源**：插件绝不写入、复制或篡改 Project 原始目录、Session 身份与元数据、原始列表、消息、提示词与会话历史。2026-11-09 人类批准的唯一扩展：仅对本次新建、尚未启动的 Session，通过 DSH 导出的 appendPluginRecord 追加官方 Forge Worktree request/created 事实；不得补写旧 Session、直接写日志文件或改写 header。
 - **Sidecar 存储范围**：插件仅在 host 数据目录维护外部关系索引（`projectId`、`worktreeId`、`sessionId`、Worktree 路径、branch、source、生命周期状态、指令，以及获取事实 `createdAt`/`importedAt`、不可变获取 commit `baseCommit` 和用户可改写的 Dashboard 基线 `baseBranch`）。Git ahead/behind、changed-file 行数与 working-tree 快照属于运行时 projection，只读且绝不写入 Sidecar。
 - **独立 Forge 启用**：通过 DSH pluginManager 独立启用已安装且兼容的官方 Forge bundle，不下载、不挂为 Worktree 子插件，卸载 Worktree 时保留 Forge。Home 中的 forge-activation 偏好只记录每个 profile 的一次性首次加载尝试，独立于关系 Sidecar。之后手动禁用在普通重启、读取列表及使用已有 Session 时保留。侧栏、Dashboard、Agent 显式新建 Worktree Session 时直接按需启用，无需弹窗；保留单独禁用的组件，等面板与服务实际就绪后才新建 Session，失败或需要重启时不建。Dashboard 打开 Diff 仍须单独确认启用。
-- **禁止污染业务目录**：严禁向业务工作区或项目根目录写入 `AGENTS.md`、临时索引或凭据。新 checkout 放在源 Git 根的 `.agents/worktrees/clutch/` 专属池以兼容官方恢复；旧 Workspace 的 `.agents/clutch-worktrees/` 与旧 Home 池保持原位。仅在新专属池创建自己的忽略文件，不改已有业务配置。Sidecar、锁与偏好仍在 DSH Home。
+- **禁止污染业务目录**：严禁向业务工作区或项目根目录写入 `AGENTS.md`、临时索引或凭据。新 checkout 放在源 Git 根的 `.agents/worktrees/clutch/` 专属池以兼容官方恢复；旧 Workspace 的 `.agents/clutch-worktrees/` 与旧 Home 池保持原位。Clutch 首次创建共享父池 `.agents/worktrees/` 时写入官方默认的 `.gitignore`（`*`）。已有父池的规则由其所有者管理。专属子池保留自己的忽略文件。Sidecar、锁与偏好仍在 DSH Home。
 - **降级容灾**：Sidecar 损坏或不可用时，原生 Project/Session 视图必须完全可读；插件进入降级只读状态，严禁使用空索引覆盖 DSH 原始数据。
 - **根目录缺失降级**：仅当 `stat` 明确返回 `ENOENT` 确认 Workspace 根目录确实缺失时，Sidecar 支撑的读取（Worktree 列表、Session 绑定、已记录指令）才允许继续投影，Git 相关读取以专用 `WORKSPACE_ROOT_MISSING` 失败并由 Client 显示本地化的目录缺失状态（`workspaceMissing`）；未知 Workspace、非绝对 root、存在但不是目录或无法解析的 root 必须保留 `WORKSPACE_NOT_FOUND` 语义，严禁误报为目录缺失。降级读取不得放宽身份校验、写入门禁与破坏性操作确认。
 
@@ -84,7 +84,7 @@ Refresh scope is determined by the smallest affected identity.
 ## 重要禁止事项 (Prohibitions)
 
 - ❌ 严禁修改 DSH 核心源码、Session/Project 元数据或消息记录；
-- ❌ 严禁往用户项目目录写入 `AGENTS.md`、配置文件或临时数据；§1 已批准的专属 Worktree 池及池内独立忽略文件除外；
+- ❌ 严禁往用户项目目录写入 `AGENTS.md`、配置文件或临时数据；§1 已批准的专属 Worktree 池及首次创建共享父池时的默认忽略文件除外；
 - ❌ 严禁通过 shell 执行任何 Git 命令；
 - ❌ 严禁从 feature worktree 执行 `npm publish`（发布必须在 release worktree 进行）；
 - ❌ 严禁在未经确信或未经用户二次确认时执行破坏性清理；
