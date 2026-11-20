@@ -15,6 +15,7 @@ export async function loadClientEntry({
   workspaceSnapshot: initialWorkspaceSnapshot,
   fork,
   sidebarRight,
+  jsxRuntime,
 } = {}) {
   const clientBundle = await readFile(path.join(packageDirectory, 'lib', 'client.js'), 'utf8');
   const registrations = [];
@@ -328,7 +329,7 @@ export async function loadClientEntry({
       return { createSnapshotStore, defineStore };
     }
     if (specifier === 'react/jsx-runtime') {
-      return { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
+      return jsxRuntime ?? { Fragment: Symbol('Fragment'), jsx: () => null, jsxs: () => null };
     }
     if (specifier === 'react') return {
       createContext: () => ({ Provider: 'NotificationProvider' }),

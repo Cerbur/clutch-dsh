@@ -74,6 +74,11 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 - Session permissions remain owned by DSH. There is no plugin-specific preset, confirmation, permission RPC, icon decoration or cleanup normalization. Historical saved policies remain unchanged.
 - `worktree-view.ts` and `WorktreeSurface.tsx` own browser view state and action orchestration. They render Workspace → Worktree → Session and call the injected manager for Worktree operations.
 - `view/activity-filter.ts` owns the browser-only activity-range predicate shared by the header selector and the tree. It reads native Session and Workspace facts plus the Worktree acquisition facts the management record already carries (running, pending interaction, `updatedAt`, Workspace `createdAt` and title, Worktree `createdAt`/`importedAt`), adds no RPC, Git read, new Sidecar field or DSH membership change, and hides rows without unbinding or archiving them. The browser-local `showInactiveStructure` preference defaults to true and keeps structure and management actions visible; turning it off also filters structure, except that a Workspace created inside the range, a Worktree acquired inside the range together with its owning Workspace, and the pinned automatic `default-workspace` still survive. Archived Worktrees reuse the same acquisition predicate. The browser-local `keepDefaultWorkspaceVisible` preference defaults to true and can be unchecked; a renamed automatic Workspace is no longer recognized, matching DSH. Missing persisted values use the defaults, while an explicit false is preserved. Session rows are filtered either way. Counts exclude all blank and archived Sessions, including a visible current blank Session. `surface/state/useActivityFilter.ts` adds the shared view-store preferences (selected range, visible ranges, inactive structure, default Workspace pin), the one-minute clock and the per-range counts. The bar's right-edge checklist menus are browser-local: checking a range only adds a tab and never changes Host state.
+- Local Session rows read `projectionValues.forgeWorktree` from the existing native Session
+  list to render a trailing branch icon and localized branch tooltip. Managed/archived Worktree
+  groups already label their checkout and do not duplicate this icon. No sidecar inference,
+  additional subscription/RPC, or historical Session migration is involved; a null/absent
+  native projection removes the icon.
 - The Client uses the contract/facade and native DSH Client APIs only. It does not execute Git, read sidecar files, import Provider/Manage/Host runtime internals, or mutate DSH-owned Workspace/Session data.
 - `command-activity.ts` registers a private native Conversation activity target for
   `command/run` records named `cluworktree`. Ordinary native Chat command nodes do not
@@ -395,13 +400,16 @@ not a stable Forge integration API. Branch scope includes uncommitted changes.
 Source verification and compatibility limits are recorded in
 [`../../docs/plans/2026-11-14-dashboard-native-diff.md`](../../docs/plans/2026-11-14-dashboard-native-diff.md).
 
-If the native definition is absent, `native-forge-activation.ts` reads the official Forge bundle
+The Host must authorize the current Session before the Dashboard offers to enable Forge.
+Opening Diff keeps its own confirmation. Explicit new Worktree Session creation from the sidebar or Dashboard delegates Forge activation to the Host without a Client prompt, as does creation from Agent tools.
+A matching non-current candidate is selected without touching the profile and requires a new click.
+If the native definition is absent for the verified current target, `native-forge-activation.ts` reads the official Forge bundle
 through the existing Connection adapter. A disabled bundle requires the Surface's native Modal
 confirmation before the adapter calls `pluginManager/setBundleEnabled` with the fixed bundle name
 and `enabled: true`. Native endpoints return direct Gateway values, unlike Worktree's nested result.
 The confirmation is cancelled on action retirement or Surface unmount. The action rechecks bundle
 state after confirmation, bounds each management request and Client registration wait to 15 seconds,
-and only continues directory validation when the exact native definition is registered. Existing
+and revalidates the authorized Session after registration and sidebar mounting. Existing
 selected bundles are never re-enabled to override row-level settings. Restart-required, overridden,
 failed and registration-timeout outcomes preserve Dashboard and report localized feedback.
 An enable RPC timeout or lost response does not prove the Host mutation failed. The action grants
@@ -557,6 +565,10 @@ launching to the browser's protocol handler; it makes no success or existence cl
 The Client contributes one read-only context action to the existing
 `conversation.session.header.actions` list. It displays the current local branch
 or the active Worktree branch beside the native Session title and Agent mode.
+The header subscribes to the mounted Session's native working directory. It selects
+the deepest containing checkout in the Workspace Git worktree listing, including
+checkouts removed from management. Returning to the project selects its HEAD on
+the same Session. This display lookup does not change Dashboard ownership or bindings.
 
 The Client contributes a quick Dashboard button to the existing
 `conversation.session.header.utilities` list. It appears only when the shared
@@ -567,9 +579,10 @@ does not change DSH Session or Workspace data.
 
 The Client also contributes a browser-local `shell.overlay` companion for the
 blank Hero. It positions `Workspace (branch)` after the native Hero headline
-while `[data-phase='hero']` is present. The suffix is derived from the selected
-Workspace's current local branch or active Worktree branch, so changing the
-Workspace causes the displayed suffix to refresh.
+while `[data-phase='hero']` is present. Before a Session exists it shows the
+selected Workspace branch. For a selected blank Session it matches the native
+list's `workingDirectory` projection against the same checkout roots as the
+conversation header. Directory changes update the label even after removal from management.
 
 The Hero companion is deliberately visual rather than a native Conversation
 slot: the current upstream DSH source checkout has no additive Hero headline seat. It never renames the native
@@ -615,6 +628,10 @@ The Host shares the native creation module used by Agent and Dashboard dispatch.
 
 New Sessions already have DSH-owned original Workspace membership. The browser-only legacy
 projection does not modify DSH source, Session metadata or native Workspace storage.
+Every binding update and native refresh rebuilds that additive projection from the untouched
+native snapshot. Never subtract previous bindings from native membership: forgetting a Worktree
+must remove only virtual entries, preserve native ordering, and immediately retain Sessions that
+DSH already owns (including those adopted by a later native snapshot).
 All Sessions preserve native permissions. Browser creation retains one
 request id across uncertain failures and the Host shares its promise within one lifetime.
 Client/Host reload or replacement of native Session/Agent capabilities ends that deduplication scope.

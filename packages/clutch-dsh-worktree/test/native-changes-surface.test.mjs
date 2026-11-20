@@ -12,13 +12,45 @@ import * as selection from '../lib/client/dashboard/dashboard-selection.js';
 import * as navigation from '../lib/client/dashboard/dashboard-navigation.js';
 import * as sessions from '../lib/client/dashboard/dashboard-sessions.js';
 import { createNativeChangesNavigation } from '../lib/client/dashboard/git/native-changes-navigation.js';
-import { en } from '../lib/client/locales.js';
+import { en, zh } from '../lib/client/locales.js';
+import * as queue from '../lib/client/surface/notification-queue.js';
+import * as diagnostics from '../lib/client/settings/diagnostics.js';
+import { useSurfaceMutation } from '../lib/client/surface/actions/useSurfaceMutation.js';
 
-const compiled = ts.transpileModule(await readFile(new URL('../src/client/WorktreeSurface.tsx', import.meta.url), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-}).outputText;
+async function clientModule(file) {
+  const compiled = ts.transpileModule(await readFile(new URL('../src/client/' + file, import.meta.url), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  return (modules) => {
+    const exports = {};
+    new Function('require', 'exports', compiled)((name) => {
+      if (name === 'react') return React;
+      if (name === 'react/jsx-runtime') return jsx;
+      return modules[name] ?? new Proxy({}, {
+        get: (_target, key) => String(key).startsWith('use') ? () => ({}) : () => null,
+      });
+    }, exports);
+    return exports;
+  };
+}
 
-async function fixture(t, { main, external }) {
+const surfaceModule = await clientModule('WorktreeSurface.tsx');
+const errorCopy = (await clientModule('view/worktree-error-copy.ts'))({});
+const notifications = (await clientModule('surface/components/NotificationToasts.tsx'))({
+  '../notification-queue.js': queue, '../../settings/diagnostics.js': diagnostics,
+  '../../view/worktree-error-copy.js': errorCopy,
+  '@deepseek-ai/dsh-client-ui-primitives': { Toast: ({ text }) => React.createElement('output', null, text) },
+});
+const { SurfaceContent } = (await clientModule('surface/components/SurfaceContent.tsx'))({
+  './NotificationToasts.js': notifications, '../notification-queue.js': queue,
+  '../../view/worktree-error-copy.js': errorCopy,
+});
+const { WorktreeSettings } = (await clientModule('settings/WorktreeSettings.tsx'))({
+  './diagnostics.js': diagnostics, '../view/worktree-error-copy.js': errorCopy,
+  '@deepseek-ai/dsh-client-ui-primitives': { SegmentedTabs: () => null, Tag: 'span', Button: 'button' },
+});
+
+async function fixture(t, { main, external, openNativeChanges }) {
   const dom = new JSDOM('<div id="root"></div><div id="sidebar"></div>');
   const previous = new Map();
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) {
@@ -28,7 +60,7 @@ async function fixture(t, { main, external }) {
   const root = createRoot(dom.window.document.getElementById('root'));
   const record = { workspaceId: 'ws', worktreeId: main ? 'main:ws' : 'wt', absolutePath: '/checkout',
     status: 'active', source: main ? undefined : 'plugin', branch: 'feature' };
-  const source = { mode: 'worktree', currentSessionId: 'old', workspaceIds: ['ws'],
+  const source = { mode: 'worktree', currentSessionId: 'old', workspaceIds: ['ws'], forkRecoverySnapshot: { pending: [] },
     workspaces: { items: [{ workspaceId: 'ws', path: '/checkout', sessionIds: ['old', 'matching'] }] },
     sessions: { ids: ['old', 'matching'], byId: {}, phase: 'ready' }, archivedSessionIds: [], sessionPresentations: {} };
   const view = { worktrees: main ? [] : [record], branches: [], knownSessionIds: ['old', 'matching'],
@@ -37,32 +69,33 @@ async function fixture(t, { main, external }) {
   let snapshot = { workspaceId: 'ws', worktreeId: record.worktreeId, sessionId: 'old' };
   const store = { subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     getSnapshot: () => snapshot, set: (next) => { snapshot = next; for (const fn of listeners) fn(); } };
-  const f = { record, source, opened: [], resources: [], mounts: 0, dashboard: undefined,
+  const f = { record, source, document: dom.window.document, opened: [], resources: [], mounts: 0, dashboard: undefined,
     verify: async ({ sessionId }) => sessionId === 'matching', error: undefined };
-  const mutation = { setActionError: (error) => { f.error = error; } };
   function Dashboard(props) {
     f.dashboard = props;
     React.useEffect(() => { f.mounts++; return () => { f.dashboard = undefined; }; }, []);
     return React.createElement('div', { 'data-dashboard': true });
   }
   const modules = {
-    react: React, 'react/jsx-runtime': jsx, 'react-dom': ReactDOM,
+    'react-dom': ReactDOM,
     './dashboard/dashboard-selection.js': selection,
     './dashboard/dashboard-navigation.js': navigation,
     './dashboard/dashboard-sessions.js': sessions,
     './dashboard/WorktreeDashboard.js': { WorktreeDashboard: Dashboard },
-    './surface/components/NotificationToasts.js': { NotificationProvider: ({ children }) => children },
-    './surface/components/SurfaceContent.js': { SurfaceContent: ({ props }) => { f.openDashboard = props.openDashboard; return null; } },
+    './surface/components/NotificationToasts.js': notifications,
+    './surface/components/SurfaceContent.js': { SurfaceContent: (input) => {
+      f.openDashboard = input.props.openDashboard;
+      f.error = input.mutation.actionError;
+      return React.createElement(SurfaceContent, input);
+    } },
     './surface/state/useSurfaceSources.js': { useSurfaceSources: () => source },
-    './surface/state/useSurfaceRefresh.js': { useSurfaceRefresh: () => ({ viewByWorkspace: new Map([['ws', view]]) }) },
-    './surface/actions/useSurfaceMutation.js': { useSurfaceMutation: () => mutation },
+    './surface/state/useSurfaceRefresh.js': { useSurfaceRefresh: () => ({ viewByWorkspace: new Map([['ws', view]]), readState: { status: 'ready' } }) },
+    './surface/actions/useSurfaceMutation.js': { useSurfaceMutation },
+    './surface/actions/useLifecycleActions.js': { useLifecycleActions: () => ({ recoveryAction: () => null }) },
     './surface/state/useSessionOrdering.js': { useSessionOrdering: () => ({ orderedSessionIdsByAccount: new Map() }) },
     './view/view-mode.js': { workspaceSessionIds: () => ['old', 'matching'] },
   };
-  const exports = {};
-  new Function('require', 'exports', compiled)((name) => modules[name] ?? new Proxy({}, {
-    get: (_target, key) => String(key).startsWith('use') ? () => ({}) : () => null,
-  }), exports);
+  const { WorktreeSurface } = surfaceModule(modules);
   const native = createNativeChangesNavigation({ manager: { canOpenNativeChanges: (input) => f.verify(input) },
     screen: () => ({ ready: true, workspaceId: 'ws', sessionId: source.currentSessionId,
       cwd: source.currentSessionId === 'matching' ? '/checkout' : '/moved', mountedSessionId: source.currentSessionId }),
@@ -71,15 +104,21 @@ async function fixture(t, { main, external }) {
   const props = { t: (key) => en[key], dashboardStore: external ? store : undefined,
     sidebarSeat: { element: dom.window.document.getElementById('sidebar') },
     openSession: (id) => { f.opened.push(id); f.onNavigate?.(id); },
-    openNativeChanges: (...args) => native.open(...args) };
-  f.render = () => React.act(async () => { root.render(React.createElement(exports.WorktreeSurface, props)); });
+    openNativeChanges: openNativeChanges ?? ((...args) => native.open(...args)) };
+  const render = (locale = en, showSettings = false) => {
+    props.t = (key) => locale[key];
+    root.render(React.createElement(React.Fragment, null, React.createElement(WorktreeSurface, props),
+      showSettings && React.createElement(WorktreeSettings, { t: props.t })));
+  };
+  f.render = (...args) => React.act(async () => render(...args));
   f.selectSync = (id) => {
     source.currentSessionId = id;
-    ReactDOM.flushSync(() => root.render(React.createElement(exports.WorktreeSurface, props)));
+    ReactDOM.flushSync(() => render());
   };
   f.switchTo = async (id) => { source.currentSessionId = id; await f.render(); };
   t.after(async () => {
     native.dispose(); await React.act(async () => root.unmount()); dom.window.close();
+    diagnostics.worktreeDiagnostics.dispose();
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
     }
@@ -99,6 +138,22 @@ test('a synchronous native selection commit preserves the Dashboard and retry fe
   assert.equal(f.mounts, mounts);
   assert.equal(f.error?.code, 'NATIVE_CHANGES_SESSION_SWITCHING');
 });
+
+for (const result of ['session-switching', 'forge-restart-required']) {
+  test(`Dashboard ${result} renders localized guidance in the toast and Settings without a refresh retry`, async (t) => {
+    const f = await fixture(t, { external: true,
+      openNativeChanges: result === 'session-switching' ? undefined : async () => result });
+    await React.act(async () => f.dashboard.onOpenNativeChanges());
+    for (const locale of [en, zh]) {
+      await f.render(locale, true);
+      const message = locale[`dashboard.git.native.${result}`];
+      assert.equal(f.document.querySelector('output').textContent, `${message} ${locale['settings.toastHint']}`);
+      const issue = f.document.querySelector('[data-worktree-diagnostic]');
+      assert.equal(issue.querySelector('p').textContent, message);
+      assert.equal(issue.querySelector('button'), null);
+    }
+  });
+}
 
 for (const cancel of ['close', 'mode', 'unrelated']) test(`a ${cancel} during Host validation retires native navigation`, async (t) => {
   const f = await fixture(t, { external: true });

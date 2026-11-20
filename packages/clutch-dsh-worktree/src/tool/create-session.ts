@@ -1,11 +1,11 @@
 import type { WorktreeManager, WorktreeRecord, WorktreeSessionCreationResult } from '../contract/index.js';
-import type { WorktreeToolSessionPort } from './native-session.js';
+import { WorktreeDirectoryEntryNotStarted, type WorktreeToolSessionPort } from './native-session.js';
 
 /** Native creation owns Workspace membership; native directory publication precedes binding and input. */
 export async function createBoundWorktreeSession(input: {
   record: WorktreeRecord;
   manager: Pick<WorktreeManager, 'bindSession'>;
-  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory'>;
+  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
   signal: AbortSignal;
   check(): void;
 }): Promise<WorktreeSessionCreationResult> {
@@ -13,14 +13,26 @@ export async function createBoundWorktreeSession(input: {
   check();
   const { sessionId } = await sessions.create(sessions.enterWorkingDirectory
     ? { cwd: record.absolutePath, workspaceId: record.workspaceId }
-    : { cwd: record.absolutePath });
+    : { cwd: record.absolutePath }, signal);
+  let bound = false;
+  let initializationStarted = false;
   try {
     check();
-    await sessions.enterWorkingDirectory?.(sessionId, record.absolutePath, signal);
-    check();
-    await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId });
+    initializationStarted = true;
+    const bind = async () => {
+      check();
+      await manager.bindSession({ workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId }, 'new-session');
+      bound = true;
+    };
+    if (sessions.initializeWorktreeSession) await sessions.initializeWorktreeSession(sessionId, record, signal, bind);
+    else {
+      await sessions.enterWorkingDirectory?.(sessionId, record.absolutePath, signal);
+      await bind();
+    }
     return { sessionId, bound: true };
   } catch (error) {
-    return { sessionId, bound: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 700) };
+    return { sessionId, bound, error: (error instanceof Error ? error.message : String(error)).slice(0, 700),
+      ...((!initializationStarted && sessions.enterWorkingDirectory) || error instanceof WorktreeDirectoryEntryNotStarted
+        ? { retryCreation: true } : {}) };
   }
 }

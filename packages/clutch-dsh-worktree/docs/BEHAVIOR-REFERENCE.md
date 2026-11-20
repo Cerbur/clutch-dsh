@@ -39,7 +39,21 @@ the next new-Session action creates a fresh Session once that Session is no long
 This includes manual binding recovery. New Sessions in historical subdirectory Worktrees receive
 the same shared instructions; moving outside the bound directory still disables those instructions.
 
-New Worktrees live in `<workspace>/.agents/clutch-worktrees/wt_<id>/`. New Sessions remain members of the original Workspace; DSH records their execution directory through its native working-directory capability before task input is admitted. They keep normal native permissions, including explicit user restrictions, and require no plugin-specific permission setup. The pool contains its own ignore file; existing repository ignore files are untouched.
+New Worktrees live in `<repository-root>/.agents/worktrees/clutch/wt_<id>/`, inside DSH's default Worktree pool. If setup stops before directory entry, the blank Session stays in the original Workspace. Resolve the reported issue and click **+** again. New Sessions remain members of the original Workspace; DSH records their execution directory and official Forge Worktree facts before task input is admitted. They keep normal native permissions, including explicit user restrictions. A subdirectory Workspace may therefore need native approval to access the checkout outside its directory. The Clutch subdirectory has its own ignore file. When Clutch creates the shared parent pool, it writes Forge’s default ignore rule there so sibling checkouts stay out of the source repository’s Git status. Existing parent pools retain their rules.
+
+On first load in each DSH profile, Worktree automatically enables the installed official Forge bundle as an independent plugin. Uninstalling Worktree leaves Forge enabled. Newly created Worktree Sessions retain native Worktree records after **Remove from management** or uninstalling this plugin; the label is visible while the current directory remains inside that checkout. Official Forge provides restoration of a missing checkout in its configured pool and **Continue in Project**. Continue in Project targets the source Git root and removes the active Worktree label. Official Forge must remain enabled; it interprets these records independently of this plugin and its index.
+
+**Known upstream limitation:** in the tested DSH build, opening a live Session can read its skill catalog and automatically fall back from a missing checkout to the project directory before Forge offers recovery. The label then disappears. This also occurs with officially created Worktrees; automatic recovery after uninstall is therefore not guaranteed. This plugin does not override that native behavior. Once DSH has returned to the project, an unavailable old binding no longer blocks conversation or supplies stale Worktree instructions. Existing Sessions are not rewritten.
+
+The first-load attempt runs once per profile. If you later disable the bundle, ordinary restarts, list reads and use of existing Sessions leave it off. An explicit request to create a new Worktree Session from the sidebar, Dashboard or Agent tools enables the installed, compatible official bundle for the profile without a confirmation dialog. Opening **Diff** has its own confirmation.
+
+Worktree does not download Forge or override individually disabled components. Session creation waits for both the official Forge panel and its Worktree service to be live. If a component was disabled separately, re-enable it in Plugins. If activation fails or requires a restart, no Session is created. Retry after resolving the error or restarting DSH.
+
+Existing Sessions are not migrated. Old checkout paths stay in place. A new Session on an imported or older checkout can receive the label, but official disk restoration requires that checkout to be inside DSH's configured pool; otherwise use Continue in Project. Restoration does not recover uncommitted files. When several Sessions are waiting for the same missing checkout, resume each Session separately.
+
+In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. This includes the current blank Session before its first message. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
+
+After removal from management, the blank Session page and the conversation header both show the branch checked out in the Session’s working directory. Choosing **Continue in the project** switches the label to the project checkout’s branch.
 
 Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
 
@@ -605,7 +619,10 @@ Directory verification failures, a pending Session switch, and missing native ca
 without opening another directory's Diff. This requires the native DSH right sidebar and the updated
 Worktree Host; reload the Host after rebuilding this plugin.
 
-If the official Forge bundle is off, clicking the open icon asks you to **Enable and open Diff**.
+The Host verifies the target directory before the Dashboard offers **Enable and open Diff**.
+A failed check leaves the profile alone. If only another Session matches, the first click selects
+it without enabling Forge. Click again after it loads. Diff errors give the specific next step
+in the toast and error list; refreshing Workspace data does not retry the open action.
 The confirmation explains that Forge also includes native Worktree and GitHub integration and affects
 every Session using the current profile. After confirmation, the plugin enables Forge through DSH's
 Plugin Manager, waits for the native Diff to register, verifies the target directory, and opens it
@@ -620,7 +637,7 @@ Directory verification also has a timeout, and closing the Dashboard cancels its
 An already selected bundle is not force-enabled again; check its panel toggle on the DSH Plugins page
 if Diff remains unavailable. Closing Dashboard or changing its target cancels the pending open.
 Any completed Forge enablement remains saved, including after uninstalling this plugin.
-Startup never enables Forge. To turn it off, open **Plugins → Experimental plugins** and switch off
+The Dashboard does not enable Forge in the background. The Host's separate first-load attempt is not repeated after a manual disable. To turn it off, open **Plugins → Experimental plugins** and switch off
 **Change requests & worktrees**. This disables the whole official Forge bundle for the current profile,
 including its native Worktree and GitHub integration; closing the Diff sidebar only hides the panel.
 
@@ -810,6 +827,7 @@ If the backup cannot be written, cancellation fails and the original journal sta
   bindings while keeping the recorded history until it is forgotten.
 - **Remove from Management** deletes only the plugin's Worktree and binding records. It preserves
   the disk files and native DSH Sessions, and does not require a Session activity check.
+  Sessions already owned by a native Workspace stay in that Workspace immediately; no page refresh is needed.
 
 When importing a Worktree created by DSH, native ownership and its archive-retention setting stay
 with DSH. Importing does not disable native cleanup. DSH may reclaim that directory after all

@@ -3,6 +3,7 @@ import type {
   WorktreeHealth,
   WorktreeManager,
   WorktreeStatus,
+  WorktreeSessionCreationResult,
   WorktreeSessionState,
 } from '../../contract/index.js';
 import { sameWindowsPath } from '../../contract/windows-path.js';
@@ -75,9 +76,7 @@ export interface WorktreeSessionConnectorOptions {
   readonly archivedSessionIds: () => readonly string[];
   readonly createSession: (input: { readonly cwd: string }) => Promise<string>;
   /** The packaged Host owns native Workspace creation, directory entry and binding. */
-  readonly createBoundSession?: (input: CreateSessionForWorktreeInput & { readonly requestId: string }) => Promise<{
-    readonly sessionId: string; readonly bound: boolean; readonly error?: string; readonly state?: WorktreeSessionState;
-  }>;
+  readonly createBoundSession?: (input: CreateSessionForWorktreeInput & { readonly requestId: string }) => Promise<WorktreeSessionCreationResult>;
   readonly ensureSessionWorkspace: (workspaceId: string, sessionId: string) => void;
   readonly openSession: (sessionId: string) => void;
 
@@ -330,6 +329,12 @@ export function createWorktreeSessionConnector(
       if (options.createBoundSession) {
         creationRequests.set(key, { requestId });
         const created = await options.createBoundSession({ ...input, requestId });
+        if (!created.bound && created.retryCreation) {
+          creationRequests.delete(key);
+          throw new WorktreeSessionActionError('WORKTREE_SESSION_ENTRY_NOT_STARTED', created.error ?? '', false, {
+            workspaceId: input.workspaceId, sessionId: created.sessionId,
+          });
+        }
         creationRequests.set(key, { requestId, sessionId: created.sessionId });
         if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, new Error(created.error));
         await prepareOpen(created.sessionId, created.state);

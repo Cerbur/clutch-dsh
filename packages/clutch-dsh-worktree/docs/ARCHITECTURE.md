@@ -52,9 +52,10 @@ contract  ←  provider
 - 整个插件由单一 npm package `@cerbur/clutch-dsh-worktree` 组成，内部各层为源码模块，而非独立的 workspace package。
 - DSH 通过 `package.json.dsh.bundle.patch` 激活插件；`cordis.patch.yml` 为同目录下的 YAML 补丁层。
 - 补丁层装载 `clutch-dsh-worktree-host`，并通过 DSH 的 `dshHomePath()` 注入绝对路径 DSH Home。
-- Dashboard 原生 Diff 入口仅在点击时探测 Forge；组合包未启用时由用户确认，再通过既有
+- Dashboard 原生 Diff 入口先经 Host 检查 Session 与目标目录。仅其他 Session 匹配时只切换，
+  不读写 Forge 开关；用户再次点击后重新核验。仅当前 Session 匹配时才探测启用状态；未启用时由用户确认，再通过既有
   Connection 调用官方 Plugin Manager 启用固定的 Forge 组合包。配置所有权属于 DSH，
-  不写 Sidecar、不编辑 profile 文件、不复制官方 plugin rows，也不在启动或卸载时改变 Forge 开关。
+  不写 Sidecar、不编辑 profile 文件、不复制官方 plugin rows。Dashboard 不在启动时修改开关。Host 的首次加载与新建 Session 启用规则见下文，卸载不关闭 Forge。
   Host 启用成功后仍须等待 Client 原生 Diff 注册，再按原有目录身份与 Session 门禁导航。
   取消只终止待执行的导航和请求等待，不撤销已经完成的官方配置变更。
 - 官方 `dsh-typert-loader` 通过 `./package.json` 和 `./typert` 注册 descriptor，Upstream DSH 的 `TypertGateway` 在现有的 `/api` 连接通道上接管 `worktreeManager/<method>`。插件不创建第二套 RPC 或传输层。
@@ -210,7 +211,7 @@ wire requestId 为 null-only；已有 attempt 时允许原 id 重试。运行时
 
 `WorktreeRecord.source` 记录来源类型：
 
-- `plugin`：在原 Workspace 的专属池（`<workspace>/.agents/clutch-worktrees/wt_<12-hex-chars>`）下新建；
+- `plugin`：在源 Git 根的专属池（`<repository-root>/.agents/worktrees/clutch/wt_<12-hex-chars>`）下新建；旧 Workspace/Home 池保持兼容；
   池内仅创建自己的 `.gitignore`（`*`），不修改已有业务忽略文件。历史 DSH Home 外置路径保留用于读取、恢复和清理，不自动迁移；
 - `external`：登记已存在的独立 Git linked worktree。
 
@@ -220,6 +221,8 @@ Main 与 managed Worktree 共用 checkout projection：工作目录与 Git check
 `currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
 不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
 通用 `listWorktrees` 只读取 porcelain，不为每个 detached checkout 启动引用探测。
+Workspace 导航复用这份 Git 清单投影 linked checkout 的路径与 HEAD 标签。Session 标题栏按原生
+`workingDirectory` 匹配最具体的 checkout，移出管理后仍可显示实际分支；匹配结果不写入 Sidecar。
 Manage 的 Worktree 列表投影在同一 Sidecar 快照上按最多 4 项一批并行读取路径、活动与 HEAD，
 避免会话打开时逐项累加读取延迟；结果保持快照顺序、逐项错误语义与原有身份校验，
 不缓存或持久化运行时事实。并行上限按单次列表读取约束，不是全局 Git 进程上限。
@@ -296,7 +299,7 @@ Git 根执行，避免 Git 子目录的两种路径坐标混入同一列表。�
   - 原生目录能力存在时读取 DSH effective cwd；解绑、清理或 Main 分组不构成目录切换；
   - Active Worktree binding 必须与 effective cwd 匹配；缺少原生目录事实的旧 adapter 才保留 Main/detached 使用 Workspace 根、active 使用 Worktree 的派生规则；
   - 绑定校验比较 Worktree 与 DSH Session cwd 的物理路径，而不是要求路径字符串完全一致，以兼容平台路径大小写、符号链接和别名规范化；Client 端快照只用于候选筛选，最终关系与物理身份必须由 Host 重新校验；
-  - **cwd 是 DSH 原生执行事实；插件不改写 Session 元数据或直接追加事件**。旧 adapter 的关系派生只用于兼容。
+  - **cwd 是 DSH 原生执行事实；插件不改写 Session 元数据**。仅新建 Session 可通过官方 appendPluginRecord 追加 Forge Worktree 事实（见下文）；旧 adapter 的关系派生只用于兼容。
 - **孤儿与解绑语义**：未绑定的 Session 归入 Main 分组展示；删除 Worktree 不会删除 Session，关系转换为 `detached`；只有显式解绑才会回归 Main。分组变更不是原生目录切换，绝不把运行中的任务重定向。
 
 ### 时序约束
@@ -1065,8 +1068,8 @@ requestId，覆盖手动恢复后已开始对话的情况；未知传输结果�
 共享指令读取对缺少 gitRootPath 的历史记录应用既有 Workspace 子目录投影，再校验 native cwd；
 此投影仅在内存中使用，不迁移原 Sidecar、Session 或指令。
 
-人类选择 Workspace 内新建方案。新 checkout 根固定为原 Workspace 的
-`<workspace>/.agents/clutch-worktrees/wt_<id>`，子目录 Workspace 也在自己的可写范围内；
+2026-11-09 官方恢复兼容方案替代原 Workspace 内池。新 checkout 根固定为源 Git 根的
+`<repository-root>/.agents/worktrees/clutch/wt_<id>`，子目录 Workspace 访问需遵循原生审批；
 完整仓库仍位于该 checkout，公开 absolutePath 保留原 Workspace 的相对子目录。
 池中的独立 .gitignore 只包含 *；用户已有 .gitignore、配置、AGENTS 与业务文件不修改。
 Sidecar、锁、偏好始终在 DSH Home，禁止把它们随 checkout 放进业务目录。
@@ -1136,3 +1139,60 @@ Git 只读命令保持 GIT_OPTIONAL_LOCKS=0，避免状态读取反复改写 ind
 退出动画可暂留 inert、aria-hidden 的视觉内容；关闭即停用内容的监听和读取生命周期，
 不能等动画结束才释放。进入 Dashboard 直接移除浮窗。关闭标记按 Session 存于浏览器，
 最多保留最近十个；手动打开移除标记，不影响 DSH 或 Sidecar。
+
+## 新 Session 的官方 Forge Worktree 记录（2026-11-09）
+
+人类批准通过 DSH appendPluginRecord 写入 `plugin:client-ui-forge/worktree`，范围仅为本次
+新建且无 turn/start、step/start 或既有官方 Worktree 记录的 Session。原生 port 持有一次性
+新建身份；绑定已有 Session、冷读取、卸载、移出管理不补写记录，不迁移旧数据。
+
+初始化在 Agent.runMaintenance 内解析原 cwd 对应的源 Git 根，并校验 live Git checkout
+的物理路径、分支与 acquisition baseCommit。先 workingDirectory.set，再同步追加
+request(from:null) 与 created(path, branch, from:null, baseCommit, repositoryRoot)。
+from 不使用可变的 Dashboard baseBranch。先写 request 会让目录通知触发官方重复创建，
+因此禁止调换顺序。sessions.flush 必须确认持久化，随后才绑定并允许外层派发输入。
+失败保留新 Session id、不投递任务；maintenance callback 返回前用独立的 10 秒清理信号
+尽力恢复原目录（原生 Stop 不能取消该清理；已销毁的 Agent 仍受原生服务拒绝），未完成 request 追加 cancel。
+
+官方 Forge 独立解释记录，clutch 卸载或移出管理不删除它。标签取决于当前目录仍在记录的
+checkout 内；Continue in Project 返回源 Git 根后标签消失。官方恢复只接受其配置池内的路径，
+首次创建共享父池 .agents/worktrees 的一方按 Forge 约定写入默认忽略规则，已有父池保留原规则。旧池/外部导入路径可带标签并回到项目，但不承诺磁盘恢复。
+官方组件停用时记录仍保留，显示与恢复需重新启用官方组件。多 Session 共用一个 checkout；
+已在等待恢复的 Session 仍需逐个触发原生恢复。未提交文件不在恢复范围。
+
+### 独立 Forge 自动启用与准入
+
+UI 回归发现当前 DSH 的 sessionSkillCatalog.list 对 live Agent 调用 workingDirectory.ensure；
+缺失目录会先提交回退并插入通知，早于 Forge 的 inbox 恢复门禁。官方自身创建的 Worktree
+亦可复现，因此仅持久化官方记录不能承诺自动恢复（case 08，等待上游修复）。不安装额外
+兼容插件、不拦截或重写 DSH 服务，不回滚已有 cwd 事件。
+
+case 05 的修复只影响指令读取：active binding 与原生当前 cwd 不匹配时，历史路径投影的
+WORKTREE_NOT_FOUND 表示无适用 Worktree 指令，不再阻止原生对话。其他错误继续抛出；
+绑定、创建、Git 操作的目录可用性门禁保持严格。读取不解绑、不迁移 Sidecar、不改变 cwd。
+
+Host 通过可选 pluginManager 注入，在初始化完成后的定时回调中调用
+setBundleEnabled('@deepseek-ai/dsh-experimental-forge-bundle', true)。不能在构造阶段等待
+profile 变更，否则 HMR 的重载与 profile 锁可能互相等待。Forge 由 DSH profile 独立拥有，
+不是 Worktree 的子插件；Worktree dispose 只停止自己的观察与回调，不停用或卸载 Forge。
+
+每个 profile 的首次尝试由 Home/clutch-dsh-worktree/forge-activation/
+sha256(profileContext.dir).json 记录（version 与 bundle），独立于 Workspace 关系索引。
+先在同一目录写入并 fsync 临时文件，再用硬链接排他发布到最终路径。并发加载只允许发布成功的一方执行首次启用。已有损坏文件保留且显式失败。
+已启用、缺失或不兼容的 bundle 也记为已尝试。手动关闭后，普通重启、列表读取及已有 Session 的操作均保留关闭状态。
+
+侧栏、Dashboard 和 Agent 工具显式创建新 Worktree Session 时，Host 可按需启用已安装且兼容的官方 bundle，
+无需确认。首次加载标记只约束启动尝试。按需启用保留各组件单独的禁用设置，不下载安装；请求启用后等待
+官方面板及 Worktree 服务实际就绪。若启用失败、组件未就绪或需要重启，必须在创建原生 Session 前返回错误。
+Dashboard 打开 Diff 仍采用独立确认流程。
+
+新建前、初始化前、绑定前和派发输入前异步检查官方运行状态：bundle 独立选中且无错误，
+DSH rc.1 起面板 `forge-panel` 与工具共享 `worktree` 服务。用官方 bundle 声明行的
+`entryId` 和模块名关联 `listPlugins()`；两行都须 enabled 且 fiberPhase=active，并存在 forgePanel。
+`patchId` 表示能否通过 profile 修改条目，不是运行时身份。若旧布局声明 `forge-worktree`，则只认该隔离行，
+不能用同名模块或 `forgePanel.ctx` 看到的全局服务替代。并发准入共享进行中的读取，不缓存已完成的结果。
+共享的运行状态读取及启动时的 bundle 清单读取最多等待 15 秒。清单读取超时后释放待处理的选择，迟到的响应不会再触发启用。Stop、调用方取消或 manager 卸载会结束相应的等待并释放 maintenance。新 manager 重新检查首次尝试标记，不重复启用。
+新建流程在绑定锁内拒绝已归档 Worktree；既有 Session 的补绑和幂等复用不受影响。原生 Stop 到达时，
+已提交的绑定不回滚；初始化停止，不再派发首条任务。
+失败使用 WORKTREE_FORGE_UNAVAILABLE 和 NativeSessionCreationPreflightError，创建前失败
+不留 Session，恢复后同一 requestId 可重试。如果原生 Session 已建好但在调用 workingDirectory.set 前取消或出错，该次请求的结果按原 requestId 保留。侧栏收到确定结果后提示再次点击 +，下一次点击使用新 requestId，先前的空 Session 留在原 Workspace。停止后的迟到检查不得放行。

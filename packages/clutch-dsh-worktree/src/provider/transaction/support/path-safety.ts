@@ -12,10 +12,11 @@ import { providerError } from '../../types.js';
 export function assertGeneratedTarget(
   dependencies: Pick<TransactionDependencies, 'dshHome'>,
   input: CreateWorktreeTransactionInput,
+  repositoryRoot = input.workspaceRoot,
 ): void {
   if (
     !path.isAbsolute(input.targetPath) ||
-    !generatedPathAncestors(dependencies.dshHome, input.workspaceRoot, input.targetPath)
+    !generatedPathAncestors(dependencies.dshHome, input.workspaceRoot, input.targetPath, repositoryRoot)
   ) {
     throw providerError(
       'WORKTREE_STATE_CONFLICT',
@@ -32,10 +33,11 @@ export async function assertSafeRemovalPath(
   dependencies: Pick<TransactionDependencies, 'dshHome'>,
   record: WorktreeRecord,
   workspaceRoot: string,
+  repositoryRoot = workspaceRoot,
 ): Promise<void> {
   const targetPath = path.resolve(gitWorktreeRoot(record));
   if (record.source === 'plugin') {
-    await assertGeneratedPath(dependencies.dshHome, workspaceRoot, targetPath);
+    await assertGeneratedPath(dependencies.dshHome, workspaceRoot, targetPath, true, repositoryRoot);
     return;
   }
 
@@ -49,8 +51,9 @@ export async function assertRecoverableCreatePath(
   dependencies: Pick<TransactionDependencies, 'dshHome'>,
   pending: Extract<PendingOperation, { readonly type: 'create-worktree' }>,
   workspaceRoot: string,
+  repositoryRoot = workspaceRoot,
 ): Promise<void> {
-  await assertGeneratedPath(dependencies.dshHome, workspaceRoot, path.resolve(pending.targetPath));
+  await assertGeneratedPath(dependencies.dshHome, workspaceRoot, path.resolve(pending.targetPath), true, repositoryRoot);
 }
 
 export async function assertNotSymlink(pathname: string, record: WorktreeRecord): Promise<void> {

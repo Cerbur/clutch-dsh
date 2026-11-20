@@ -82,6 +82,10 @@ export async function getWorkspaceCheckout(context: WorktreeManagerContext, inpu
       return {
         gitRootPath,
         workspacePath,
+        linkedHeads: worktrees.filter((other) => other !== worktree && !other.bare).map((other) => ({
+          path: other.absolutePath,
+          label: other.prunable ? undefined : other.branch ?? other.headCommit?.slice(0, 12),
+        })),
         ...(currentHead === undefined ? {} : { currentHead }),
       };
     }

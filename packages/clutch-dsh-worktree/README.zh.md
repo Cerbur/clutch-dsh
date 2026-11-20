@@ -73,16 +73,20 @@ Local/Main 或 Worktree 分组，选择会话继续对话。使用 Worktree 面�
 
 1. 打开 Local/Main 或 Worktree 菜单，选择**创建 Worktree**。
 2. 选择本地或已获取的远端基线分支，并填写新分支名称。
-3. 确认后，点击 Worktree 上的 **+**，在该目录中打开会话。
+3. 确认后会创建 Worktree 并打开首个会话。如果 Forge 不可用，侧栏会显示新 Worktree，并提示会话创建失败。Forge 恢复后，点击该行的 **+** 即可打开会话。
 
 需要更新远端引用时，使用远端分支旁的 **Fetch**；列出分支不会自动访问远端。
-新 Worktree 仅继承已提交的文件，目录位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。
+新 Worktree 仅继承已提交的文件，目录位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`。
 
 接入已有目录时，切换到创建弹窗中的**导入**，选择 Worktree 后点击**导入 Worktree**。
 导入保留原目录及文件。列表仅显示尚未受管理、目录可用、绑定分支且不是仓库根的 Worktree。
 
 Local/Main 上的 **+** 在原 Workspace 中打开会话；存在匹配的空白会话时可能直接复用。
 Fork 一个 Worktree 会话时，新会话仍属于同一 Worktree。
+
+在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。当前空会话在发送第一条消息前也会显示图标。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
+
+移出管理后，空白会话页和对话标题栏都会显示会话工作目录中实际检出的分支。在 Forge 中选择**回到项目继续**后，标签会切换为项目目录的分支。
 
 ### 检查改动与管理 Worktree
 
@@ -97,8 +101,9 @@ Fork 一个 Worktree 会话时，新会话仍属于同一 Worktree。
 会话标题栏的 **Worktree 面板**在对话旁显示简洁的改动摘要。
 可以直接刷新，也可以打开完整 Dashboard 查看详情。
 
-**打开原生本地改动**会为匹配的会话打开 DSH Diff 侧栏。如果 Forge 尚未启用，会先询问是否
-为当前 profile 启用；这也会启用 Forge 的原生 Worktree 和 GitHub 集成，且卸载本插件后仍然有效。
+**打开原生本地改动**先检查是否有会话正在使用目标目录。如果只有其他会话匹配，Dashboard 会先切换过去；
+等会话加载后，再点一次打开 Diff 侧栏。没有匹配会话时不会更改 Forge 设置。当前会话匹配但 Forge 未启用时，
+DSH 会询问是否为当前 profile 启用；这也会启用 Forge 的原生 Worktree 和 GitHub 集成，且卸载本插件后仍然有效。
 可在**插件 → 实验性插件 → Change requests & worktrees**中关闭。
 
 ### 同步基线
@@ -130,7 +135,7 @@ Agent 被停止或中断时可能无法回报，空闲状态不代表成功。�
 | --- | --- |
 | **归档 Worktree** | 保留文件、会话、绑定和指令；Git 登记仍完整时可以取消归档。 |
 | **清理磁盘** | 单独确认后移除目录。请先停止使用它的所有任务，插件不会检查任务是否仍在运行。会话保留。 |
-| **移出管理** | 停止跟踪该 Worktree，保留文件和 DSH 原生会话。 |
+| **移出管理** | 停止跟踪该 Worktree，保留文件和 DSH 原生会话。 已有原生 Workspace 归属的 Session 会立即保留在原 Workspace 中，无需刷新页面。 |
 
 Local/Main Dashboard 的**管理 Worktree**支持批量操作。清理或移出管理前先归档。
 每个 Worktree 单独显示结果，失败项可以重试。
@@ -150,12 +155,20 @@ Local/Main Dashboard 的**管理 Worktree**支持批量操作。清理或移出�
 
 | 组件 | 要求 |
 | --- | --- |
-| DSH Host 与 Client | `>=0.2.2-rc.2` |
+| DSH Host、Client 与工作区路径工具包 | `>=0.2.2-rc.2` |
 | Git | `>=2.20.0`，可在 `PATH` 中使用；创建需要已有初始提交的仓库 |
 | Node.js | `>=24.9.0` |
 | 文件系统 | Windows 或 macOS 本地路径；网络或特殊文件系统可能不支持 |
 
 ## 行为与限制
+
+DSH 可能在 Forge 提供恢复选项前将会话切回项目目录。你可以在那里继续对话。
+
+Worktree 在每个配置档首次加载时，会尝试启用一次已安装且兼容的官方 Forge 组合包。之后手动关闭 Forge，重启 DSH、浏览列表或打开已有会话都会保持关闭。从侧栏、Dashboard 或 Agent 工具新建 Worktree 会话时，会直接为当前配置档重新启用 Forge，无需确认。打开 **Diff** 时若需启用 Forge，仍会单独询问。
+
+新建会话会等到 Forge 面板和 Worktree 服务都已运行。如果单独关闭了其中一项，请在**插件**中重新启用。Worktree 不会下载 Forge。启用失败或需要重启时不会创建会话，请解决问题或重启 DSH 后重试。如果 DSH 已建好会话，但在进入 checkout 前中断，会话会留在原 Workspace。解决提示中的问题后，再次点击 Worktree 的 **+** 即可。
+
+启用官方 Forge 后，新会话在移出管理或卸载插件后仍保留原生 Worktree 记录。Forge 可以恢复配置池内缺失的 checkout，或让你选择 **Continue in Project（回到项目继续）**。恢复无法找回未提交文件。
 
 - Workspace、Session 和对话历史以 DSH 为唯一数据源。移除 Worktree 不会删除其原生会话。
 - 每个会话最多属于一个 active Worktree，每个 Worktree 可以有多个会话。

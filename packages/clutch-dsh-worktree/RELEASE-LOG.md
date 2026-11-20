@@ -1,5 +1,55 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.38 — 2026-11-20
+
+### 中文
+
+#### 新增
+
+- 新建的 Worktree Session 支持通过 DSH 原生 Forge 恢复 checkout。
+- 每个 DSH profile 首次加载 Worktree 时会尝试启用已安装的 Forge，之后手动禁用的选择会保留，直到新建 Worktree Session 时按需启用。
+- Local 列表中的 Session 可显示当前 checkout 的分支图标，空白 Session 或已移出管理的 checkout 也能显示分支。
+
+#### 修复
+
+- Forge 未及时就绪时，新建 Session 的等待会超时，之后可以安全重试。
+- Session 离开已经缺失的 checkout 后，可以在新的工作目录继续对话。
+- 将 Worktree 移出管理后，DSH 仍会在原 Workspace 中显示其 Session。
+- 从 Dashboard 打开原生 Diff 时会校验目标 checkout。
+- 登记 checkout 后会刷新其状态，Session 顶部显示的 Worktree 信息也会跟随实际工作目录。
+- 创建 Worktree 时保留已有共享目录的 Git 忽略规则。
+
+### English
+
+#### Added
+
+- DSH's native Forge can recover the checkout for newly created Worktree Sessions.
+- Worktree tries to enable an installed Forge on its first load in each DSH profile and respects a later manual disable until Forge is needed to create a Worktree Session.
+- Sessions in the Local list can show their checkout's branch icon, including blank Sessions and Sessions whose checkouts were removed from management.
+
+#### Fixed
+
+- Creating a Session times out if Forge takes too long to become ready, and creation can be retried safely.
+- A Session can continue its conversation in a new working directory after leaving a missing checkout.
+- DSH keeps Sessions in their original Workspace after a Worktree is removed from management.
+- Opening the native Diff from the Dashboard verifies the target checkout.
+- Registering a checkout refreshes its status, and the Worktree details in the Session header follow its actual working directory.
+- Creating a Worktree preserves existing Git ignore rules in the shared worktree directory.
+
+## 0.1.37 — 2026-11-19
+
+### 中文
+
+#### 修复
+
+- 修正工作区路径依赖的版本约束，使插件在 DSH 0.2.2-rc.2 和 rc.5 上通过市场兼容性筛选。
+
+### English
+
+#### Fixed
+
+- Correct the workspace path dependency range so the plugin passes marketplace compatibility checks on DSH 0.2.2-rc.2 and rc.5.
+
 ## 0.1.36 — 2026-11-18
 
 ### 中文

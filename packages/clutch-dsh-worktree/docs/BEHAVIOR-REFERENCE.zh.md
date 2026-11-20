@@ -32,7 +32,21 @@ Session 后，待该 Session 不再为空白，再次新建会创建新的 Sessi
 手动绑定恢复同样遵循此规则。历史子目录 Worktree 中的新 Session 也能获取共享指令；
 离开绑定目录后仍会停止注入这些指令。
 
-新 Worktree 位于 `<workspace>/.agents/clutch-worktrees/wt_<id>/`。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 原生工作目录能力记录其执行目录。它们保留正常原生权限及用户的显式限制，无需插件专属权限配置。专属池仅包含自己的忽略文件，不修改仓库已有忽略规则。
+新 Worktree 位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`，属于 DSH 默认 Worktree 池。如果初始化在进入 checkout 前中断，空会话留在原 Workspace。解决提示中的问题后可再次点击 **+**。新 Session 仍归属原始 Workspace；接收任务输入前，由 DSH 记录执行目录和官方 Forge Worktree 事实。它们保留正常原生权限及用户的显式限制；子目录 Workspace 访问位于其目录之外的新 checkout 时，可能需要原生审批。专属子池有自己的忽略文件。如果共享父池由 Clutch 首次创建，Clutch 同时写入 Forge 默认的忽略规则，使同级 checkout 不会出现在源仓库的 Git 状态中。已有父池保留原有规则。
+
+每个 DSH profile 首次加载 Worktree 时，会将已安装的官方 Forge bundle 作为独立插件自动启用。卸载 Worktree 后，Forge 保持启用。新建的 Worktree Session 在**移出管理**或卸载本插件后仍保留原生 Worktree 记录；当前目录仍位于该 checkout 内时显示标签。官方 Forge 提供配置池内缺失 checkout 的恢复以及 **Continue in Project（回到项目继续）**。回到项目指向源 Git 根目录，并移除当前 Worktree 标签。官方 Forge 必须保持启用；它独立解释这些记录，不依赖本插件或其索引。
+
+**已知上游限制：**在本次验证的 DSH 构建中，打开已加载的 Session 时，技能列表读取可能在 Forge 提示恢复前，将缺失 checkout 的执行目录自动回退到项目目录，标签随之消失。官方创建的 Worktree 也会出现此问题，因此不能保证卸载后的自动恢复。本插件不覆盖该原生行为。DSH 已返回项目后，不可用的旧绑定不会再阻止对话，也不会提供过期 Worktree 指令。已有 Session 不会被改写。
+
+每个 profile 的首次加载只尝试启用一次。之后手动关闭组合包，普通重启、读取列表和使用已有 Session 都会保持关闭。从侧栏、Dashboard 或 Agent 工具显式新建 Worktree Session 时，会直接为当前 profile 启用已安装且兼容的官方组合包，无需弹窗确认。打开 **Diff** 时仍单独确认。
+
+Worktree 不会下载 Forge，也不会覆盖单独关闭的组件。创建 Session 会等到官方 Forge 面板和 Worktree 服务都已运行。如果单独关闭了组件，请在插件页重新启用。启用失败或需要重启时不会创建 Session，请解决问题或重启 DSH 后重试。
+
+不迁移已有 Session，旧 checkout 路径保持原位。在导入或旧 checkout 中新建的 Session 可以获得标签，但官方磁盘恢复要求路径位于 DSH 配置池内；否则请回到项目继续。恢复不能找回未提交文件。多个 Session 等待同一缺失 checkout 时，需要分别恢复每个 Session。
+
+在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。当前空会话在发送第一条消息前也会显示图标。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
+
+移出管理后，空白会话页和对话标题栏都会显示会话工作目录中实际检出的分支。在 Forge 中选择**回到项目继续**后，标签会切换为项目目录的分支。
 
 历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
 
@@ -501,7 +515,9 @@ Session，入口会先切换会话，并提示加载完成后再次点击；切�
 能力缺失时会显示反馈，不会打开其他目录的 Diff。此入口要求启用 DSH 原生右侧栏插件，
 并加载更新后的 Worktree Host；重新构建此插件后请重载 Host。
 
-如果官方 Forge 组合包未开启，点击打开图标会提示**启用并打开 Diff**。
+Host 核实目标目录后，Dashboard 才会提示**启用并打开 Diff**。核验失败不会更改 profile。
+如果只有另一会话匹配，第一次点击只切换会话，不启用 Forge；待加载后再点一次。
+通知和错误列表会给出对应的下一步操作；刷新 Workspace 数据不会重试打开 Diff。
 确认框会说明 Forge 也包含原生 Worktree 与 GitHub 集成，且启用会影响当前配置下的所有会话。
 确认后通过 DSH 插件管理器启用 Forge，等待原生 Diff 注册完成，再核验目标目录并自动打开，
 无需再次点击；取消不会更改开关。需要重启、配置被覆盖或面板加载失败时，会给出重试提示。
@@ -511,7 +527,7 @@ Session，入口会先切换会话，并提示加载完成后再次点击；切�
 同一 Session 的侧栏尚未挂载时会等待就绪，再重新核验目录后打开；Session 或运行目录变化会取消后续打开。
 状态读取、启用和侧栏就绪超时分别提供提示；启用超时不代表已保存的开关被撤销。
 目录核验也有超时限制，关闭 Dashboard 会取消尚未完成的读取。
-卸载本插件也不会关闭 Forge；启动时不会自动启用它。关闭入口是 **插件 → 实验性插件**，
+卸载本插件也不会关闭 Forge。Dashboard 不在后台启用 Forge；Host 独立的首次启用尝试不会在手动关闭后重复。关闭入口是 **插件 → 实验性插件**，
 关闭 **变更请求与工作树** 开关即可。这会关闭当前配置中的整个官方 Forge 组合包，
 包括其原生 Worktree 和 GitHub 集成；收起 Diff 侧栏只会隐藏面板。
 
@@ -656,6 +672,7 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
   binding 会 detached，记录会保留到之后显式移出管理。
 - **Remove from Management** 只删除 plugin 的 Worktree 和 binding 记录，会保留磁盘文件和原生
   DSH Session，也不要求检查 Session 活动状态。
+  已有原生 Workspace 归属的 Session 会立即保留在原 Workspace 中，无需刷新页面。
 
 导入由 DSH 创建的 Worktree 时，原生所有权及归档保留设置仍由 DSH 管理。导入不会禁止原生清理。
 所有引用 Session 归档后，DSH 可能回收该目录；仍有未归档 Session 使用该目录，或启用 DSH 的

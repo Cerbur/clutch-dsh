@@ -69,8 +69,8 @@ runtime 版本承诺。
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
 | DSH compatibility floor | `dsh-v0.2.2-rc.2`                                                                                           |
 | verified DSH graph      | `dsh-v0.2.2-rc.2`                                                                                           |
-| package DSH peer range  | 所有 `@deepseek-ai/dsh-*` peer 使用 `>=0.2.2-rc.2`                                                          |
-| local validation graph  | 所有对应 `@deepseek-ai/dsh-*` dev dependency 固定 `0.2.2-rc.2`；Cordis peer `^4.1.0`、dev `4.1.0`；旧图仅通过 test-only alias 保留回归 |
+| package DSH range  | 所有 DSH 同步版本线的直接依赖（含 workspace path 工具、peer 和开发依赖）使用 `>=0.2.2-rc.2`                                                          |
+| local validation graph  | workspace lockfile 将这些直接依赖解析为 `0.2.2-rc.2`；Cordis peer `^4.1.0`、dev `4.1.0`；旧图仅通过 test-only alias 保留回归 |
 | unsupported graph       | `dsh-v0.2.2-rc.2` 之前的版本，包括 `dsh-v0.2.2-rc.1`；更早 graph 也不满足当前 Client 和 WorkspaceSource contract |
 | forward compatibility   | 更高版本只有在保持 Controller、Store、WorkspaceSource、Connection 和 Slot contract 时才可候选，必须重新验证 |
 
@@ -140,7 +140,7 @@ dsh plugin --profile web add @cerbur/clutch-dsh-worktree
   已完成邮箱验证和发布所需的 2FA；
 - `package.json` 保留 `dsh.bundle.patch`、`publishConfig.access: "public"` 和
   `prepare: "pnpm run build"`；`packageManager` 保持项目实际使用的 pnpm 版本，不要借此升级依赖；
-- 官方 DSH package 继续放在 `peerDependencies`，不要复制成 runtime `dependencies`；
+- 宿主提供的 DSH 服务声明在 `peerDependencies`，直接导入的 `@deepseek-ai/dsh-util-workspace-path` 声明在 `dependencies`，两者使用相同兼容范围；
 - 发布前确认 DSH compatibility floor 仍为 `dsh-v0.2.2-rc.2`；运行 package manifest、Client
   composition 和 read-only `WorkspaceSource` 回归测试；不要恢复 legacy monolithic Client runtime 或
   `WorkspaceSource.set()` 兼容分支；

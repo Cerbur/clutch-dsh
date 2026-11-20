@@ -310,7 +310,7 @@ export async function statusRenderers() {
     source: 'plugin',
   };
   return {
-    session(presentation) {
+    session(presentation, props = {}) {
       return h.render(
         'session',
         () =>
@@ -319,6 +319,7 @@ export async function statusRenderers() {
             sessionId: 's',
             label: 's',
             blank: false,
+            ...props,
             drag,
             presentation,
           }),

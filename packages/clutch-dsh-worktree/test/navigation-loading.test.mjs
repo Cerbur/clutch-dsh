@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createWorktreeViewReader, createWorktreeModalViewLoader } from '../lib/client/view/worktree-view-read.js';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -18,6 +18,9 @@ test('real Git navigation reduces attached checkout probes from ten to four', as
   const git = (args) => execFileSync('git', args, { cwd: repo, timeout: 10000, maxBuffer: 1024 * 1024 });
   git(['init', '-b', 'main']);
   git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '-m', 'initial']);
+  const linked = path.join(root, 'unmanaged');
+  git(['worktree', 'add', '-b', 'feature/unmanaged', linked]);
+  git(['-C', linked, 'switch', '-c', 'feature/renamed']);
   const adapter = new LocalGitAdapter();
   const calls = [];
   const run = adapter.run.bind(adapter);
@@ -51,6 +54,7 @@ test('real Git navigation reduces attached checkout probes from ten to four', as
   assert.equal(sidecarReads, 1);
   assert.equal(view.gitState.value.currentBranch, 'main');
   assert.equal(view.checkout.currentHead.kind, 'branch');
+  assert.deepEqual(view.checkout.linkedHeads, [{ path: await realpath(linked), label: 'feature/renamed' }]);
   // Diagnostic only: real local Git/Manage reads, excluding recovery, RPC and UI.
   // Never turn wall time into a flaky correctness assertion.
   const timings = { legacy: [], snapshot: [] };

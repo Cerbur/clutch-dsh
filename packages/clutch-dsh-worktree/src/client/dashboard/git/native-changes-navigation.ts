@@ -59,11 +59,10 @@ export function createNativeChangesNavigation(options: {
       const run = async (): Promise<NativeChangesResult> => {
         if (!active()) return 'stale';
         const before = options.screen();
-        let activated = false;
+        let activatedSession: string | undefined;
         let expectedCwd = before.cwd;
         let readyDeadline = 0;
         let reportedWait = false;
-        let waitingForCurrent = false;
         const moved = (screen: NativeChangesScreen) => {
           if (screen.sessionId !== before.sessionId) { report('session-changed'); return true; }
           if (expectedCwd !== undefined && screen.cwd !== undefined && screen.cwd !== expectedCwd) {
@@ -73,7 +72,7 @@ export function createNativeChangesNavigation(options: {
           return false;
         };
         const pauseForMount = async (): Promise<NativeChangesResult | undefined> => {
-          if (!activated) return 'session-switching';
+          if (!activatedSession) return 'session-switching';
           if (Date.now() >= readyDeadline) return 'session-ready-timeout';
           if (!reportedWait) { reportedWait = true; report('session-mount-wait'); }
           await waitNativeDiffPoll(controller.signal, Math.min(options.pollMs ?? 100, readyDeadline - Date.now()));
@@ -90,15 +89,7 @@ export function createNativeChangesNavigation(options: {
           const sidebar = options.sidebar();
           if (!sidebar) return 'unavailable';
           const address = `dsh-resource://forge-changes/${encodeURIComponent(candidates[0]!)}/local`;
-          if (!sidebar.accepts(address)) {
-            if (!options.ensureAvailable) return 'unavailable';
-            report('activation-start');
-            const result = await options.ensureAvailable(address, confirm, controller.signal, active);
-            if (!active()) return 'stale';
-            if (result !== 'ready') return result;
-            activated = true;
-            readyDeadline = Date.now() + (options.readyTimeoutMs ?? 15_000);
-          }
+          if (!options.ensureAvailable && !sidebar.accepts(address)) return 'unavailable';
         } catch { return 'unavailable'; }
         // Registration and Session-store adoption are independent. A newly enabled
         // provider may register while the same Session is still loading/remounting.
@@ -106,11 +97,11 @@ export function createNativeChangesNavigation(options: {
         // must not block selecting a retained candidate. Each retry after readiness
         // validates the directory again; no pre-wait Host result is reused.
         while (active()) {
-          if (activated) {
+          if (activatedSession) {
             const current = options.screen();
             if (current.supported === false) return 'unavailable';
             if (moved(current)) return 'session-switching';
-            if (waitingForCurrent && (!current.ready || current.mountedSessionId !== before.sessionId || !current.cwd)) {
+            if (!current.ready || current.mountedSessionId !== before.sessionId || !current.cwd) {
               const result = await pauseForMount();
               if (result) return result;
               continue;
@@ -119,7 +110,7 @@ export function createNativeChangesNavigation(options: {
           }
           let target: string | undefined;
           try {
-            for (const sessionId of candidates) {
+            for (const sessionId of activatedSession ? [activatedSession] : candidates) {
               if (await nativeDiffRequest(controller.signal, options.verificationTimeoutMs ?? 15_000,
                 (signal) => options.manager.canOpenNativeChanges({ workspaceId: record.workspaceId,
                   worktreeId: record.worktreeId, sessionId, expectedPath: record.absolutePath }, signal))) {
@@ -136,7 +127,7 @@ export function createNativeChangesNavigation(options: {
           const after = options.screen();
           if (after.supported === false) return 'unavailable';
           // A Session/cwd change during the read cancels this click; never redirect a newer view.
-          if (moved(after) || (!activated && after.cwd !== before.cwd)) return 'session-switching';
+          if (moved(after) || (!activatedSession && expectedCwd !== undefined && after.cwd === undefined)) return 'session-switching';
           if (!target) return 'directory-mismatch';
           if (target !== after.sessionId) {
             report('session-selected');
@@ -145,19 +136,36 @@ export function createNativeChangesNavigation(options: {
             // Require a fresh click after rendering instead of opening a resource into the old store.
             return 'session-switching';
           }
-          if (!after.ready || after.mountedSessionId !== target || !after.cwd) {
-            waitingForCurrent = true;
-            const result = await pauseForMount();
-            if (result) return result;
-            continue;
-          }
-          if (expectedCwd === undefined) {
-            // The first published cwd is not correlated with the completed Host
-            // read. Pin it, then authorize again; never use that earlier success.
+          if (expectedCwd === undefined && after.cwd !== undefined) {
+            // A newly published cwd was not correlated with the completed Host read.
             expectedCwd = after.cwd;
             continue;
           }
           const address = `dsh-resource://forge-changes/${encodeURIComponent(target)}/local`;
+          if (!activatedSession && options.ensureAvailable) {
+            try {
+              const sidebar = options.sidebar();
+              if (!sidebar) return 'unavailable';
+              if (!sidebar.accepts(address)) {
+                // A profile-wide change is only offered for an authorized current Session.
+                const sameSession = () => active() && !moved(options.screen());
+                report('activation-start');
+                const result = await options.ensureAvailable(address, confirm, controller.signal, sameSession);
+                if (!active()) return 'stale';
+                if (moved(options.screen())) return 'session-switching';
+                if (result !== 'ready') return result;
+                activatedSession = target;
+                readyDeadline = Date.now() + (options.readyTimeoutMs ?? 15_000);
+                // Reauthorize after activation, even if the screen looks unchanged.
+                continue;
+              }
+            } catch { return 'unavailable'; }
+          }
+          if (!after.ready || after.mountedSessionId !== target || !after.cwd) {
+            const result = await pauseForMount();
+            if (result) return result;
+            continue;
+          }
           try {
             const sidebar = options.sidebar();
             if (!sidebar?.accepts(address)) return 'unavailable';
@@ -174,7 +182,6 @@ export function createNativeChangesNavigation(options: {
             return 'opened';
           } catch (error) {
             if (!(error instanceof Error) || error.message !== 'sidebarRight: no session surface is mounted') return 'unavailable';
-            waitingForCurrent = true;
             const result = await pauseForMount();
             if (result) return result;
           }
