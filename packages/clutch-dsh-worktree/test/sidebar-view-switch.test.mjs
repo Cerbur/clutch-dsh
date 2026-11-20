@@ -10,9 +10,9 @@ import { createRoot } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';
 
-async function loadSwitch() {
+async function loadTs(relative, dependencies) {
   const compiled = ts.transpileModule(
-    await readFile(new URL('../src/client/view/SidebarViewSwitch.tsx', import.meta.url), 'utf8'),
+    await readFile(new URL(relative, import.meta.url), 'utf8'),
     {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
@@ -22,23 +22,50 @@ async function loadSwitch() {
     },
   ).outputText;
   const exports = {};
+  new Function('require', 'exports', compiled)((name) => {
+    assert.ok(name in dependencies, name);
+    return dependencies[name];
+  }, exports);
+  return exports;
+}
+
+async function loadSwitch() {
+  const entryGuide = await loadTs('../src/client/view/entry-guide.ts', {});
   const dependencies = {
     react: React,
     'react/jsx-runtime': JSX,
     'react-dom': { createPortal },
     '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('span', { 'data-branch': true }) },
     '../worktree.css': {
-      default: { headerSwitch: 'header-switch', railSwitch: 'rail-switch' },
+      default: {
+        headerSwitch: 'header-switch',
+        railSwitch: 'rail-switch',
+        entryGuide: 'entry-guide',
+        entryGuideArrow: 'entry-guide-arrow',
+        entryGuideTitle: 'entry-guide-title',
+        entryGuideBody: 'entry-guide-body',
+        entryGuideDismiss: 'entry-guide-dismiss',
+      },
     },
     '@deepseek-ai/dsh-client-ui-primitives': {
       Tooltip: ({ children }) => children,
     },
+    './EntryGuide.js': {
+      EntryGuide: ({ title, body, dismissLabel, onDismiss }) =>
+        React.createElement(
+          'div',
+          { 'data-guide': 'stub', 'data-guide-body': body },
+          React.createElement('span', { 'data-guide-title': title }),
+          React.createElement(
+            'button',
+            { type: 'button', 'data-guide-dismiss': dismissLabel, onClick: onDismiss },
+            dismissLabel,
+          ),
+        ),
+    },
+    './entry-guide.js': entryGuide,
   };
-  new Function('require', 'exports', compiled)((name) => {
-    assert.ok(dependencies[name], name);
-    return dependencies[name];
-  }, exports);
-  return exports.SidebarViewSwitch;
+  return (await loadTs('../src/client/view/SidebarViewSwitch.tsx', dependencies)).SidebarViewSwitch;
 }
 
 function waitForFrame() {
@@ -67,8 +94,17 @@ const collapsedMarkup = `
 </div>
 `;
 
-async function mount(markup, onOpen) {
-  const dom = new JSDOM(markup, { pretendToBeVisual: true });
+const guideCopy = {
+  title: 'Open Worktree mode here',
+  body: 'Browse Sessions grouped by Git worktree.',
+  dismissLabel: 'Got it',
+};
+
+async function mount(markup, onOpen, options = {}) {
+  const dom = new JSDOM(markup, { pretendToBeVisual: true, url: 'https://dsh.test/' });
+  if (options.guideSeen === true) {
+    dom.window.localStorage.setItem('clutch-dsh-worktree.entry-guide-seen', '1');
+  }
   const previous = {
     window: globalThis.window,
     document: globalThis.document,
@@ -92,6 +128,7 @@ async function mount(markup, onOpen) {
       React.createElement(SidebarViewSwitch, {
         visible: true,
         label: 'Worktree',
+        ...(options.guide === undefined ? {} : { guide: options.guide }),
         onOpen,
       }),
     );
@@ -124,6 +161,69 @@ test('portals the Worktree entry into the native workspace toolbar when wide', a
     assert.equal(doc.querySelector('[data-sidebar-list-area] [data-worktree-view-switch]'), null);
     button.click();
     assert.equal(opened, 1);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('shows the one-time entry guide and records it after opening the mode', async () => {
+  let opened = 0;
+  const mounted = await mount(wideMarkup, () => { opened += 1; }, { guide: guideCopy });
+  try {
+    const doc = mounted.dom.window.document;
+    assert.ok(doc.querySelector('[data-guide="stub"]'), 'guide renders next to the entry');
+    assert.equal(doc.querySelector('[data-guide-title]')?.getAttribute('data-guide-title'), guideCopy.title);
+    assert.equal(doc.querySelector('[data-guide-body]')?.getAttribute('data-guide-body'), guideCopy.body);
+    await React.act(async () => {
+      doc.querySelector('[data-worktree-view-switch="header"]').click();
+    });
+    assert.equal(opened, 1);
+    assert.equal(doc.querySelector('[data-guide="stub"]'), null, 'guide disappears after opening');
+    assert.equal(
+      mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'),
+      '1',
+    );
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('dismissing the guide records it without opening the mode', async () => {
+  let opened = 0;
+  const mounted = await mount(wideMarkup, () => { opened += 1; }, { guide: guideCopy });
+  try {
+    const doc = mounted.dom.window.document;
+    const dismiss = doc.querySelector('[data-guide-dismiss]');
+    assert.ok(dismiss, 'guide exposes its dismiss control');
+    await React.act(async () => { dismiss.click(); });
+    assert.equal(opened, 0);
+    assert.equal(doc.querySelector('[data-guide="stub"]'), null);
+    assert.equal(
+      mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'),
+      '1',
+    );
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('does not show the guide once this browser dismissed it', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, guideSeen: true });
+  try {
+    assert.equal(mounted.dom.window.document.querySelector('[data-guide="stub"]'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('omits the guide when the consumer provides no copy', async () => {
+  const mounted = await mount(wideMarkup, () => {});
+  try {
+    assert.equal(mounted.dom.window.document.querySelector('[data-guide="stub"]'), null);
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();

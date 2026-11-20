@@ -12,7 +12,9 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   (`data-sidebar-workspace-header`) and a 36px rail button into the collapsed rail list area
   (`data-sidebar-list-area`); both are documented DSH integration markers. No
   `sidebar.footer.action` registration is made, so other footer plugins keep the native row
-  geometry; this supersedes the 2026-08-21 footer-action design. Exit/disposal releases the
+  geometry; this supersedes the 2026-08-21 footer-action design. A one-time guide
+  (`view/EntryGuide.tsx`, remembered through `view/entry-guide.ts`) points at the mounted entry
+  until the browser dismisses it or opens the mode. Exit/disposal releases the
   registration so the native occupant wins again. Native registrations
   and their child declarations remain owned by DSH. No DOM row order, array index, text label,
   private class, or measured coordinate selects the navigation mount point.

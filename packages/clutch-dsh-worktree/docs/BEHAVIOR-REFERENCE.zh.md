@@ -69,7 +69,9 @@ Worktree 通过 DSH 的 `sidebar.workspaces` 插槽，仅替换 Workspace 浏览
 使用面板标题栏的退出按钮，或折叠状态下的窄栏退出按钮，即可恢复原生 Workspace 浏览器。
 模式入口只挂载在 DSH 公开的 `data-sidebar-workspace-header` 与 `data-sidebar-list-area`
 标记内，不插入原生行，也不占用底栏。侧栏挂载和折叠遵循 DSH 插槽契约，不通过文字、
-DOM 顺序或坐标定位原生行。
+DOM 顺序或坐标定位原生行。入口旁的一次性引导只在该浏览器尚未关闭或使用入口时出现；关闭、
+按 Esc、点击引导外部或进入 Worktree 模式都会记录已读，已读状态保存在浏览器本地，不写入
+Sidecar，也不发送请求。
 导航继承原生 Sidebar 材质和透明度偏好。Dashboard 继续作为独立浮层，由已有操作显式打开。
 
 标题栏的**添加 Workspace** 使用 DSH 配置的目录选择器，包括 Web 的应用内目录浏览器及

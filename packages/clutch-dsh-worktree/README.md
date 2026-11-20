@@ -60,6 +60,10 @@ open a Workspace and its Local/Main or Worktree group. Select a Session to conti
 conversation. Use the Worktree panel header's exit control, or the rail exit while collapsed, to
 return to native Workspace navigation.
 
+Until it is dismissed, a one-time hint beside the entry explains how to open the mode. Dismissing
+the hint or opening the mode retires it for that browser, so users who were already inside
+Worktree mode see it once after their first exit.
+
 Filter Sessions by **Today**, **24 hours**, **7 days**, or **All**. Running and waiting Sessions,
 and the Session you are viewing, remain visible. The range menu lets you hide inactive groups
 and choose which range tabs to show. Filtering does not archive or remove anything.

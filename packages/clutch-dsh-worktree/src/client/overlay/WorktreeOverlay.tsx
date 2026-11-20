@@ -38,6 +38,11 @@ export function WorktreeOverlay(props: WorktreeOverlayProps) {
       <SidebarViewSwitch
         visible={!active && props.available && props.manager !== undefined}
         label={props.t('mode.open')}
+        guide={{
+          title: props.t('mode.guide.title'),
+          body: props.t('mode.guide.body'),
+          dismissLabel: props.t('mode.guide.dismiss'),
+        }}
         onOpen={() => { props.actions.setViewMode('worktree'); }}
       />
       <WorktreeSurface {...props} sidebarSeat={sidebarSeat}

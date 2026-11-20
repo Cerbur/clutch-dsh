@@ -86,7 +86,9 @@ Use the surface header's exit control, or the rail exit while collapsed, to rest
 Workspace browser. The entry is mounted only inside DSH's documented
 `data-sidebar-workspace-header` and `data-sidebar-list-area` markers, so it injects no native
 row and no footer row. Sidebar placement and folding follow DSH's slot contract, without
-locating native rows by text, DOM order, or coordinates.
+locating native rows by text, DOM order, or coordinates. A one-time guide sits beside the entry
+until that browser dismisses or uses it; closing it, pressing Escape, clicking outside it, or
+opening Worktree mode records the read locally and sends nothing to the Host.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
 

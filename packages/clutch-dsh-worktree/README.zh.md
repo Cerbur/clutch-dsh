@@ -59,6 +59,9 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 Local/Main 或 Worktree 分组，选择会话继续对话。使用 Worktree 面板标题栏的退出按钮，
 或折叠状态下的窄栏退出按钮，可返回原生 Workspace 导航。
 
+入口旁会显示一次性引导，说明如何打开 Worktree 模式；关闭引导或直接进入模式后，该浏览器
+不再显示，因此此前已在 Worktree 模式中的用户会在首次退出后看到一次。
+
 使用**今天**、**24 小时**、**7 天**或**全部**筛选会话。运行中、等待交互和当前查看的会话
 始终可见。范围菜单支持隐藏不活跃分组、选择显示哪些时间范围。筛选不会归档或删除内容。
 即使隐藏了不活跃分组，在所选时间范围内创建或导入的 Worktree 和所属 Workspace 仍然可见，即使其中还没有会话。
