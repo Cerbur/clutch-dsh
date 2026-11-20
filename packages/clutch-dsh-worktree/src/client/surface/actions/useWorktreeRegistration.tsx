@@ -225,16 +225,18 @@ export function useWorktreeRegistration({
     registeredWorktree: WorktreeRecord,
   ): Promise<void> => {
     closeWorktreeCreator(true);
+    const refreshRegistration = () => refresh({
+      scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
+      preserveCurrent: true,
+    });
     if (createSessionCallback === undefined) {
-      await refresh({
-        scope: { kind: 'workspace', workspaceId: registeredWorktree.workspaceId },
-        preserveCurrent: true,
-      });
       setActionError({
         code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE',
         message: '',
         retryable: true,
+        details: { workspaceId: registeredWorktree.workspaceId },
       });
+      await refreshRegistration();
       return;
     }
 
@@ -251,11 +253,14 @@ export function useWorktreeRegistration({
         openingSession: { sessionId, worktreeId: registeredWorktree.worktreeId },
       }));
     } catch (error) {
+      const sessionError = toWorktreeViewError(error);
+      setActionError({ ...sessionError, details: { ...sessionError.details, workspaceId: registeredWorktree.workspaceId } });
       if (error instanceof WorktreeSessionBindingError) {
         setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId,
-          error: toWorktreeViewError(error) });
+          error: sessionError });
       }
-      throw error;
+      // Registration already committed even when opening the first Session failed.
+      await refreshRegistration();
     }
   };
   const submitWorktree = async (): Promise<void> => {

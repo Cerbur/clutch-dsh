@@ -570,9 +570,10 @@ does not change DSH Session or Workspace data.
 
 The Client also contributes a browser-local `shell.overlay` companion for the
 blank Hero. It positions `Workspace (branch)` after the native Hero headline
-while `[data-phase='hero']` is present. The suffix is derived from the selected
-Workspace's current local branch or active Worktree branch, so changing the
-Workspace causes the displayed suffix to refresh.
+while `[data-phase='hero']` is present. Before a Session exists it shows the
+selected Workspace branch. For a selected blank Session it matches the native
+list's `workingDirectory` projection against the same checkout roots as the
+conversation header. Directory changes update the label even after removal from management.
 
 The Hero companion is deliberately visual rather than a native Conversation
 slot: the current upstream DSH source checkout has no additive Hero headline seat. It never renames the native

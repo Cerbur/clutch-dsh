@@ -69,7 +69,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 
 1. 打开 Local/Main 或 Worktree 菜单，选择**创建 Worktree**。
 2. 选择本地或已获取的远端基线分支，并填写新分支名称。
-3. 确认后，点击 Worktree 上的 **+**，在该目录中打开会话。
+3. 确认后会创建 Worktree 并打开首个会话。如果 Forge 不可用，侧栏会显示新 Worktree，并提示会话创建失败。Forge 恢复后，点击该行的 **+** 即可打开会话。
 
 需要更新远端引用时，使用远端分支旁的 **Fetch**；列出分支不会自动访问远端。
 新 Worktree 仅继承已提交的文件，目录位于 `<repository-root>/.agents/worktrees/clutch/wt_<id>/`。
@@ -82,7 +82,7 @@ Fork 一个 Worktree 会话时，新会话仍属于同一 Worktree。
 
 在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。当前空会话在发送第一条消息前也会显示图标。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
 
-移出管理后，会话标题栏仍显示其工作目录实际检出的分支。在 Forge 中选择**回到项目继续**后，标题栏会切换为项目目录的分支。
+移出管理后，空白会话页和对话标题栏都会显示会话工作目录中实际检出的分支。在 Forge 中选择**回到项目继续**后，标签会切换为项目目录的分支。
 
 ### 检查改动与管理 Worktree
 

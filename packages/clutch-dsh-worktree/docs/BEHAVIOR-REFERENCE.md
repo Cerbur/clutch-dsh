@@ -53,7 +53,7 @@ Existing Sessions are not migrated. Old checkout paths stay in place. A new Sess
 
 In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. This includes the current blank Session before its first message. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
 
-After removal from management, the Session header still shows the branch checked out in its working directory. Choosing **Continue in the project** changes the header to the project checkout’s branch.
+After removal from management, the blank Session page and the conversation header both show the branch checked out in the Session’s working directory. Choosing **Continue in the project** switches the label to the project checkout’s branch.
 
 Historical and imported external Worktrees stay in place. Historical Sessions and saved permissions are not migrated. An external checkout may still need ordinary DSH approval when the original Workspace sandbox does not cover it. Creating new Worktree Sessions requires the native `workingDirectory` service; older hosts fail explicitly before creating a Session.
 

@@ -73,7 +73,7 @@ more than five Sessions, or **Collapse All** to focus on the current Session's g
 
 1. Open the Local/Main or Worktree menu and choose **Create Worktree**.
 2. Choose a local or fetched remote base branch and a new branch name.
-3. Confirm, then use **+** on the Worktree to open a Session in that checkout.
+3. Confirm to create the Worktree and open its first Session. If Forge is unavailable, the new Worktree appears in the sidebar with the Session error. Once Forge is ready, click **+** on that row to open a Session.
 
 Use **Fetch** beside remote branches when you need updated remote refs; listing branches
 does not contact remotes automatically. New Worktrees inherit committed files only.
@@ -88,7 +88,7 @@ be reused. Forking a Worktree Session keeps the new Session in the same Worktree
 
 In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. The current blank Session shows the icon before its first message. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
 
-After removal from management, the Session header still shows the branch checked out in its working directory. Choosing **Continue in the project** changes the header to the project checkout’s branch.
+After removal from management, the blank Session page and the conversation header both show the branch checked out in the Session’s working directory. Choosing **Continue in the project** switches the label to the project checkout’s branch.
 
 ### Review changes and manage a Worktree
 
