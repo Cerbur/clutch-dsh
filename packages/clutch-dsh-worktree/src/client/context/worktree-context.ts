@@ -1,4 +1,5 @@
 import type { BranchRecord, SessionBinding, WorktreeRecord, WorkspaceCheckout } from '../../contract/index.js';
+import { isWindowsPath, normalizeWindowsPath } from '../../contract/windows-path.js';
 
 export type WorktreeSessionContextReason =
   | 'no-session'
@@ -46,6 +47,33 @@ const none = (reason: WorktreeSessionContextReason): WorktreeSessionContext => (
   kind: 'none',
   reason,
 });
+
+export type HeaderCheckout = { readonly kind: 'main' | 'worktree'; readonly label: string };
+
+/** Match the native Session cwd against Git's checkout roots, including nested worktree pools. */
+export function resolveHeaderCheckout(
+  value: WorktreeSessionContext, checkout: WorkspaceCheckout | undefined, cwd: string | undefined,
+): HeaderCheckout | undefined {
+  if (value.kind === 'none') return undefined;
+  if (!cwd || !checkout?.linkedHeads) return value;
+  const normalize = isWindowsPath(cwd) ? normalizeWindowsPath : (path: string) => path;
+  const directory = normalize(cwd);
+  const roots = [
+    { path: checkout.gitRootPath, kind: 'main' as const,
+      label: checkout.currentHead?.name ?? (value.kind === 'main' ? value.label : undefined) },
+    ...checkout.linkedHeads.map((head) => ({ ...head, kind: 'worktree' as const })),
+  ];
+  let longest = -1;
+  let match: HeaderCheckout | undefined;
+  for (const entry of roots) {
+    const root = normalize(entry.path).replace(/\/+$/u, '');
+    if (root.length > longest && (directory === root || directory.startsWith(root + '/'))) {
+      longest = root.length;
+      match = entry.label ? { kind: entry.kind, label: entry.label } : undefined;
+    }
+  }
+  return match;
+}
 
 /** Resolve the branch or active Worktree label for one current DSH Session. */
 export function resolveWorktreeSessionContext(

@@ -221,6 +221,8 @@ Main 与 managed Worktree 共用 checkout projection：工作目录与 Git check
 `currentHead: { kind: 'branch' | 'tag' | 'commit', name, commit }` 只表达观察到的 HEAD，
 不替代持久 branch，也不进入本地 branch selector。Provider 优先读取 porcelain 的本地 branch；
 通用 `listWorktrees` 只读取 porcelain，不为每个 detached checkout 启动引用探测。
+Workspace 导航复用这份 Git 清单投影 linked checkout 的路径与 HEAD 标签。Session 标题栏按原生
+`workingDirectory` 匹配最具体的 checkout，移出管理后仍可显示实际分支；匹配结果不写入 Sidecar。
 Manage 的 Worktree 列表投影在同一 Sidecar 快照上按最多 4 项一批并行读取路径、活动与 HEAD，
 避免会话打开时逐项累加读取延迟；结果保持快照顺序、逐项错误语义与原有身份校验，
 不缓存或持久化运行时事实。并行上限按单次列表读取约束，不是全局 Git 进程上限。

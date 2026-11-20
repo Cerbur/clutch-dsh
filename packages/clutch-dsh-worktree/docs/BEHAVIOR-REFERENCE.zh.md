@@ -46,6 +46,8 @@ Worktree 不会下载 Forge，也不会覆盖单独关闭的组件。创建 Sess
 
 在 Worktree 模式下，列于**本地**的会话如果仍被 DSH 识别为 Worktree Session，会在右侧显示分支图标，包括移出管理后的会话。悬停图标可查看分支名。图标跟随原生记录，会话离开该 checkout 后消失；没有官方记录的历史会话不会补标。
 
+移出管理后，会话标题栏仍显示其工作目录实际检出的分支。在 Forge 中选择**回到项目继续**后，标题栏会切换为项目目录的分支。
+
 历史与导入的外置 Worktree 保持原位，历史 Session 和已保存权限不会迁移。若外置 checkout 不在原 Workspace 的沙箱范围内，仍可能需要 DSH 普通审批。创建新 Worktree Session 要求原生 `workingDirectory` 服务；旧 Host 会在创建 Session 前显式失败。
 
 ### 打开 Worktree 模式

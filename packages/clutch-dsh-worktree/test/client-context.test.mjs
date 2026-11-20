@@ -1,6 +1,57 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveWorktreeSessionContext } from '../lib/client/context/worktree-context.js';
+import { resolveHeaderCheckout, resolveWorktreeSessionContext } from '../lib/client/context/worktree-context.js';
+import { loadClientEntry } from './client-fixture.mjs';
+
+test('registered header renders the live working directory after removal and Continue in Project', async (t) => {
+  const linked = '/repo/.agents/worktrees/clutch/wt_1';
+  const jsx = (type, props) => ({ type, props });
+  const client = await loadClientEntry({
+    jsxRuntime: { jsx, jsxs: jsx },
+    sessionListSnapshot: { current: 'session-current', byId: { 'session-current': {} } },
+    rpc: { async call() {
+      return { ok: true, value: { ok: true, value: {
+        checkout: { gitRootPath: '/repo', currentHead: { kind: 'branch', name: 'trunk' },
+          linkedHeads: [{ path: linked, label: 'feature/actual' }] },
+        gitState: { ok: true, value: { currentBranch: 'trunk' } },
+        worktrees: [], bindings: [], mainInstructions: '',
+      } } };
+    } },
+  });
+  t.after(() => client.disposers.toReversed().forEach((dispose) => dispose()));
+  const header = client.registrationsById.get('clutch-dsh-worktree-context-header');
+  const context = header.options.inject().hooks.worktreeContext;
+  await new Promise((resolve) => globalThis.setImmediate(resolve));
+  assert.equal(context.getSnapshot().value.kind, 'main');
+  function label(cwd) {
+    const chip = header.component({
+      sessionId: 'session-current', t: (key, params) => params ? key + ' ' + params.name : key,
+      useWorktreeContext: (select) => select(context.getSnapshot()),
+      useProjection: (key) => { assert.equal(key, 'workingDirectory'); return cwd; },
+    });
+    return chip.type(chip.props).props.anchor.props['aria-label'];
+  }
+  assert.equal(label(linked), 'context.worktree feature/actual');
+  assert.equal(label('/repo'), 'context.main trunk');
+});
+
+test('forgotten Session header follows its actual checkout, then the project on the same Session', () => {
+  const root = '/repo';
+  const linked = root + '/.agents/worktrees/clutch/wt_1';
+  const checkout = { gitRootPath: root, currentHead: { kind: 'branch', name: 'trunk' },
+    linkedHeads: [{ path: linked, label: 'feature/renamed' }] };
+  const local = resolveWorktreeSessionContext(baseInput({ checkout }));
+  assert.equal(resolveHeaderCheckout(local, checkout, linked + '/app')?.label, 'feature/renamed');
+  assert.equal(resolveHeaderCheckout(local, checkout, root)?.label, 'trunk');
+  const staleBinding = { kind: 'worktree', label: 'feature/old', worktreeId: 'wt_1', workspaceId: 'ws1' };
+  assert.equal(resolveHeaderCheckout(staleBinding, checkout, root)?.label, 'trunk');
+  assert.equal(resolveHeaderCheckout(local, checkout, linked + '-sibling')?.label, 'trunk');
+  assert.equal(resolveHeaderCheckout(local, checkout, '/elsewhere'), undefined);
+  assert.equal(resolveHeaderCheckout(local, { ...checkout, currentHead: undefined }, root)?.label, 'trunk');
+  for (const reason of ['repair', 'detached', 'stale', 'workspace-mismatch']) {
+    assert.equal(resolveHeaderCheckout({ kind: 'none', reason }, checkout, linked), undefined);
+  }
+});
 
 const workspace = { workspaceId: 'ws1', sessionIds: ['session-1'] };
 

@@ -556,6 +556,10 @@ launching to the browser's protocol handler; it makes no success or existence cl
 The Client contributes one read-only context action to the existing
 `conversation.session.header.actions` list. It displays the current local branch
 or the active Worktree branch beside the native Session title and Agent mode.
+The header subscribes to the mounted Session's native working directory. It selects
+the deepest containing checkout in the Workspace Git worktree listing, including
+checkouts removed from management. Returning to the project selects its HEAD on
+the same Session. This display lookup does not change Dashboard ownership or bindings.
 
 The Client contributes a quick Dashboard button to the existing
 `conversation.session.header.utilities` list. It appears only when the shared

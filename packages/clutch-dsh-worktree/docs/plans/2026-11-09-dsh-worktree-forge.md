@@ -15,6 +15,10 @@ outside the configured official pool support labels and Continue in Project, but
 disk restoration remains restricted by DSH. Subdirectory Workspaces retain their native
 membership and permissions; official Continue in Project targets the source Git root.
 
+Case 15: the Session header follows the native working directory after forgetting
+a checkout and after Continue in Project. Git supplies the checkout's observed
+branch through the existing navigation read; sidecar membership still controls management.
+
 Validation: targeted real-native record, replay and restoration tests; historical-path
 regression tests; all package gates; isolated acceptance under `~/.dsh-test`, including
 plugin unload and read-only inspection of old data. No release/version changes.

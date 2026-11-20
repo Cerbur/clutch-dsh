@@ -88,6 +88,8 @@ be reused. Forking a Worktree Session keeps the new Session in the same Worktree
 
 In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
 
+After removal from management, the Session header still shows the branch checked out in its working directory. Choosing **Continue in the project** changes the header to the project checkout’s branch.
+
 ### Review changes and manage a Worktree
 
 Open **Dashboard** from a row menu or the Session header. Browse Sessions, edit shared

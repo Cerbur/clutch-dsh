@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '../dsh-slot-contract.js';
-import type { WorktreeSessionContext } from './worktree-context.js';
+import { resolveHeaderCheckout, type HeaderCheckout } from './worktree-context.js';
 import type { WorktreeContextState } from './worktree-context-store.js';
 import { WORKTREE_NS } from '../locales.js';
 import styles from './worktree-context.css';
@@ -35,10 +35,9 @@ function WorktreeContextLabel({
   value,
   t,
 }: {
-  readonly value: WorktreeSessionContext;
+  readonly value: HeaderCheckout;
   readonly t: WorktreeTranslate;
 }) {
-  if (value.kind === 'none') return null;
   const ariaLabel = value.kind === 'main'
     ? t('context.main', { name: value.label })
     : t('context.worktree', { name: value.label });
@@ -62,9 +61,12 @@ function WorktreeContextLabel({
 export function WorktreeHeaderContext({
   sessionId,
   useWorktreeContext,
+  useProjection,
   t,
 }: WorktreeHeaderContextProps) {
   const state = useWorktreeContext((snapshot) => snapshot);
+  const cwd = useProjection('workingDirectory');
   if (state.sessionId !== sessionId) return null;
-  return <WorktreeContextLabel value={state.value} t={t} />;
+  const value = resolveHeaderCheckout(state.value, state.checkout, cwd);
+  return value ? <WorktreeContextLabel value={value} t={t} /> : null;
 }
