@@ -389,7 +389,7 @@ pnpm dsh web --dump-config | grep -A 10 clutch-dsh-worktree
 Sidecar、偏好与锁仍位于用户主目录的 DSH Home；新 checkout 放在原 Workspace 范围以沿用默认权限：
 
 - **工作区 Sidecar JSON**：`$dshHome/clutch-dsh-worktree/workspaces/<workspaceId>.json`
-- **新建 Worktree 根目录**：`<workspace>/.agents/clutch-worktrees/wt_<hex>/`（子目录 Workspace 也在其自身范围内）；历史 `$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/` 保持原位
+- **新建 Worktree 根目录**：`<repository-root>/.agents/worktrees/clutch/wt_<hex>/`；历史 Workspace 的 `.agents/clutch-worktrees/` 与 `$dshHome/clutch-dsh-worktree/worktree/wt_<hex>/` 保持原位
 - **跨进程文件锁**：`$dshHome/clutch-dsh-worktree/locks/`
 
 在开发调试过程中，若遇到并发异常或需要重置本地测试数据：
@@ -611,3 +611,44 @@ Desktop drain，不代表每 5 秒执行 Git。可运行 node --test test/git-ch
 Host 因此在注册后 1 秒补发一次校准，而不是延长测试超时或恢复高频 Git 轮询；
 常态事件丢失仍由 60 秒兜底覆盖。回归用静默 watcher 确认丢事件时校准、只执行一次、
 关闭前取消；真实文件事件测试继续保留 5 秒断言期限。
+
+## 官方 Forge 新 Session 互操作验证
+
+Forge 接缝复核：DSH `dsh-v0.2.2-rc.5`（`9c2670d3bc`），插件开发依赖与最低支持仍为 rc.2。
+下述历史真机验收与本次源码/隔离测试不是同一次运行。新建 port 额外要求 Agent.runMaintenance、
+导出的 appendPluginRecord 与 sessions.flush。插件的 dsh-session peer 必须由 DSH loader
+解析到宿主同一份模块；不能把另一份 Session 实例传入带私有字段的 appendPluginRecord。
+真实 profile 的 linked-package 验收已经覆盖此解析边界，不使用私有字段兼容补丁。
+
+默认 native-session-flow 测试覆盖新建门禁、目录/分支身份、写入顺序、持久化失败、调用取消、
+原生 maintenance 取消、重放及旧池中的新 Session。以下外部接缝另运行 6 个官方组件场景：
+
+```bash
+DSH_NATIVE_SOURCE=/path/to/deepseek-harness node --test test/forge-activation.test.mjs test/native-forge-recovery.test.mjs
+```
+
+它使用上游 Forge test harness、真实工作目录/投影/压缩持久化/Git 服务；Agent 调度为上游 test double，
+不请求模型账号。覆盖 producer 卸载后的冷重放、旧池恢复限制、缺失分支、共享 checkout、
+错误记录顺序和子目录 Workspace。fixture/config 写入临时目录，不修改 DSH 源码。
+profile 真机验收与旧数据保护证据见 [2026-11-09 验收报告](qa/2026-11-09-forge-acceptance.md)。
+
+自动启用另由 test/forge-activation.test.mjs 覆盖：独立 bundle 选择、跨 profile 偏好、
+手动禁用后的冷启动、失败/重启/损坏偏好、卸载时序，以及全局 backend 不能代替
+被禁用的旧版 Forge 隔离 backend。指定上游源码时，测试读取实际 Forge bundle patch 的行声明，
+以模拟 loader entry 验证准入；不是运行真实 profile 的 plugin manager。rc.5 的服务行是 `worktree`。
+native-session-flow 的 Host fixture 必须提供对应的清单；仅注入 forgePanel 不代表 Forge 就绪。
+
+真实 ~/.dsh-test 验收不要在 overlay 中强行启用 Forge：只安装 feature link，观察
+profile 首次加载后独立选中。手动关闭组合包并冷启动，验证读取列表、打开已有 Session 后仍保持关闭。
+分别从侧栏、Dashboard 和 Agent 工具显式新建 Worktree Session，每次先关闭组合包，验证无需弹窗、
+面板和 Worktree 服务均已运行后才创建。单独关闭任一组件时检查其仍为关闭且未新建 Session；
+缺失或不兼容的组合包不应被下载。启用失败或需要重启时核对没有新增 Session，修复或重启后再试。
+另行关闭组合包，在匹配的当前 Session 打开 Diff，验证仍需确认。最后通过官方 plugin remove 卸载
+Worktree 并冷启动验证原生恢复与真实模型续聊。
+对既有 Session/sidecar 文件先计算散列，结束后逐个比较；只操作专用测试仓库。
+详见 [自动启用验收报告](qa/2026-11-09-forge-auto-enable.md)。
+
+后续真实 UI 验收发现：技能列表读取可在发送前触发 DSH 原生 cwd 回退，之前直接调用
+恢复接口的测试不足以覆盖此路径。case 05 修复与 case 08 上游阻塞的复现、范围及验收
+见 [05/08 回归报告](qa/2026-11-09-forge-05-08.md)。缺失目录测试必须包含打开 live Session
+和输入框初始化，不能仅调用 sessionController.prompt 或 forgePanel.restoreWorktree。

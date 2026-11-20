@@ -73,11 +73,11 @@ more than five Sessions, or **Collapse All** to focus on the current Session's g
 
 1. Open the Local/Main or Worktree menu and choose **Create Worktree**.
 2. Choose a local or fetched remote base branch and a new branch name.
-3. Confirm, then use **+** on the Worktree to open a Session in that checkout.
+3. Confirm to create the Worktree and open its first Session. If Forge is unavailable, the new Worktree appears in the sidebar with the Session error. Once Forge is ready, click **+** on that row to open a Session.
 
 Use **Fetch** beside remote branches when you need updated remote refs; listing branches
 does not contact remotes automatically. New Worktrees inherit committed files only.
-They are created in `<workspace>/.agents/clutch-worktrees/wt_<id>/`.
+They are created in `<repository-root>/.agents/worktrees/clutch/wt_<id>/`.
 
 To bring in an existing checkout, switch the creation dialog to **Import**, choose a Worktree,
 and select **Import Worktree**. Import keeps the directory and its files in place. Only available,
@@ -85,6 +85,10 @@ branch-attached, non-root Worktrees that are not already managed appear in the p
 
 Use **+** on Local/Main for a Session in the original Workspace. A matching blank Session may
 be reused. Forking a Worktree Session keeps the new Session in the same Worktree.
+
+In Worktree mode, Sessions listed under **Local** show a branch icon when DSH still identifies them as Worktree Sessions, including after removal from management. The current blank Session shows the icon before its first message. Its tooltip names the branch. The icon follows the native record and disappears when the Session leaves that checkout; historical Sessions without official records are not relabeled.
+
+After removal from management, the blank Session page and the conversation header both show the branch checked out in the Session’s working directory. Choosing **Continue in the project** switches the label to the project checkout’s branch.
 
 ### Review changes and manage a Worktree
 
@@ -101,8 +105,10 @@ Refresh to see later edits; the Dashboard is read-only.
 The Session header's **Worktree panel** keeps a compact change summary beside the conversation.
 Use its refresh button or open the full Dashboard for more detail.
 
-**Open native local changes** opens DSH's Diff sidebar for a matching Session. If Forge is off,
-DSH asks before enabling it for the current profile. This also enables Forge's native Worktree
+**Open native local changes** checks for a Session in the target directory first. If only another
+Session matches, the Dashboard switches to it; click again once it loads. If none matches,
+the Forge setting is left alone. If the current Session matches and Forge is off, DSH asks
+before enabling it for the current profile. This also enables Forge's native Worktree
 and GitHub integration; the setting remains enabled after this plugin is removed. You can turn
 it off in **Plugins → Experimental plugins → Change requests & worktrees**.
 
@@ -143,7 +149,7 @@ enabled remain available until that Agent ends.
 | --- | --- |
 | **Archive Worktree** | Keeps files, Sessions, bindings, and instructions. You can unarchive while the Git registration remains intact. |
 | **Clean Up Disk** | Removes the checkout after a separate confirmation. Stop all tasks using it first; the plugin does not check whether they are running. Sessions are kept. |
-| **Remove from Management** | Stops tracking the Worktree while keeping its files and native DSH Sessions. |
+| **Remove from Management** | Stops tracking the Worktree while keeping its files and native DSH Sessions. Sessions already owned by a native Workspace stay in that Workspace immediately; no page refresh is needed. |
 
 Local/Main Dashboard's **Manage Worktrees** supports batch actions. Archive before cleanup or
 removal from management. Results are shown per Worktree so failed items can be retried.
@@ -171,6 +177,14 @@ Sessions and does not claim cleanup succeeded. Error history clears on page refr
 | Filesystem | Local Windows or macOS paths; network or special filesystems may not be supported |
 
 ## Behavior and limitations
+
+DSH may return a Session to the project before Forge offers recovery. You can continue the conversation there.
+
+When Worktree first loads in a profile, it makes one attempt to enable the installed, compatible official Forge bundle. If you later turn Forge off, restarting DSH, browsing lists, and opening an existing Session leave it off. Creating a new Worktree Session from the sidebar, Dashboard, or an Agent tool turns Forge back on for that profile without asking. Opening **Diff** still asks before enabling Forge.
+
+Session creation waits for the Forge panel and Worktree service to be running. If you disabled either component individually, re-enable it in **Plugins**. Worktree does not download Forge. If activation fails or requires a restart, no Session is created. Resolve the issue or restart DSH, then retry. If setup stops before the new Session enters the checkout, the Session stays in the original Workspace. After resolving the reported issue, click **+** on the Worktree again.
+
+With official Forge enabled, new Sessions keep native Worktree records after removal from management or uninstall. Forge can restore missing checkouts inside its configured pool or let you **Continue in Project**. Restoration cannot recover uncommitted files.
 
 - DSH remains the source of truth for Workspaces, Sessions, and conversation history. Removing
   a Worktree does not delete its native Sessions.

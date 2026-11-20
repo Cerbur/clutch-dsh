@@ -6,7 +6,7 @@ import { NativeSessionCreationPreflightError, type WorktreeToolSessionPort } fro
 /** One native admission identity per browser action, without persistent task/message state. */
 export function createWorktreeSessionCreation(options: {
   manager: Pick<WorktreeManager, 'listWorktrees' | 'bindSession' | 'readWorktreeSessionState'>;
-  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory'>;
+  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
   changed(workspaceId: string, worktreeId: string, requestId: string): void;
 }) {
   const lifetime = new AbortController();

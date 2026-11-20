@@ -47,7 +47,7 @@ export async function adoptBranchWorktreeTransaction(
             { worktreeId: input.worktreeId },
           );
         }
-        await assertSafeRemovalPath(dependencies, record, input.workspaceRoot);
+        await assertSafeRemovalPath(dependencies, record, input.workspaceRoot, repository.identity.topLevel);
         const targetRepository = await resolveRepository(dependencies, gitWorktreeRoot(record));
         if (
           !(await samePhysicalPath(

@@ -213,7 +213,7 @@ export async function requireWorkspaceRoot(workspace: DshWorkspaceSummary): Prom
   if (rootState !== 'directory') throwWorkspaceRootUnavailable(workspace.workspaceId, workspace.rootPath, rootState);
 }
 
-/** New checkouts live in one dedicated pool inside the original Workspace. */
+/** New checkouts live in one dedicated pool inside the source Git checkout. */
 export function validateGeneratedPath(
   context: WorktreeManagerContext, workspaceRoot: string, targetPath: string, worktreeId: string,
 ): void {
@@ -232,6 +232,12 @@ export async function validatePhysicalGeneratedPath(
   // Sidecar still lives in DSH Home; preserve its independent trust checks.
   await rejectSymlink(context.dshHome, 'DSH Home');
   await rejectSymlink(path.join(context.dshHome, 'clutch-dsh-worktree'), 'plugin sidecar root');
+  let home = path.resolve(context.dshHome);
+  try { home = await realpath(home); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  if (isSameOrInside(await realpath(workspaceRoot), home))
+    throw providerError('GIT_OPERATION_FAILED', 'Sidecar storage must remain outside the source repository', { workspaceRoot });
   await assertGeneratedPath(context.dshHome, workspaceRoot, targetPath, false);
 }
 

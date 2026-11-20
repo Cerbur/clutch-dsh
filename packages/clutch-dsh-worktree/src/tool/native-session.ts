@@ -2,6 +2,8 @@ import type { CallingAgent } from './types.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { samePhysicalPath } from '../provider/path-identity.js';
 import { createAgentRelaySender, type AgentRelayInput, type RelayAgent } from './agent-relay.js';
+import { initializeForgeSession, type ForgeAgent } from './forge-session.js';
+import type { WorktreeRecord } from '../contract/index.js';
 
 export interface ToolModel {
   readonly provider: string;
@@ -44,9 +46,10 @@ export interface ToolSessionSnapshot {
 export interface WorktreeToolSessionPort {
   resolveAgent(sessionId: string, signal: AbortSignal): Promise<CallingAgent>;
   sendAgentMessage(input: AgentRelayInput, signal: AbortSignal): Promise<{ accepted: true }>;
-  create(input: { cwd: string; workspaceId?: string }): Promise<{ sessionId: string }>;
+  create(input: { cwd: string; workspaceId?: string }, signal?: AbortSignal): Promise<{ sessionId: string }>;
   /** Native directory publication; optional only for legacy injected adapters. */
   enterWorkingDirectory?(sessionId: string, cwd: string, signal: AbortSignal): Promise<void>;
+  initializeWorktreeSession?(sessionId: string, record: WorktreeRecord, signal: AbortSignal, bind: () => Promise<void>): Promise<void>;
   assertWorkingDirectory?(sessionId: string, cwd: string, signal: AbortSignal): Promise<void>;
   prompt(
     input: {
@@ -105,17 +108,52 @@ interface NativeContext {
 /** Only thrown by capability preflight, before invoking native Session creation. */
 export class NativeSessionCreationPreflightError extends Error {}
 
-/** Minimal native Session creation/directory seam; browser creation needs no commands, tools or model provider. */
-export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<WorktreeToolSessionPort,
-  'create' | 'enterWorkingDirectory' | 'assertWorkingDirectory'> {
+/** Native creation succeeded, but directory entry and Forge initialization never started. */
+export class WorktreeDirectoryEntryNotStarted extends Error {}
+
+/** Only the pre-create check may change profile selection. */
+export interface ForgeSessionGate {
+  ensureForCreation(signal?: AbortSignal): Promise<void>;
+  assertReady(signal?: AbortSignal): Promise<void>;
+}
+
+/** Browser creation needs no commands, tools or model provider. */
+export function createNativeWorktreeSessionDirectoryPort(ctx: Context, forge?: ForgeSessionGate): Pick<WorktreeToolSessionPort,
+  'create' | 'enterWorkingDirectory' | 'assertWorkingDirectory' | 'initializeWorktreeSession'> {
   const native = ctx as unknown as NativeContext;
   const controller = ctx.get('sessionController') as NativeSessionController;
+  const fresh = new Set<string>();
   return {
-    create: (input) => {
-      if (input.workspaceId === undefined) return controller.create({ cwd: input.cwd });
+    create: (input, signal) => {
       const directories = ctx.get('workingDirectory') as { set?: unknown } | undefined;
-      if (typeof directories?.set !== 'function') throw new NativeSessionCreationPreflightError('Native workingDirectory service is required for Workspace-owned Worktree Sessions');
-      return controller.create({ workspaceId: input.workspaceId });
+      if (input.workspaceId !== undefined && typeof directories?.set !== 'function') throw new NativeSessionCreationPreflightError('Native workingDirectory service is required for Workspace-owned Worktree Sessions');
+      return Promise.resolve(forge?.ensureForCreation(signal)).then(async () => {
+        if (signal?.aborted) throw new NativeSessionCreationPreflightError('Worktree Session creation cancelled before native creation');
+        if (input.workspaceId === undefined) return controller.create({ cwd: input.cwd });
+        const created = await controller.create({ workspaceId: input.workspaceId });
+        fresh.add(created.sessionId);
+        return created;
+      });
+    },
+    initializeWorktreeSession: async (sessionId, record, signal, bind) => {
+      if (!fresh.delete(sessionId)) throw new Error('Only a newly created Session may receive Forge Worktree records');
+      let entryStarted = false;
+      try {
+        signal.throwIfAborted();
+        await forge?.assertReady(signal);
+        const result = await controller.resolveAgent(sessionId);
+        if ('error' in result) throw result.error;
+        if (result.agent.session.id !== sessionId || native.agents.get(sessionId) !== result.agent)
+          throw new Error('Native Session identity changed before Forge initialization');
+        await initializeForgeSession(ctx, result.agent as unknown as ForgeAgent, record, signal, async (control) => {
+          await forge?.assertReady(control);
+          control.throwIfAborted();
+          await bind();
+        }, () => { entryStarted = true; });
+      } catch (error) {
+        if (entryStarted) throw error;
+        throw new WorktreeDirectoryEntryNotStarted(error instanceof Error ? error.message : String(error), { cause: error });
+      }
     },
     enterWorkingDirectory: async (sessionId, cwd, signal) => {
       signal.throwIfAborted();
@@ -132,6 +170,7 @@ export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<Wor
       signal.throwIfAborted();
     },
     assertWorkingDirectory: async (sessionId, cwd, signal) => {
+      await forge?.assertReady(signal);
       signal.throwIfAborted();
       const directories = ctx.get('workingDirectory') as { get(session: NativeAgent['session']): string } | undefined;
       const agent = native.agents.get(sessionId);
@@ -146,7 +185,7 @@ export function createNativeWorktreeSessionDirectoryPort(ctx: Context): Pick<Wor
 }
 
 /** Native reads stay cold; model routing is installed only on a newly created Agent. */
-export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSessionPort {
+export function createWorktreeToolSessionPort(ctx: Context, forge?: ForgeSessionGate): WorktreeToolSessionPort {
   const native = ctx as unknown as NativeContext;
   const controller = ctx.get('sessionController') as NativeSessionController;
   const relay = createAgentRelaySender({
@@ -240,7 +279,7 @@ export function createWorktreeToolSessionPort(ctx: Context): WorktreeToolSession
       signal.throwIfAborted();
       return result.agent;
     },
-    ...createNativeWorktreeSessionDirectoryPort(ctx),
+    ...createNativeWorktreeSessionDirectoryPort(ctx, forge),
     prompt: (input, signal) => controller.prompt(input, signal),
     sendAgentMessage: (input, signal) => relay.send(input, signal),
     rename: (input) => controller.rename(input),

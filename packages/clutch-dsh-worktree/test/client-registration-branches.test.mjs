@@ -4,8 +4,9 @@ import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
 import * as viewHelpers from '../lib/client/view/worktree-view.js';
+import { createWorktreeSessionConnector } from '../lib/client/session/worktree-session.js';
 
-async function harness() {
+async function harness({ onRefresh, onActionError } = {}) {
   const branchHelpersSource = await readFile(new URL('../src/client/view/worktree-view-read.ts', import.meta.url), 'utf8');
   const branchHelpers = {};
   new Function('require', 'exports', ts.transpileModule(branchHelpersSource, {
@@ -69,9 +70,9 @@ async function harness() {
   const render = () => {
     cursor = 0;
     const registrationState = modules.useRegistrationState({ props });
-    const read = { viewByWorkspace: new Map([['ws', projection]]), refresh: async () => { refreshes++; },
+    const read = { viewByWorkspace: new Map([['ws', projection]]), refresh: async (options) => { refreshes++; await onRefresh?.(options); },
       loadModalWorktreeView: () => { registrationState.modalReadViewRef.current = projection; } };
-    const mutation = { actionPending: false, setActionError() {}, setActionPending() {} };
+    const mutation = { actionPending: false, setActionError: error => onActionError?.(error), setActionPending() {} };
     const registration = modules.useWorktreeRegistration({ source: { workspaces: { items: [workspace] } },
       registrationState, read, props, mutation, session: { setPendingSessionBinding() {} } });
     const dialog = modules.RegistrationDialog({ props, registration, registrationState, read, mutation });
@@ -85,6 +86,59 @@ async function harness() {
       entry.cleanup = entry.setup();
     }); } };
 }
+
+test('a registered checkout stays visible for a Session retry when Forge rejects the first creation', async () => {
+  const registered = [];
+  const refreshed = [];
+  const errors = [];
+  const { render, workspace, props, projection } = await harness({
+    onActionError: error => errors.push(error),
+    onRefresh(options) {
+      refreshed.push(options);
+      projection.worktrees = [...registered];
+    },
+  });
+  const record = { workspaceId: 'ws', worktreeId: 'created', absolutePath: '/created', branch: 'feature', status: 'active' };
+  props.manager.createWorktree = async () => { registered.push(record); return record; };
+  props.manager.listWorktrees = async () => registered;
+  props.manager.listBindings = async () => [];
+  let available = false;
+  const created = [];
+  const opened = [];
+  const requests = [];
+  const connector = createWorktreeSessionConnector({
+    manager: props.manager, sessions: { getSnapshot: () => ({ phase: 'ready', ids: [], byId: {} }) },
+    archivedSessionIds: () => [], openSession: id => opened.push(id),
+    async createBoundSession(input) {
+      requests.push(input.requestId);
+      if (!available) throw Object.assign(new Error('Forge panel is disabled'), {
+        code: 'WORKTREE_FORGE_UNAVAILABLE', details: { reason: 'disabled' },
+      });
+      created.push(input.worktreeId);
+      return { bound: true, sessionId: 'first-session' };
+    },
+  });
+  props.createSessionForWorktree = connector.create;
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  await render().registration.submitWorktree();
+  assert.deepEqual(refreshed, [{ scope: { kind: 'workspace', workspaceId: 'ws' }, preserveCurrent: true }]);
+  assert.deepEqual(projection.worktrees, [record]);
+  assert.deepEqual(errors.at(-1), {
+    code: 'WORKTREE_FORGE_UNAVAILABLE', message: 'Forge panel is disabled', retryable: true,
+    details: { reason: 'disabled', workspaceId: 'ws' },
+  });
+  assert.deepEqual(created, []);
+  available = true;
+  const [row] = projection.worktrees;
+  const plus = () => props.createSessionForWorktree({ workspaceId: row.workspaceId, worktreeId: row.worktreeId, cwd: row.absolutePath });
+  await Promise.all([plus(), plus()]);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1], requests[0]);
+  assert.deepEqual(registered, [record]);
+  assert.deepEqual(created, ['created']);
+  assert.deepEqual(opened, ['first-session']);
+});
 
 test('HEAD creation carries the observed commit from the modal projection', async () => {
   const { render, workspace, props, projection } = await harness();

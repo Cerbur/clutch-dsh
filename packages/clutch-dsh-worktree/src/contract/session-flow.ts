@@ -4,6 +4,8 @@ import type { SessionBinding, WorktreeRecord } from './index.js';
 export interface WorktreeSessionCreationResult {
   readonly sessionId: string;
   readonly bound: boolean;
+  /** This confirmed attempt ended before native directory entry. A new user action may start fresh. */
+  readonly retryCreation?: boolean;
   readonly error?: string;
   readonly state?: WorktreeSessionState;
 }
