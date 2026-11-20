@@ -36,7 +36,7 @@ async function fixture(t) {
     t.after(() => value.close());
     return value;
   };
-  const directory = path.join(repo, '.agents', 'clutch-worktrees');
+  const directory = path.join(repo, '.agents', 'worktrees', 'clutch');
   await mkdir(directory, { recursive: true });
   return { root, repo, home, git, sidecar, manager, directory };
 }

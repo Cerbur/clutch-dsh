@@ -69,7 +69,7 @@ export async function cleanWorktreeTransaction(
 
         const liveBefore = await dependencies.git.listWorktrees(gitRoot);
         const exactBefore = await findExactWorktree(liveBefore, gitWorktreeRoot(record), record.branch);
-        await assertSafeRemovalPath(dependencies, record, input.workspaceRoot);
+        await assertSafeRemovalPath(dependencies, record, input.workspaceRoot, repository.identity.topLevel);
         if (await pathEntryMissing(path.join(gitWorktreeRoot(record), '.git'))) {
           const pathRegistration = await findWorktreeByPhysicalPath(
             liveBefore,

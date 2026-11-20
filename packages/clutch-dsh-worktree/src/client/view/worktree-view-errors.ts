@@ -1,6 +1,9 @@
+import type { WorktreeLocaleKey } from '../locales.js';
+
 export interface WorktreeViewError {
   readonly code: string;
   readonly message: string;
+  readonly messageKey?: WorktreeLocaleKey;
   readonly retryable: boolean;
   readonly details?: Readonly<Record<string, unknown>>;
 }

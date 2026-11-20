@@ -1527,7 +1527,7 @@ test('preserves the Workspace subdirectory in created Worktree cwd and public pa
     const record = await provider.createWorktree({
       workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/nested-cwd',
     });
-    const expectedCwd = path.join(nestedRoot, '.agents', 'clutch-worktrees', record.worktreeId, relativeDirectory);
+    const expectedCwd = path.join(await realpath(workspaceRoot), '.agents', 'worktrees', 'clutch', record.worktreeId, relativeDirectory);
     assert.equal(record.absolutePath, expectedCwd);
     assert.equal(record.gitRootPath, path.dirname(path.dirname(expectedCwd)));
     assert.equal((await provider.listWorktrees({ workspaceId: 'ws_one' }))[0].absolutePath, expectedCwd);
@@ -1806,7 +1806,8 @@ test('does not repeat Git preflight before the transactional create path', async
     assert.deepEqual(calls, {
       validateRepository: 1,
       resolveRepositoryIdentity: 1,
-      resolveRepositoryRoot: 0,
+      // Pool placement needs the source Git root before transactional validation.
+      resolveRepositoryRoot: 1,
       listBranches: 0,
       listBranchesWithWorktreePaths: 1,
       // One preflight includes prunable registrations; one verifies the created Worktree.
@@ -1843,7 +1844,7 @@ test('retries an occupied pool name but rejects Sidecar storage inside the Works
     await runGit(workspaceRoot, ['branch', 'feature/existing']);
     await runGit(workspaceRoot, ['branch', 'feature/inside']);
     const existingId = 'wt_existing';
-    const existingPath = path.join(workspaceRoot, '.agents', 'clutch-worktrees', existingId);
+    const existingPath = path.join(workspaceRoot, '.agents', 'worktrees', 'clutch', existingId);
     await mkdir(existingPath, { recursive: true });
     const existingProvider = createWorktreeManager({
       dsh,
@@ -1918,7 +1919,7 @@ test('creates a generated Worktree and persists only approved relation metadata'
     await writeFile(dshFixturePath, '{"title":"DSH-owned","messages":["history"],"cwd":"original"}\n');
     const dshFixtureBefore = await readFile(dshFixturePath);
     const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/example' });
-    const expectedPath = path.join(workspaceRoot, '.agents', 'clutch-worktrees', record.worktreeId);
+    const expectedPath = path.join(await realpath(workspaceRoot), '.agents', 'worktrees', 'clutch', record.worktreeId);
 
     assert.equal(record.absolutePath, expectedPath);
     assert.match(record.worktreeId, /^wt_[a-f0-9]{12}$/);
@@ -2433,7 +2434,7 @@ test('returns sync-required when cleanup after sidecar failure also fails', asyn
     });
 
     await expectCode(provider.createWorktree({ workspaceId: 'ws_one', branch: 'feature/cleanup-failure' }), 'SIDECAR_SYNC_REQUIRED');
-    assert.equal(await exists(path.join(workspaceRoot, '.agents', 'clutch-worktrees', 'wt_cleanup_failure')), true);
+    assert.equal(await exists(path.join(workspaceRoot, '.agents', 'worktrees', 'clutch', 'wt_cleanup_failure')), true);
   });
 });
 

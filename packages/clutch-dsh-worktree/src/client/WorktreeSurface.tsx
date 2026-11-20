@@ -41,10 +41,22 @@ import {
 } from './dashboard/dashboard-navigation.js';
 import { buildSessionFileAddress, GitFileAddressError } from './dashboard/git/file-address.js';
 import { useNativeForgeConfirmation } from './dashboard/git/useNativeForgeConfirmation.js';
+import type { NativeChangesResult } from './dashboard/git/native-changes-navigation.js';
+import type { WorktreeViewError } from './view/worktree-view-errors.js';
 import { sameWindowsPath } from '../contract/windows-path.js';
 import { createNumberedWorktreeName } from './view/worktree-view.js';
 import { workspaceSessionIds } from './view/view-mode.js';
 export type { WorktreeSurfaceInjected, WorktreeSurfaceProps } from './surface/types.js';
+
+function nativeChangesError(result: Exclude<NativeChangesResult, 'opened' | 'stale' | 'cancelled'>): WorktreeViewError {
+  return {
+    code: 'NATIVE_CHANGES_' + result.replaceAll('-', '_').toUpperCase(),
+    message: result,
+    messageKey: `dashboard.git.native.${result}`,
+    retryable: false,
+  };
+}
+
 /** Retains shared state/actions and portals navigation into the workspace slot. */
 export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const forgeConfirmation = useNativeForgeConfirmation(inputProps.t);
@@ -590,14 +602,12 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               switching = true;
               // Native selection can commit before this async action resumes.
               if (nativeChangesSelection.current === dashboard || nativeChangesSelection.current === pending.selection) {
-                mutation.setActionError({ code: 'NATIVE_CHANGES_SESSION_SWITCHING',
-                  message: props.t('dashboard.git.native.session-switching'), retryable: true });
+                mutation.setActionError(nativeChangesError('session-switching'));
               }
             }, forgeConfirmation.confirm, { baseBranch })
               .catch(() => 'verification-failed' as const) ?? 'unavailable';
             if (switching || !isCurrent() || result === 'opened' || result === 'stale' || result === 'cancelled') return;
-            mutation.setActionError({ code: 'NATIVE_CHANGES_' + result.replaceAll('-', '_').toUpperCase(),
-              message: props.t(`dashboard.git.native.${result}`), retryable: true });
+            mutation.setActionError(nativeChangesError(result));
           }}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)

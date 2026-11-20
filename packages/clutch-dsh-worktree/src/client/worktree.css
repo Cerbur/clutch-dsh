@@ -1668,6 +1668,14 @@
   height: 28px;
 }
 
+.sessionWorktreeIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin: 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .sessionTime {
   overflow: hidden;
   text-overflow: ellipsis;

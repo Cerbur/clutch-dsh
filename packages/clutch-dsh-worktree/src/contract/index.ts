@@ -39,6 +39,7 @@ export const WORKTREE_ERROR_CODES = Object.freeze([
   'WORKTREE_IDENTITY_CHANGED',
   'WORKTREE_SESSION_BUSY',
   'WORKTREE_ACTIVITY_UNAVAILABLE',
+  'WORKTREE_FORGE_UNAVAILABLE',
 ] as const);
 
 export type WorktreeErrorCode = (typeof WORKTREE_ERROR_CODES)[number];
@@ -240,6 +241,8 @@ export interface GitCheckoutHead {
 /** Git paths use this root; Session cwd remains the DSH Workspace working directory. */
 export interface WorkspaceCheckout {
   readonly gitRootPath: string;
+  /** Other checkouts in the same Git worktree listing. A prunable checkout has no display label. */
+  readonly linkedHeads?: readonly { readonly path: string; readonly label?: string }[];
   /** Physical Workspace directory, paired with the physical checkout root. */
   readonly workspacePath?: string;
   readonly currentHead?: GitCheckoutHead;
@@ -480,7 +483,7 @@ export interface WorktreeManager {
     workspaceId: WorkspaceId;
     worktreeId: WorktreeId;
     sessionId: SessionId;
-  }): Promise<SessionBinding>;
+  }, purpose?: 'new-session'): Promise<SessionBinding>;
 }
 
 /**

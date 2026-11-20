@@ -4,17 +4,15 @@ import type {
   InjectFace,
   PropsLocale,
   PropsRuntime,
-  TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots';
 import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives';
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '../dsh-slot-contract.js';
 import type { WorktreeContextInjected } from './WorktreeContext.js';
-import type { WorktreeContextState } from './worktree-context-store.js';
+import { currentSessionIdFromList } from '../session/session-selection.js';
+import { resolveHeaderCheckout } from './worktree-context.js';
 import { WORKTREE_NS } from '../locales.js';
 import styles from './worktree-context.css';
-
-type WorktreeTranslate = TranslateNS<typeof WORKTREE_NS>;
 
 export type WorktreeHeroContextProps =
   PropsRuntime<'shell.overlay'> &
@@ -24,17 +22,6 @@ export type WorktreeHeroContextProps =
 interface HeroPlacement {
   readonly left: number;
   readonly top: number;
-}
-
-function labelFor(state: WorktreeContextState): string | undefined {
-  if (
-    state.status !== 'ready' ||
-    state.workspaceTitle === undefined ||
-    state.value.kind === 'none'
-  ) {
-    return undefined;
-  }
-  return `${state.workspaceTitle} (${state.value.label})`;
 }
 
 function elementWithClassSuffix(root: ParentNode, suffix: string): HTMLElement | null {
@@ -93,12 +80,6 @@ function measurePlacement(element: HTMLElement): HeroPlacement | null {
   };
 }
 
-function contextAriaLabel(state: WorktreeContextState, t: WorktreeTranslate): string | undefined {
-  if (state.value.kind === 'main') return t('context.main', { name: state.value.label });
-  if (state.value.kind === 'worktree') return t('context.worktree', { name: state.value.label });
-  return undefined;
-}
-
 function heroContainer(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
   const el = document.querySelector<HTMLElement>('[data-phase="hero"]');
@@ -112,10 +93,20 @@ function heroContainer(): HTMLElement | null {
  */
 export function WorktreeHeroContext({
   useWorktreeContext,
+  useSessions,
   t,
 }: WorktreeHeroContextProps) {
   const state = useWorktreeContext((snapshot) => snapshot);
-  const label = labelFor(state);
+  const cwd = useSessions((snapshot) => {
+    const id = currentSessionIdFromList(snapshot);
+    if (id !== state.sessionId) return null;
+    if (id === undefined) return undefined; // Workspace Hero before a Session exists.
+    return snapshot.byId[id]?.projectionValues?.workingDirectory ?? null;
+  });
+  const checkout = state.status === 'ready' && cwd !== null
+    ? resolveHeaderCheckout(state.value, state.checkout, cwd) : undefined;
+  const label = checkout && state.workspaceTitle !== undefined
+    ? `${state.workspaceTitle} (${checkout.label})` : undefined;
   const [placement, setPlacement] = useState<HeroPlacement | null>(null);
   const [heroTarget, setHeroTarget] = useState<HTMLElement | null>(() => heroContainer());
 
@@ -175,8 +166,8 @@ export function WorktreeHeroContext({
     };
   }, [label, measure, heroTarget]);
 
-  const ariaLabel = contextAriaLabel(state, t);
-  if (label === undefined || heroTarget === null) return null;
+  if (!checkout || label === undefined || heroTarget === null) return null;
+  const ariaLabel = t(checkout.kind === 'main' ? 'context.main' : 'context.worktree', { name: checkout.label });
 
   return createPortal(
     <span

@@ -17,6 +17,7 @@ export async function listBindings(
 export async function bindSession(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: WorkspaceId; readonly worktreeId: string; readonly sessionId: string },
+  purpose?: 'new-session',
 ): Promise<SessionBinding> {
   const workspace = await requireWorkspace(context, input.workspaceId);
 
@@ -37,6 +38,11 @@ export async function bindSession(
     }
 
     const existing = snapshot.bindings.find((binding) => binding.sessionId === input.sessionId);
+    if (purpose === 'new-session' && worktree.status !== 'active') {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'Cannot add a Session to an archived Worktree', {
+        workspaceId: input.workspaceId, worktreeId: input.worktreeId,
+      });
+    }
     if (existing && (existing.worktreeId !== input.worktreeId || existing.status !== 'active')) {
       throw providerError('SESSION_ALREADY_BOUND', `Session is already bound to Worktree ${existing.worktreeId}`, {
         sessionId: input.sessionId,

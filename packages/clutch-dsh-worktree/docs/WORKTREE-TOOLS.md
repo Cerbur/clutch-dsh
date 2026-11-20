@@ -20,6 +20,8 @@ immediately before initial input admission. Default native permissions are prese
 Old injected Session ports retain their cwd creation contract; the real Host fails before creation
 when native directory capability is absent. See `ARCHITECTURE.md` for storage and historical limits.
 
+An Agent request to create a new Worktree Session may enable the installed, compatible official Forge bundle for the profile without prompting. The Host waits for the panel and Worktree service to be live before creating the Session. Individually disabled components, activation failure or a required restart block creation. Listing Worktrees or Sessions, reusing an existing Session, and sending it a message leave Forge settings alone.
+
 This feature uses existing plugin extension points without DSH core changes.
 Relevant source files under the requested DSH checkout:
 

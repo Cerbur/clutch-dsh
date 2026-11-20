@@ -32,6 +32,7 @@ test('exports the approved stable error codes', () => {
     'WORKTREE_IDENTITY_CHANGED',
     'WORKTREE_SESSION_BUSY',
     'WORKTREE_ACTIVITY_UNAVAILABLE',
+    'WORKTREE_FORGE_UNAVAILABLE',
   ]);
 });
 

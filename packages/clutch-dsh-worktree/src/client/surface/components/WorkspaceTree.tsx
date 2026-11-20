@@ -434,6 +434,7 @@ export function WorkspaceTree({
                     />
                     {mainExpanded && (
                       <WorktreeSessionGroup
+                        showWorktreeIcon
                         t={t}
                         groupKey={mainGroupKey}
                         sessionIds={sessionIds}

@@ -50,7 +50,7 @@ export async function createWorktreeTransaction(
         const current = await locked.read();
         assertMutationAdmitted(current, input.workspaceId);
         assertRepositoryCompatible(current, repository.identity, input.workspaceId);
-        assertGeneratedTarget(dependencies, input);
+        assertGeneratedTarget(dependencies, input, gitRoot);
 
         let existingGitWorktrees: readonly GitWorktreeInfo[] | undefined;
         if (dependencies.git.listBranchesWithWorktreePaths) {
@@ -191,7 +191,7 @@ export async function createWorktreeTransaction(
         });
 
         try {
-          await prepareWorktreePool(dependencies.dshHome, input.workspaceRoot, input.targetPath);
+          await prepareWorktreePool(dependencies.dshHome, gitRoot, input.targetPath);
           await dependencies.git.createWorktree(
             input.workspaceRoot,
             input.targetPath,

@@ -13,6 +13,14 @@ import {
 const dots = (node) =>
   findNodes(node, (item) => item.type === 'StateDot').map((item) => item.props.state);
 
+test('a current blank Local Session shows its native Worktree branch', async () => {
+  const render = await statusRenderers();
+  const row = (worktreeBranch) => render.session(undefined, { blank: true, current: true, worktreeBranch });
+  const icons = (element) => findNodes(element, node => node.props['aria-label'] === 'session.worktree');
+  assert.equal(icons(row('feature')).length, 1);
+  assert.equal(icons(row(undefined)).length, 0);
+});
+
 test('native off-main completion reaches Session dot and collapsed Worktree/Workspace', async () => {
   const f = await nativeStatusFixture();
   try {

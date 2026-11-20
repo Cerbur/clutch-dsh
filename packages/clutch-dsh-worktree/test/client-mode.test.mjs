@@ -430,6 +430,56 @@ test('sync removes a virtual Session without changing native Workspace state', a
   membership.dispose();
 });
 
+for (const removal of ['sync', 'syncWorkspace', 'removeSession']) {
+  test(`removing a binding preserves native membership and ordering: ${removal}`, async () => {
+    const { createVirtualWorkspaceMembership } = await import(
+      '../lib/client/session/virtual-workspace-membership.js',
+    );
+    const nativeSnapshot = { items: [
+      workspace('ws-one', ['before', 'native-bound', 'after']),
+      workspace('ws-two', ['unrelated']),
+    ] };
+    const list = { getSnapshot: () => nativeSnapshot, subscribe: () => () => {} };
+    const membership = createVirtualWorkspaceMembership(list);
+    const seen = [];
+    list.subscribe(() => seen.push(list.getSnapshot().items[0].sessionIds));
+    membership.sync([
+      { workspaceId: 'ws-one', sessionId: 'native-bound' },
+      { workspaceId: 'ws-one', sessionId: 'legacy-virtual' },
+      { workspaceId: 'ws-two', sessionId: 'unrelated-virtual' },
+    ]);
+    if (removal === 'sync') membership.sync([{ workspaceId: 'ws-two', sessionId: 'unrelated-virtual' }]);
+    else if (removal === 'syncWorkspace') membership.syncWorkspace('ws-one', []);
+    else {
+      membership.removeSession('native-bound');
+      membership.removeSession('legacy-virtual');
+    }
+    assert.deepEqual(list.getSnapshot().items[0].sessionIds, ['before', 'native-bound', 'after']);
+    assert.deepEqual(list.getSnapshot().items[1].sessionIds, ['unrelated', 'unrelated-virtual']);
+    for (const ids of seen) assert.deepEqual(ids.filter(id => id !== 'legacy-virtual'), ['before', 'native-bound', 'after']);
+    assert.deepEqual(nativeSnapshot.items[0].sessionIds, ['before', 'native-bound', 'after']);
+    membership.dispose();
+    assert.equal(list.getSnapshot(), nativeSnapshot);
+  });
+}
+
+test('a virtual Session adopted by the native source survives binding removal', async () => {
+  const { createVirtualWorkspaceMembership } = await import(
+    '../lib/client/session/virtual-workspace-membership.js',
+  );
+  let nativeSnapshot = { items: [workspace('ws-one', ['before'])] };
+  let notify;
+  const list = { getSnapshot: () => nativeSnapshot, subscribe(listener) { notify = listener; return () => {}; } };
+  const membership = createVirtualWorkspaceMembership(list);
+  membership.ensure({ workspaceId: 'ws-one', sessionId: 'adopted' });
+  nativeSnapshot = { items: [workspace('ws-one', ['adopted', 'before'])] };
+  notify();
+  assert.deepEqual(list.getSnapshot().items[0].sessionIds, ['adopted', 'before']);
+  membership.sync([]);
+  assert.equal(list.getSnapshot(), nativeSnapshot);
+  membership.dispose();
+});
+
 test('native Workspace refresh publishes the projected membership atomically', async () => {
   const { createVirtualWorkspaceMembership } = await import(
     '../lib/client/session/virtual-workspace-membership.js',

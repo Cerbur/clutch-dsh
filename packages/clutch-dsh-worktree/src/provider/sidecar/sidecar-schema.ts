@@ -333,7 +333,11 @@ function assertGeneratedPluginPath(
   // transaction path safety before filesystem operations; it is never copied here.
   const workspacePool = path.basename(pool) === 'clutch-worktrees' &&
     path.basename(path.dirname(pool)) === '.agents' && path.basename(checkout) === record.worktreeId;
-  if (!sameLexicalPath(checkout, expectedPath) && !workspacePool) {
+  const forgePool = path.basename(pool) === 'clutch' &&
+    path.basename(path.dirname(pool)) === 'worktrees' &&
+    path.basename(path.dirname(path.dirname(pool))) === '.agents' &&
+    path.basename(checkout) === record.worktreeId;
+  if (!sameLexicalPath(checkout, expectedPath) && !workspacePool && !forgePool) {
     throw corrupt(pathname, 'Worktree path is outside the generated DSH Home root');
   }
 }

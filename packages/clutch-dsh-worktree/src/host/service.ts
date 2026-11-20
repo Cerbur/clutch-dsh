@@ -49,6 +49,7 @@ import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repositor
 import { registerNativeWorktreeCleanup } from './native-worktree-cleanup.js';
 import { canOpenNativeChanges } from './native-changes.js';
 import type { NativeChangesTarget } from '../contract/native-changes.js';
+import { registerForgeActivation } from './forge-activation.js';
 
 /**
  * Host composition 所需且由 DSH bundle 注入的配置。
@@ -98,6 +99,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     super(ctx, 'worktreeManager');
     this.toolSettings = new WorktreeToolSettings(config.dshHome);
     ctx.effect(() => () => this.gitWatches.dispose(), 'clutch-dsh-worktree: Git watch cleanup');
+    const forge = registerForgeActivation(ctx, config.dshHome);
     let disposed = false;
     ctx.effect(
       () => () => {
@@ -148,7 +150,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     });
     ctx.effect(() => () => this.toolChanges.dispose(), 'clutch-dsh-worktree: tool change cleanup');
     ctx.inject(['sessionController', 'agents'], (sessionCtx) => {
-      const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx);
+      const sessions = createNativeWorktreeSessionDirectoryPort(sessionCtx, forge);
       const creation = createWorktreeSessionCreation({ manager, sessions,
         changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
       this.sessionCreation = creation;
@@ -161,7 +163,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
     ctx.inject(
       ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
       (toolCtx) => {
-        const sessions = createWorktreeToolSessionPort(toolCtx);
+        const sessions = createWorktreeToolSessionPort(toolCtx, forge);
         const sync = createBaselineSync({ manager, sessions,
           changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
         this.baselineSync = sync;

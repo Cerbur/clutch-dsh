@@ -1850,9 +1850,13 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   };
   await render().onOpenNativeChanges();
   assert.deepEqual(nativeInputs, { nativeTarget: record, ids: ['head'], current: true });
+  for (const locale of [en, zh]) {
+    assert.equal(formatWorktreeViewError(calls[1][1], key => locale[key]), locale['dashboard.git.native.session-required']);
+  }
   assert.deepEqual(calls.splice(0), [
     ['error', undefined],
-    ['error', { code: 'NATIVE_CHANGES_SESSION_REQUIRED', message: en['dashboard.git.native.session-required'], retryable: true }],
+    ['error', { code: 'NATIVE_CHANGES_SESSION_REQUIRED', message: 'session-required',
+      messageKey: 'dashboard.git.native.session-required', retryable: false }],
   ]);
   delete surfaceInput.currentSessionDirectory;
   let completeNative;

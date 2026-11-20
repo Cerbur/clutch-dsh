@@ -36,6 +36,7 @@ interface ContextRequest {
 }
 
 export interface WorktreeContextState {
+  readonly checkout?: WorktreeViewData['checkout'];
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly sessionId?: string;
   readonly workspaceId?: string;
@@ -173,6 +174,7 @@ export function createWorktreeContextProjection(
     }
     if (current.status === 'ready' && current.workspaceId === identity.workspaceId) {
       store.set({
+        ...(current.checkout === undefined ? {} : { checkout: current.checkout }),
         status: 'ready',
         ...(identity.sessionId === undefined ? {} : { sessionId: identity.sessionId }),
         workspaceId: identity.workspaceId,
@@ -233,6 +235,7 @@ export function createWorktreeContextProjection(
         ...(request.sessionId === undefined ? {} : { sessionId: request.sessionId }),
         workspaceId: request.workspaceId,
         workspaceTitle: workspace?.title,
+        ...(data.checkout === undefined ? {} : { checkout: data.checkout }),
         value: valueFrom(request, data),
       });
     } catch (error) {
