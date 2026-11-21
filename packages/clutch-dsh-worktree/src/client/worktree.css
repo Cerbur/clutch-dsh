@@ -97,6 +97,12 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.entryGuideActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .entryGuideDismiss {
   display: inline-flex;
   align-items: center;

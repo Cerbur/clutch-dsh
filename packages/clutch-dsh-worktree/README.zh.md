@@ -43,7 +43,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 
 | 功能 | 预览 | 说明 |
 | --- | --- | --- |
-| **Worktree 导航** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-zh.png" width="420" alt="Workspace 标题栏的分支按钮和首次使用提示"> | 从 Workspace 标题栏进入 Worktree 模式，按检出目录浏览会话，按活跃时间筛选。 |
+| **Worktree 导航** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-zh.png" width="420" alt="Workspace、Worktree 与 Session 导航"> | 按目录组织会话，按活跃时间筛选，快速定位需要关注的任务。 |
 | **创建与导入** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-import.png" width="420" alt="创建与导入 Worktree"> | 从本地或已获取的远端分支开始，或接入已有 Worktree，无需移动文件。 |
 | **Dashboard** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard"> | 集中查看会话、共享指引、基线关系和生命周期操作。 |
 | **Git 与变更** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-git-reviewer.png" width="420" alt="提交、变更文件与差异"> | 查看基线对比、单个或多个提交，以及未提交的改动。 |
@@ -59,7 +59,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 Local/Main 或 Worktree 分组，选择会话继续对话。使用 Worktree 面板标题栏的退出按钮，
 或折叠状态下的窄栏退出按钮，可返回原生 Workspace 导航。
 
-侧栏隐藏或仍在加载时，一次性引导会等到入口按钮可用后再显示。关闭引导或直接进入模式后，该浏览器
+入口可用时会显示一次性引导。将鼠标悬停或键盘焦点移到「知道了」右侧的 `from @cerbur/clutch-dsh-worktree`，即可查看插件说明和 GitHub 链接。侧栏隐藏或仍在加载时，引导会等待。关闭引导或直接进入模式后，该浏览器
 不再显示，因此此前已在 Worktree 模式中的用户会在首次退出后看到一次。
 
 使用**今天**、**24 小时**、**7 天**或**全部**筛选会话。运行中、等待交互和当前查看的会话

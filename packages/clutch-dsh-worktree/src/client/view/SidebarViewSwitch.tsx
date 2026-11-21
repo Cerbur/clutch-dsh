@@ -3,15 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconBranchOutline16 } from '../dsh-icons.js';
 import styles from '../worktree.css';
+import type { WorktreeTranslate } from '../surface/types.js';
 import { EntryGuide } from './EntryGuide.js';
 import { hasSeenEntryGuide, isEntryAvailable, markEntryGuideSeen } from './entry-guide.js';
-
-/** Localized one-time guidance for the relocated entry. */
-export interface SidebarEntryGuideCopy {
-  readonly title: string;
-  readonly body: string;
-  readonly dismissLabel: string;
-}
 
 /** Props owned by the Browser Consumer; placement comes from DSH's public markers. */
 export interface SidebarViewSwitchProps {
@@ -20,7 +14,7 @@ export interface SidebarViewSwitchProps {
   /** Localized entry label used for the accessible name and tooltip. */
   readonly label: string;
   /** One-time coach mark shown next to the entry until this browser dismisses it. */
-  readonly guide?: SidebarEntryGuideCopy;
+  readonly guide?: WorktreeTranslate;
   readonly onOpen: () => void;
 }
 
@@ -208,9 +202,7 @@ export function SidebarViewSwitch({ visible, label, guide, onOpen }: SidebarView
       {showGuide && anchor !== null && (
         <EntryGuide
           anchor={anchor}
-          title={guide.title}
-          body={guide.body}
-          dismissLabel={guide.dismissLabel}
+          t={guide}
           onDismiss={dismissGuide}
         />
       )}

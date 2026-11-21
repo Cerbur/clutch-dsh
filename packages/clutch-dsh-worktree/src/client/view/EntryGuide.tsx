@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { PluginAttribution } from '../PluginAttribution.js';
+import type { WorktreeTranslate } from '../surface/types.js';
 import styles from '../worktree.css';
 import {
   computeEntryGuidePosition,
@@ -11,9 +13,7 @@ import {
 export interface EntryGuideProps {
   /** The mounted entry button; the bubble anchors to its viewport rect. */
   readonly anchor: HTMLElement;
-  readonly title: string;
-  readonly body: string;
-  readonly dismissLabel: string;
+  readonly t: WorktreeTranslate;
   readonly onDismiss: () => void;
 }
 
@@ -22,7 +22,7 @@ export interface EntryGuideProps {
  * `document.body` so the native toolbar's overflow cannot clip it, follows the
  * anchor across resize and scroll, and never steals focus from the sidebar.
  */
-export function EntryGuide({ anchor, title, body, dismissLabel, onDismiss }: EntryGuideProps) {
+export function EntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   const bubble = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<EntryGuidePosition | null>(null);
   const titleId = useId();
@@ -98,12 +98,15 @@ export function EntryGuide({ anchor, title, body, dismissLabel, onDismiss }: Ent
         style={position === null ? undefined : { left: position.arrowLeft }}
       />
       <p id={titleId} className={styles.entryGuideTitle}>
-        {title}
+        {t('mode.guide.title')}
       </p>
-      <p className={styles.entryGuideBody}>{body}</p>
-      <button type="button" className={styles.entryGuideDismiss} onClick={onDismiss}>
-        {dismissLabel}
-      </button>
+      <p className={styles.entryGuideBody}>{t('mode.guide.body')}</p>
+      <div className={styles.entryGuideActions}>
+        <button type="button" className={styles.entryGuideDismiss} onClick={onDismiss}>
+          {t('mode.guide.dismiss')}
+        </button>
+        <PluginAttribution t={t} cardContainer={bubble} />
+      </div>
     </div>,
     document.body,
   );

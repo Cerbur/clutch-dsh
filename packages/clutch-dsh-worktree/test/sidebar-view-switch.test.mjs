@@ -51,7 +51,9 @@ async function loadSwitch() {
       Tooltip: ({ children }) => children,
     },
     './entry-guide.js': entryGuide,
+    './plugin-attribution.css': { default: {} },
   };
+  dependencies['../PluginAttribution.js'] = await loadTs('../src/client/PluginAttribution.tsx', dependencies);
   dependencies['./EntryGuide.js'] = await loadTs('../src/client/view/EntryGuide.tsx', dependencies);
   return (await loadTs('../src/client/view/SidebarViewSwitch.tsx', dependencies)).SidebarViewSwitch;
 }
@@ -83,11 +85,8 @@ function collapsedSidebar({ drawer = false } = {}) {
     </div>`;
 }
 
-const guideCopy = {
-  title: 'Open Worktree mode here',
-  body: 'Browse Sessions grouped by Git worktree.',
-  dismissLabel: 'Got it',
-};
+const { en } = await loadTs('../src/client/locales.ts', {});
+const guideCopy = (key, params) => en[key].replace('{plugin}', params?.plugin ?? '');
 
 async function mount(markup, onOpen, options = {}) {
   const dom = new JSDOM(markup, { pretendToBeVisual: true, url: 'https://dsh.test/' });
@@ -162,8 +161,8 @@ test('shows the one-time entry guide and records it after opening the mode', asy
   try {
     const doc = mounted.dom.window.document;
     assert.ok(doc.querySelector('[data-worktree-entry-guide]'), 'guide renders next to the entry');
-    assert.equal(doc.querySelector('.entry-guide-title')?.textContent, guideCopy.title);
-    assert.equal(doc.querySelector('.entry-guide-body')?.textContent, guideCopy.body);
+    assert.equal(doc.querySelector('.entry-guide-title')?.textContent, en['mode.guide.title']);
+    assert.equal(doc.querySelector('.entry-guide-body')?.textContent, en['mode.guide.body']);
     await React.act(async () => {
       doc.querySelector('[data-worktree-view-switch="header"]').click();
     });

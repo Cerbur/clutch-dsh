@@ -42,13 +42,19 @@ const css = {
 
 async function loadGuideModules() {
   const helper = await loadTs('../src/client/view/entry-guide.ts', {});
-  const component = await loadTs('../src/client/view/EntryGuide.tsx', {
+  const dependencies = {
     react: React,
     'react/jsx-runtime': JSX,
     'react-dom': { createPortal },
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })),
+    },
+    './plugin-attribution.css': { default: {} },
     '../worktree.css': { default: css },
     './entry-guide.js': helper,
-  });
+  };
+  dependencies['../PluginAttribution.js'] = await loadTs('../src/client/PluginAttribution.tsx', dependencies);
+  const component = await loadTs('../src/client/view/EntryGuide.tsx', dependencies);
   return { ...helper, ...component };
 }
 
@@ -121,12 +127,17 @@ async function mountGuide() {
   const previous = {
     window: globalThis.window,
     document: globalThis.document,
+    node: globalThis.Node,
+    observer: globalThis.ResizeObserver,
     act: globalThis.IS_REACT_ACT_ENVIRONMENT,
   };
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  globalThis.Node = dom.window.Node;
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const { EntryGuide } = await loadGuideModules();
+  const { en } = await loadTs('../src/client/locales.ts', {});
   const anchor = dom.window.document.querySelector('[data-anchor]');
   const container = dom.window.document.createElement('div');
   dom.window.document.body.appendChild(container);
@@ -136,9 +147,7 @@ async function mountGuide() {
     root.render(
       React.createElement(EntryGuide, {
         anchor,
-        title: 'Open Worktree mode here',
-        body: 'Browse Sessions grouped by Git worktree.',
-        dismissLabel: 'Got it',
+        t: (key, params) => en[key].replace('{plugin}', params?.plugin ?? ''),
         onDismiss: () => {
           dismissed.push('dismiss');
         },
@@ -156,6 +165,8 @@ async function mountGuide() {
       });
       globalThis.window = previous.window;
       globalThis.document = previous.document;
+      globalThis.Node = previous.node;
+      globalThis.ResizeObserver = previous.observer;
       globalThis.IS_REACT_ACT_ENVIRONMENT = previous.act;
       dom.window.close();
     },
@@ -167,19 +178,44 @@ test('renders an anchored dialog with the localized copy', async () => {
   try {
     assert.ok(mounted.bubble, 'bubble portals into the document body');
     assert.equal(mounted.bubble.getAttribute('role'), 'dialog');
+    const actions = mounted.bubble.querySelector('button').parentElement;
+    assert.equal(actions.querySelector('button[aria-haspopup="dialog"]')?.textContent, 'from @cerbur/clutch-dsh-worktree');
     assert.equal(
       mounted.dom.window.document.querySelector('.entry-guide-title')?.textContent,
       'Open Worktree mode here',
     );
     assert.equal(
       mounted.dom.window.document.querySelector('.entry-guide-body')?.textContent,
-      'Browse Sessions grouped by Git worktree.',
+      'Browse Sessions grouped by Git worktree, and return to native Workspace navigation anytime.',
     );
     assert.equal(
       mounted.dom.window.document.querySelector('[data-worktree-entry-guide] button')?.textContent,
       'Got it',
     );
     assert.equal(mounted.dom.window.document.querySelector('[data-placement]')?.getAttribute('data-placement'), 'below');
+  } finally {
+    await mounted.unmount();
+  }
+});
+
+test('keeps the guide open while using its attribution card and dismisses the card first', async () => {
+  const mounted = await mountGuide();
+  try {
+    const win = mounted.dom.window;
+    const trigger = mounted.bubble.querySelector('button[aria-haspopup="dialog"]');
+    await React.act(async () => trigger.dispatchEvent(new win.MouseEvent('pointerover', { bubbles: true })));
+    const card = mounted.bubble.querySelector('[role="dialog"]');
+    assert.match(card.textContent, /This component comes from/);
+    const link = card.querySelector('a');
+    assert.equal(link.href, 'https://github.com/Cerbur/clutch-dsh');
+    await React.act(async () => link.dispatchEvent(new win.Event('pointerdown', { bubbles: true })));
+    assert.deepEqual(mounted.dismissed, []);
+    await React.act(async () => link.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(win.document.activeElement, trigger);
+    assert.deepEqual(mounted.dismissed, []);
+    await React.act(async () => trigger.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    assert.deepEqual(mounted.dismissed, ['dismiss']);
   } finally {
     await mounted.unmount();
   }

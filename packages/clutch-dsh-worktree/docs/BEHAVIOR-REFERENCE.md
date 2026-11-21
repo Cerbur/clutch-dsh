@@ -105,6 +105,7 @@ sidebar is hidden, the guide stays pending and ignores outside clicks and Escape
 When the button is available, a one-time guide sits beside the entry
 until that browser dismisses or uses it; closing it, pressing Escape, clicking outside it, or
 opening Worktree mode records the read locally and sends nothing to the Host.
+Next to **Got it**, hover over, focus, or click `from @cerbur/clutch-dsh-worktree` to open the same attribution card as the Session popover.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
 
