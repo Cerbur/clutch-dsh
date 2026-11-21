@@ -1,6 +1,17 @@
 /** Browser-local marker: the one-time Worktree entry guide has been dismissed. */
 export const ENTRY_GUIDE_STORAGE_KEY = 'clutch-dsh-worktree.entry-guide-seen';
 
+/** DSH keeps the native browser mounted in closed drawers and fully collapsed desktop columns. */
+export function isEntryAvailable(element: HTMLElement): boolean {
+  return element.isConnected && element.closest([
+    '[inert]',
+    '[hidden]',
+    '[data-sidebar-drawer][data-sidebar-collapsed]',
+    '[data-platform="darwin"] [data-sidebar-collapsed]',
+    '[data-windows-titlebar] [data-sidebar-collapsed]',
+  ].join(',')) === null;
+}
+
 /** Anchor geometry in viewport coordinates; structural so jsdom can supply zeroes. */
 export interface EntryGuideRect {
   readonly top: number;

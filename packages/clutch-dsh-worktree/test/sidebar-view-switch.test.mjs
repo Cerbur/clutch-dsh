@@ -50,21 +50,9 @@ async function loadSwitch() {
     '@deepseek-ai/dsh-client-ui-primitives': {
       Tooltip: ({ children }) => children,
     },
-    './EntryGuide.js': {
-      EntryGuide: ({ title, body, dismissLabel, onDismiss }) =>
-        React.createElement(
-          'div',
-          { 'data-guide': 'stub', 'data-guide-body': body },
-          React.createElement('span', { 'data-guide-title': title }),
-          React.createElement(
-            'button',
-            { type: 'button', 'data-guide-dismiss': dismissLabel, onClick: onDismiss },
-            dismissLabel,
-          ),
-        ),
-    },
     './entry-guide.js': entryGuide,
   };
+  dependencies['./EntryGuide.js'] = await loadTs('../src/client/view/EntryGuide.tsx', dependencies);
   return (await loadTs('../src/client/view/SidebarViewSwitch.tsx', dependencies)).SidebarViewSwitch;
 }
 
@@ -84,15 +72,16 @@ const wideMarkup = `
 
 const lateMarkup = '<div><div data-shell-overlay></div></div>';
 
-const collapsedMarkup = `
-<div data-sidebar-collapsed>
-  <div data-shell-overlay></div>
-  <div>
-    <div data-sidebar-workspace-header><span>Workspaces</span></div>
-    <div data-sidebar-list-area></div>
-  </div>
-</div>
-`;
+function collapsedSidebar({ drawer = false } = {}) {
+  return `
+    <div data-sidebar-collapsed ${drawer ? 'data-sidebar-drawer' : ''}>
+      <div data-shell-overlay></div>
+      <div ${drawer ? 'inert' : ''}>
+        <div data-sidebar-workspace-header><span>Workspaces</span></div>
+        <div data-sidebar-list-area></div>
+      </div>
+    </div>`;
+}
 
 const guideCopy = {
   title: 'Open Worktree mode here',
@@ -159,7 +148,7 @@ test('portals the Worktree entry into the native workspace toolbar when wide', a
     assert.ok(button, 'header entry is mounted in the native toolbar');
     assert.equal(button.getAttribute('aria-label'), 'Worktree');
     assert.equal(doc.querySelector('[data-sidebar-list-area] [data-worktree-view-switch]'), null);
-    button.click();
+    await React.act(async () => { button.click(); });
     assert.equal(opened, 1);
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
@@ -172,14 +161,14 @@ test('shows the one-time entry guide and records it after opening the mode', asy
   const mounted = await mount(wideMarkup, () => { opened += 1; }, { guide: guideCopy });
   try {
     const doc = mounted.dom.window.document;
-    assert.ok(doc.querySelector('[data-guide="stub"]'), 'guide renders next to the entry');
-    assert.equal(doc.querySelector('[data-guide-title]')?.getAttribute('data-guide-title'), guideCopy.title);
-    assert.equal(doc.querySelector('[data-guide-body]')?.getAttribute('data-guide-body'), guideCopy.body);
+    assert.ok(doc.querySelector('[data-worktree-entry-guide]'), 'guide renders next to the entry');
+    assert.equal(doc.querySelector('.entry-guide-title')?.textContent, guideCopy.title);
+    assert.equal(doc.querySelector('.entry-guide-body')?.textContent, guideCopy.body);
     await React.act(async () => {
       doc.querySelector('[data-worktree-view-switch="header"]').click();
     });
     assert.equal(opened, 1);
-    assert.equal(doc.querySelector('[data-guide="stub"]'), null, 'guide disappears after opening');
+    assert.equal(doc.querySelector('[data-worktree-entry-guide]'), null, 'guide disappears after opening');
     assert.equal(
       mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'),
       '1',
@@ -195,11 +184,11 @@ test('dismissing the guide records it without opening the mode', async () => {
   const mounted = await mount(wideMarkup, () => { opened += 1; }, { guide: guideCopy });
   try {
     const doc = mounted.dom.window.document;
-    const dismiss = doc.querySelector('[data-guide-dismiss]');
+    const dismiss = doc.querySelector('[data-worktree-entry-guide] button');
     assert.ok(dismiss, 'guide exposes its dismiss control');
     await React.act(async () => { dismiss.click(); });
     assert.equal(opened, 0);
-    assert.equal(doc.querySelector('[data-guide="stub"]'), null);
+    assert.equal(doc.querySelector('[data-worktree-entry-guide]'), null);
     assert.equal(
       mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'),
       '1',
@@ -213,7 +202,7 @@ test('dismissing the guide records it without opening the mode', async () => {
 test('does not show the guide once this browser dismissed it', async () => {
   const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, guideSeen: true });
   try {
-    assert.equal(mounted.dom.window.document.querySelector('[data-guide="stub"]'), null);
+    assert.equal(mounted.dom.window.document.querySelector('[data-worktree-entry-guide]'), null);
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();
@@ -223,7 +212,7 @@ test('does not show the guide once this browser dismissed it', async () => {
 test('omits the guide when the consumer provides no copy', async () => {
   const mounted = await mount(wideMarkup, () => {});
   try {
-    assert.equal(mounted.dom.window.document.querySelector('[data-guide="stub"]'), null);
+    assert.equal(mounted.dom.window.document.querySelector('[data-worktree-entry-guide]'), null);
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();
@@ -231,10 +220,11 @@ test('omits the guide when the consumer provides no copy', async () => {
 });
 
 test('attaches when the native workspace toolbar mounts after the overlay', async () => {
-  const mounted = await mount(lateMarkup, () => {});
+  const mounted = await mount(lateMarkup, () => {}, { guide: guideCopy });
   try {
     const doc = mounted.dom.window.document;
     assert.equal(doc.querySelector('[data-worktree-view-switch]'), null);
+    await inputWhileHidden(mounted.dom.window);
     const frame = doc.querySelector('[data-shell-overlay]')?.parentElement;
     frame.insertAdjacentHTML('beforeend', `
       <div>
@@ -244,6 +234,7 @@ test('attaches when the native workspace toolbar mounts after the overlay', asyn
     `);
     await React.act(async () => { await waitForFrame(); });
     assert.ok(doc.querySelector('[data-sidebar-workspace-header] [data-worktree-view-switch="header"]'));
+    assert.ok(doc.querySelector('[data-worktree-entry-guide]'));
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();
@@ -251,13 +242,56 @@ test('attaches when the native workspace toolbar mounts after the overlay', asyn
 });
 
 test('portals the Worktree entry into the rail list area when the sidebar is collapsed', async () => {
-  const mounted = await mount(collapsedMarkup, () => {});
+  const mounted = await mount(collapsedSidebar(), () => {});
   try {
     const doc = mounted.dom.window.document;
     const rail = doc.querySelector('[data-sidebar-list-area]');
     const button = rail?.querySelector('[data-worktree-view-switch="rail"]');
     assert.ok(button, 'rail entry is mounted in the collapsed workspace rail');
     assert.equal(doc.querySelector('[data-sidebar-workspace-header] [data-worktree-view-switch]'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+async function inputWhileHidden(win) {
+  assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+  const events = [
+    new win.Event('pointerdown', { bubbles: true }),
+    new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  ];
+  for (const event of events) {
+    await React.act(async () => { win.document.body.dispatchEvent(event); });
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), null, event.type);
+  }
+}
+
+test('keeps the first guide pending while a closed drawer retains its native markers', async () => {
+  const mounted = await mount(collapsedSidebar({ drawer: true }), () => {}, { guide: guideCopy });
+  try {
+    const win = mounted.dom.window;
+    const frame = win.document.querySelector('[data-sidebar-drawer]');
+    const column = frame.querySelector('[inert]');
+    assert.ok(!column.querySelector('[data-worktree-view-switch]'));
+    await inputWhileHidden(win);
+    frame.removeAttribute('data-sidebar-collapsed');
+    column.removeAttribute('inert');
+    await React.act(async () => { await waitForFrame(); });
+    assert.ok(column.querySelector('[data-worktree-view-switch="header"]'));
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    frame.setAttribute('data-sidebar-collapsed', '');
+    column.setAttribute('inert', '');
+    await React.act(async () => {
+      win.document.body.dispatchEvent(new win.Event('pointerdown', { bubbles: true }));
+      await waitForFrame();
+    });
+    await inputWhileHidden(win);
+    frame.removeAttribute('data-sidebar-drawer');
+    column.removeAttribute('inert');
+    await React.act(async () => { await waitForFrame(); });
+    assert.ok(column.querySelector('[data-worktree-view-switch="rail"]'));
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();

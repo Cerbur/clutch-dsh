@@ -69,6 +69,7 @@
 
 .entryGuideArrow {
   position: absolute;
+  translate: -50% 0;
   width: 10px;
   height: 10px;
   background: inherit;

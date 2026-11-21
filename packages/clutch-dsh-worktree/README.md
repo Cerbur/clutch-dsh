@@ -43,7 +43,7 @@ Keep the checkout and its dependencies available while linked. See the
 
 | Feature | Preview | What it does |
 | --- | --- | --- |
-| **Worktree navigation** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-en.png" width="420" alt="Workspace, Worktree, and Session navigation"> | Organize Sessions by checkout, filter by activity, and jump to tasks that need attention. |
+| **Worktree navigation** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-en.png" width="420" alt="Branch button and first-use hint in the Workspace header"> | Open Worktree mode from the Workspace header to browse Sessions by checkout and filter by activity. |
 | **Create and import** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-import.png" width="420" alt="Worktree creation and import"> | Start from a local or fetched remote branch, or bring an existing Worktree into the view without moving its files. |
 | **Dashboard** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard"> | See Sessions, shared instructions, baseline relationships, and lifecycle actions in one place. |
 | **Git & Changes** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-git-reviewer.png" width="420" alt="Commits, changed files, and diff"> | Review baseline comparisons, individual or multiple commits, and uncommitted changes. |
@@ -60,7 +60,8 @@ open a Workspace and its Local/Main or Worktree group. Select a Session to conti
 conversation. Use the Worktree panel header's exit control, or the rail exit while collapsed, to
 return to native Workspace navigation.
 
-Until it is dismissed, a one-time hint beside the entry explains how to open the mode. Dismissing
+A one-time hint appears when the entry is available. If the sidebar is hidden or still loading,
+the hint waits until you can use the button. Dismissing
 the hint or opening the mode retires it for that browser, so users who were already inside
 Worktree mode see it once after their first exit.
 

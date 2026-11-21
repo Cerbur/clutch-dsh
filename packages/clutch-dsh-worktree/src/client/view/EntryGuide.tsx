@@ -4,12 +4,13 @@ import styles from '../worktree.css';
 import {
   computeEntryGuidePosition,
   ENTRY_GUIDE_FALLBACK_SIZE,
+  isEntryAvailable,
   type EntryGuidePosition,
 } from './entry-guide.js';
 
 export interface EntryGuideProps {
   /** The mounted entry button; the bubble anchors to its viewport rect. */
-  readonly anchor: HTMLElement | null;
+  readonly anchor: HTMLElement;
   readonly title: string;
   readonly body: string;
   readonly dismissLabel: string;
@@ -27,7 +28,6 @@ export function EntryGuide({ anchor, title, body, dismissLabel, onDismiss }: Ent
   const titleId = useId();
 
   const place = useCallback(() => {
-    if (anchor === null) return;
     const rect = anchor.getBoundingClientRect();
     const measured = bubble.current?.getBoundingClientRect();
     const size = {
@@ -45,10 +45,18 @@ export function EntryGuide({ anchor, title, body, dismissLabel, onDismiss }: Ent
 
   useLayoutEffect(() => {
     place();
-    if (anchor === null) return;
+    // The native drawer slides an ancestor without resizing or scrolling the entry.
+    const onTransition = (event: TransitionEvent) => {
+      if (event.target instanceof window.Element && event.target.contains(anchor)) place();
+    };
+    const doc = anchor.ownerDocument;
+    doc.addEventListener('transitionend', onTransition, true);
+    doc.addEventListener('transitioncancel', onTransition, true);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     return () => {
+      doc.removeEventListener('transitionend', onTransition, true);
+      doc.removeEventListener('transitioncancel', onTransition, true);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
@@ -56,14 +64,14 @@ export function EntryGuide({ anchor, title, body, dismissLabel, onDismiss }: Ent
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onDismiss();
+      if (event.key === 'Escape' && isEntryAvailable(anchor)) onDismiss();
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target === null) return;
+      if (target === null || !isEntryAvailable(anchor)) return;
       if (bubble.current?.contains(target) === true) return;
       // Clicking the entry itself opens the mode; let the button own that path.
-      if (anchor?.contains(target) === true) return;
+      if (anchor.contains(target)) return;
       onDismiss();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -74,7 +82,6 @@ export function EntryGuide({ anchor, title, body, dismissLabel, onDismiss }: Ent
     };
   }, [anchor, onDismiss]);
 
-  if (anchor === null) return null;
   return createPortal(
     <div
       ref={bubble}

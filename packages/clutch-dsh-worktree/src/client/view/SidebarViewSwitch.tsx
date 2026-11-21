@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { IconBranchOutline16 } from '../dsh-icons.js';
 import styles from '../worktree.css';
 import { EntryGuide } from './EntryGuide.js';
-import { hasSeenEntryGuide, markEntryGuideSeen } from './entry-guide.js';
+import { hasSeenEntryGuide, isEntryAvailable, markEntryGuideSeen } from './entry-guide.js';
 
 /** Localized one-time guidance for the relocated entry. */
 export interface SidebarEntryGuideCopy {
@@ -101,7 +101,9 @@ function useSidebarTargets(visible: boolean): SidebarTargets {
         columnObserver = undefined;
         frameObserver?.disconnect();
         frameObserver = undefined;
-        setTargets({});
+        setTargets((previous) =>
+          previous.wide === undefined && previous.rail === undefined ? previous : {},
+        );
         return;
       }
       if (pendingObserver !== undefined) {
@@ -114,7 +116,12 @@ function useSidebarTargets(visible: boolean): SidebarTargets {
         columnObserver?.disconnect();
         observedColumn = column;
         columnObserver = new MutationObserver(schedule);
-        columnObserver.observe(column, { childList: true, subtree: true });
+        columnObserver.observe(column, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['inert', 'hidden'],
+        });
       }
       if (frame !== observedFrame) {
         frameObserver?.disconnect();
@@ -124,12 +131,14 @@ function useSidebarTargets(visible: boolean): SidebarTargets {
           frameObserver.observe(frame, {
             childList: true,
             attributes: true,
-            attributeFilter: ['data-sidebar-collapsed'],
+            attributeFilter: ['data-sidebar-collapsed', 'data-sidebar-drawer', 'inert', 'hidden'],
           });
         }
       }
+      // Keep observing the native markers while their column is hidden.
+      const available = isEntryAvailable(anchor) ? next : {};
       setTargets((previous) =>
-        previous.wide === next.wide && previous.rail === next.rail ? previous : next,
+        previous.wide === available.wide && previous.rail === available.rail ? previous : available,
       );
     };
     schedule();
@@ -196,7 +205,7 @@ export function SidebarViewSwitch({ visible, label, guide, onOpen }: SidebarView
           </Tooltip>,
           targets.rail,
         )}
-      {showGuide && (
+      {showGuide && anchor !== null && (
         <EntryGuide
           anchor={anchor}
           title={guide.title}
