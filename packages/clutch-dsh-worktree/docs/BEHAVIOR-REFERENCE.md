@@ -102,7 +102,8 @@ Workspace browser. The entry is mounted only inside DSH's documented
 row and no footer row. Sidebar placement and folding follow DSH's slot contract, without
 locating native rows by text, DOM order, or coordinates. While the toolbar is loading or the
 sidebar is hidden, the guide stays pending and ignores outside clicks and Escape.
-The guide appears when the button intersects the visible scrollport. Inside an open drawer,
+The guide appears when the button intersects the visible scrollport and can receive input.
+While Settings owns input, it waits and checks the button again when Settings closes. Inside an open drawer,
 Tab reaches the guide controls and Escape closes the attribution card, guide, then drawer in order.
 The first visible display sets a browser-local marker. The guide stays open for interaction
 and subsequent visits skip it, even if the user refreshed before dismissing it.

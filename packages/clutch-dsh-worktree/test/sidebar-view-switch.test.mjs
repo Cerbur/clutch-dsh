@@ -49,6 +49,11 @@ async function loadSwitch() {
       },
     },
     '@deepseek-ai/dsh-client-ui-primitives': {
+      // Model the foreground layer owned by DSH's useModalLayer.
+      isBehindModal: (anchor) => {
+        const modal = [...anchor.ownerDocument.querySelectorAll('[aria-modal="true"]')].at(-1);
+        return modal !== undefined && !modal.contains(anchor);
+      },
       Tooltip: ({ children }) => children,
     },
     './entry-guide.js': entryGuide,
@@ -272,6 +277,48 @@ test('the guide waits for its first visible intersection and does not reappear a
   }
 });
 
+const settingsPortal = '<div role="presentation"><div role="dialog" aria-modal="true" data-shortcut-modal="settings"></div></div>';
+
+test('settings blocks the first display until the portal closes and the entry is usable', async () => {
+  const mounted = await mount(wideMarkup + settingsPortal, () => {}, { guide: guideCopy });
+  try {
+    const win = mounted.dom.window;
+    const panel = win.document.querySelector('[data-shortcut-modal="settings"]').parentElement;
+    const entry = win.document.querySelector('[data-worktree-view-switch]');
+    assert.ok(entry);
+    await inputWhileHidden(win);
+    // Closing Settings alone must trigger the retry, without another intersection or resize.
+    await React.act(async () => { panel.remove(); });
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+    // Opening Settings from the keyboard also withdraws an already visible guide.
+    await React.act(async () => { win.document.body.append(panel); });
+    await inputWhileHidden(win, 'shown');
+    await React.act(async () => { panel.remove(); });
+    assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+    assert.equal(win.document.querySelector('[data-worktree-view-switch]'), entry);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('closing settings keeps the guide pending while the entry is clipped', async () => {
+  const mounted = await mount(wideMarkup + settingsPortal, () => {}, { guide: guideCopy, ratio: 0 });
+  try {
+    const win = mounted.dom.window;
+    const panel = win.document.querySelector('[data-shortcut-modal="settings"]').parentElement;
+    await React.act(async () => { panel.remove(); });
+    await inputWhileHidden(win);
+    await React.act(async () => mounted.intersect(1));
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
 test('omits the guide when the consumer provides no copy', async () => {
   const mounted = await mount(wideMarkup, () => {});
   try {
@@ -319,7 +366,7 @@ test('portals the Worktree entry into the rail list area when the sidebar is col
 });
 
 async function inputWhileHidden(win, marker = null) {
-  assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+  assert.ok(!win.document.querySelector('[data-worktree-entry-guide]'), 'the entry guide must remain hidden');
   const events = [
     new win.Event('pointerdown', { bubbles: true }),
     new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),

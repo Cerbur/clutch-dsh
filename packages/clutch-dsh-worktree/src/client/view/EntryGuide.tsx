@@ -1,3 +1,4 @@
+import { isBehindModal } from '@deepseek-ai/dsh-client-ui-primitives';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PluginAttribution } from '../PluginAttribution.js';
@@ -19,6 +20,10 @@ export interface EntryGuideProps {
   readonly onDismiss: () => void;
 }
 
+function canShowEntryGuide(anchor: HTMLElement): boolean {
+  return !anchor.ownerDocument.hidden && isEntryAvailable(anchor) && !isBehindModal(anchor);
+}
+
 /** Keep the button mounted even when its native scrollport clips it completely. */
 export function EntryGuide(props: EntryGuideProps) {
   const { anchor } = props;
@@ -29,7 +34,7 @@ export function EntryGuide(props: EntryGuideProps) {
     let intersects = false;
     const sync = () => {
       setVisibleAnchor(current => {
-        if (doc.hidden || !intersects) return null;
+        if (!intersects || !canShowEntryGuide(anchor)) return null;
         return current === anchor || !hasSeenEntryGuide() ? anchor : null;
       });
     };
@@ -39,9 +44,14 @@ export function EntryGuide(props: EntryGuideProps) {
       sync();
     }, { threshold: [0, 0.001] });
     observer.observe(anchor);
+    // Settings mounts a portal beside the app root. Its mask changes modal
+    // ownership without moving the entry or changing its intersection.
+    const portals = new window.MutationObserver(sync);
+    portals.observe(doc.body, { childList: true });
     doc.addEventListener('visibilitychange', sync);
     return () => {
       observer.disconnect();
+      portals.disconnect();
       doc.removeEventListener('visibilitychange', sync);
     };
   }, [anchor]);
@@ -55,7 +65,7 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   const titleId = useId();
   const positioned = position !== null;
   useEffect(() => {
-    if (positioned && !anchor.ownerDocument.hidden && isEntryAvailable(anchor)) markEntryGuideSeen();
+    if (positioned && canShowEntryGuide(anchor)) markEntryGuideSeen();
   }, [anchor, positioned]);
 
   const place = useCallback(() => {
@@ -111,7 +121,7 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || !isEntryAvailable(anchor)) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || !canShowEntryGuide(anchor)) return;
       if (drawer) {
         // The nested attribution card and native menus own their first Escape.
         const target = event.target;
@@ -124,7 +134,7 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target === null || !isEntryAvailable(anchor)) return;
+      if (target === null || !canShowEntryGuide(anchor)) return;
       if (bubble.current?.contains(target) === true) return;
       // Clicking the entry itself opens the mode; let the button own that path.
       if (anchor.contains(target)) return;

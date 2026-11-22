@@ -48,6 +48,7 @@ async function loadGuideModules() {
     'react/jsx-runtime': JSX,
     'react-dom': { createPortal },
     '@deepseek-ai/dsh-client-ui-primitives': {
+      isBehindModal: () => false,
       MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })),
     },
     './plugin-attribution.css': { default: {} },

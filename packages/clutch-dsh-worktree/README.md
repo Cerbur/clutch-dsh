@@ -60,7 +60,8 @@ open a Workspace and its Local/Main or Worktree group. Select a Session to conti
 conversation. Use the Worktree panel header's exit control, or the rail exit while collapsed, to
 return to native Workspace navigation.
 
-A hint points to the new button once per browser, the first time it is visible. Dismiss it
+A hint points to the new button once per browser, the first time it is visible and usable.
+If Settings covers the sidebar, the hint waits until you close Settings. Dismiss it
 with **Got it**, Escape, or a click outside the hint. Hover over or focus
 `from @cerbur/clutch-dsh-worktree` beside **Got it** for the plugin description and GitHub link.
 
