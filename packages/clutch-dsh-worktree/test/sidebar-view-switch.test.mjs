@@ -279,6 +279,65 @@ test('the guide waits for its first visible intersection and does not reappear a
 
 const settingsPortal = '<div role="presentation"><div role="dialog" aria-modal="true" data-shortcut-modal="settings"></div></div>';
 
+test('withdraws a shown guide when a keyboard action makes the right panel fullscreen', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy });
+  try {
+    const doc = mounted.dom.window.document;
+    const frame = doc.querySelector('[data-shell-overlay]').parentElement;
+    const entry = doc.querySelector('[data-worktree-view-switch]');
+    assert.ok(doc.querySelector('[data-worktree-entry-guide]'));
+    doc.elementFromPoint = () => frame.hasAttribute('data-rightbar-fullscreen') ? frame : entry;
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    assert.ok(!doc.querySelector('[data-worktree-entry-guide]'), 'fullscreen covers the entry');
+    await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+    assert.equal(doc.querySelector('[data-worktree-entry-guide]'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('follows a sidebar row removed above a fully visible entry', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, ratio: 0 });
+  try {
+    const doc = mounted.dom.window.document;
+    const header = doc.querySelector('[data-sidebar-workspace-header]');
+    const row = doc.createElement('div');
+    header.before(row);
+    const entry = doc.querySelector('[data-worktree-view-switch]');
+    entry.getBoundingClientRect = () => new mounted.dom.window.DOMRect(70, row.isConnected ? 230 : 196, 28, 28);
+    await React.act(async () => mounted.intersect(1));
+    const guide = doc.querySelector('[data-worktree-entry-guide]');
+    assert.equal(guide.style.top, '268px');
+    await React.act(async () => { row.remove(); await waitForFrame(); });
+    assert.equal(guide.style.top, '234px');
+    assert.equal(doc.querySelector('[data-worktree-entry-guide]'), guide);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('remembers the first display on return to Workspace when storage is full', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, ratio: 0 });
+  try {
+    const win = mounted.dom.window;
+    win.Storage.prototype.setItem = () => { throw new win.DOMException('Storage full', 'QuotaExceededError'); };
+    await React.act(async () => mounted.intersect(1));
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    await React.act(async () => { win.document.querySelector('[data-worktree-view-switch]').click(); });
+    await mounted.renderVisible(false);
+    await mounted.renderVisible(true);
+    await React.act(async () => { await waitForFrame(); });
+    assert.ok(win.document.querySelector('[data-worktree-view-switch]'));
+    assert.ok(!win.document.querySelector('[data-worktree-entry-guide]'), 'returning must not repeat the guide');
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
 test('settings blocks the first display until the portal closes and the entry is usable', async () => {
   const mounted = await mount(wideMarkup + settingsPortal, () => {}, { guide: guideCopy });
   try {

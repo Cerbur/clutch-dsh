@@ -105,8 +105,9 @@ sidebar is hidden, the guide stays pending and ignores outside clicks and Escape
 The guide appears when the button intersects the visible scrollport and can receive input.
 When Settings closes, the guide checks the button again and waits if another panel still covers it. Inside an open drawer,
 Tab reaches the guide controls and Escape closes the attribution card, guide, then drawer in order.
-The first visible display sets a browser-local marker. The guide stays open for interaction
-and subsequent visits skip it, even if the user refreshed before dismissing it.
+While visible, the guide follows the entry when sidebar rows move. A fullscreen right panel
+that covers the entry closes the guide. The first display is remembered for the current page
+and, when browser storage is writable, across reloads.
 Next to **Got it**, hover over, focus, or click `from @cerbur/clutch-dsh-worktree` to open the same attribution card as the Session popover.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.

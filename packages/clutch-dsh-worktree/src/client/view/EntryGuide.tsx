@@ -20,6 +20,9 @@ export interface EntryGuideProps {
   readonly onDismiss: () => void;
 }
 
+// A document remembers an actual display even if its browser rejects storage writes.
+const shownDocuments = new WeakSet<Document>();
+
 function canShowEntryGuide(anchor: HTMLElement): boolean {
   return !anchor.ownerDocument.hidden && isEntryAvailable(anchor) && !isBehindModal(anchor);
 }
@@ -38,8 +41,9 @@ export function EntryGuide(props: EntryGuideProps) {
   const { anchor } = props;
   const [visibleAnchor, setVisibleAnchor] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    if (hasSeenEntryGuide()) return;
     const doc = anchor.ownerDocument;
+    const seen = () => shownDocuments.has(doc) || hasSeenEntryGuide();
+    if (seen()) return;
     let intersects = false;
     let retry: number | undefined;
     const sync = () => {
@@ -48,10 +52,10 @@ export function EntryGuide(props: EntryGuideProps) {
       const clickable = available && entryReceivesPointer(anchor);
       // A floating panel can uncover the button without changing its intersection
       // or mounting a portal. Retry only while an unseen, on-screen entry is covered.
-      if (available && !clickable && !hasSeenEntryGuide()) retry = window.setTimeout(sync, 250);
+      if (available && !clickable && !seen()) retry = window.setTimeout(sync, 250);
       setVisibleAnchor(current => {
         if (!clickable) return null;
-        return current === anchor || !hasSeenEntryGuide() ? anchor : null;
+        return current === anchor || !seen() ? anchor : null;
       });
     };
     const observer = new window.IntersectionObserver((entries) => {
@@ -64,6 +68,11 @@ export function EntryGuide(props: EntryGuideProps) {
     // ownership without moving the entry or changing its intersection.
     const portals = new window.MutationObserver(sync);
     portals.observe(doc.body, { childList: true });
+    // The right panel covers the entry in place when the shell switches to fullscreen.
+    const frame = doc.querySelector('[data-shell-overlay]')?.parentElement;
+    if (frame?.contains(anchor)) {
+      portals.observe(frame, { attributes: true, attributeFilter: ['data-rightbar-fullscreen'] });
+    }
     doc.addEventListener('visibilitychange', sync);
     return () => {
       window.clearTimeout(retry);
@@ -81,55 +90,48 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   const [position, setPosition] = useState<EntryGuidePosition | null>(null);
   const titleId = useId();
   const positioned = position !== null;
-  useEffect(() => {
-    if (positioned && canShowEntryGuide(anchor) && entryReceivesPointer(anchor)) markEntryGuideSeen();
+  useLayoutEffect(() => {
+    if (positioned && canShowEntryGuide(anchor) && entryReceivesPointer(anchor)) {
+      shownDocuments.add(anchor.ownerDocument);
+      markEntryGuideSeen();
+    }
   }, [anchor, positioned]);
-
-  const place = useCallback(() => {
-    const rect = anchor.getBoundingClientRect();
-    const measured = bubble.current?.getBoundingClientRect();
-    const size = {
-      width: measured !== undefined && measured.width > 0 ? measured.width : ENTRY_GUIDE_FALLBACK_SIZE.width,
-      height:
-        measured !== undefined && measured.height > 0 ? measured.height : ENTRY_GUIDE_FALLBACK_SIZE.height,
-    };
-    setPosition(
-      computeEntryGuidePosition(rect, size, {
-        width: window.innerWidth,
-        height: window.innerHeight,
-      }),
-    );
-  }, [anchor]);
 
   useLayoutEffect(() => {
     // Retain the drawer's DOM/focus ownership while escaping its transformed,
     // clipped column. A manual popover leaves focus and dismissal to this guide.
     const element = bubble.current;
-    if (drawer && element && typeof element.showPopover === 'function') {
+    if (!element) return;
+    if (drawer && typeof element.showPopover === 'function') {
       element.popover = 'manual';
       element.showPopover();
     }
-    place();
-    // The native drawer slides an ancestor without resizing or scrolling the entry.
-    const onTransition = (event: TransitionEvent) => {
-      if (event.target instanceof window.Element && event.target.contains(anchor)) place();
+    // A sibling can move the button without a resize, scroll or intersection event.
+    // Track geometry only during the visible hint and publish only changed positions.
+    let previous: EntryGuidePosition | undefined;
+    let frame: number;
+    const place = () => {
+      const size = element.getBoundingClientRect();
+      const next = computeEntryGuidePosition(anchor.getBoundingClientRect(), {
+        width: size.width || ENTRY_GUIDE_FALLBACK_SIZE.width,
+        height: size.height || ENTRY_GUIDE_FALLBACK_SIZE.height,
+      }, { width: window.innerWidth, height: window.innerHeight });
+      if (!previous || next.top !== previous.top || next.left !== previous.left ||
+          next.placement !== previous.placement || next.arrowLeft !== previous.arrowLeft) {
+        previous = next;
+        setPosition(next);
+      }
+      frame = window.requestAnimationFrame(place);
     };
-    const doc = anchor.ownerDocument;
-    doc.addEventListener('transitionend', onTransition, true);
-    doc.addEventListener('transitioncancel', onTransition, true);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
+    place();
     return () => {
-      if (drawer && element?.popover === 'manual') {
+      window.cancelAnimationFrame(frame);
+      if (drawer && element.popover === 'manual') {
         element.hidePopover();
         element.removeAttribute('popover');
       }
-      doc.removeEventListener('transitionend', onTransition, true);
-      doc.removeEventListener('transitioncancel', onTransition, true);
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
     };
-  }, [anchor, drawer, place]);
+  }, [anchor, drawer]);
 
   const dismissFromGuide = useCallback(() => {
     if (bubble.current?.contains(anchor.ownerDocument.activeElement)) anchor.focus({ preventScroll: true });
