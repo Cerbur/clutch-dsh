@@ -181,6 +181,7 @@ export function SurfaceHeader({ expansion, props, source, read, mutation, onOpen
             <button
               type="button"
               className={styles.closeButton}
+              data-worktree-mode-action
               aria-label={t('mode.exit')}
               onClick={() => {
                 actions.setViewMode('workspace-session');

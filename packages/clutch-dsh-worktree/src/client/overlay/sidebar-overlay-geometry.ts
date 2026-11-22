@@ -73,7 +73,7 @@ export function findNewSessionAnchor(root: Element): HTMLElement | undefined {
 }
 
 function sidebarFooterCandidate(root: Element): Element | undefined {
-  // WorktreeModeAction owns this marker in sidebar.footer.action; no native classes or labels.
+  // The plugin owns this marker on its mode entry; no native classes or labels.
   const action = root.querySelector('[data-worktree-mode-action]');
   return directChildWithin(root, action);
 }

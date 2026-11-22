@@ -7,8 +7,20 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
 ## Runtime boundary
 
 - Sidebar navigation mounts exclusively in DSH's `sidebar.workspaces` single slot, at priority
-  -10 while Worktree mode is active. The existing footer action toggles the shared mode store;
-  exit/disposal releases the registration so the native occupant wins again. Native registrations
+  -10 while Worktree mode is active. The mode entry does not use the sidebar foot:
+  `view/SidebarViewSwitch.tsx` portals a 28px branch button into the native Workspace toolbar
+  (`data-sidebar-workspace-header`) and a 36px rail button into the collapsed rail list area
+  (`data-sidebar-list-area`); both are documented DSH integration markers. No
+  `sidebar.footer.action` registration is made, so other footer plugins keep the native row
+  geometry; this supersedes the 2026-08-21 footer-action design. A one-time guide
+  (`view/EntryGuide.tsx`, remembered through `view/entry-guide.ts`) points at the mounted entry
+  when it intersects the native scrollport and DSH's foreground modal permits input at the button.
+  Mounting or removing the Settings portal triggers a fresh check. If a panel still covers the button's
+  click target, the guide waits until a pointer can reach it. Its first positioned display in a visible tab
+  records the display for the document and attempts to persist it across reloads. A visible guide
+  follows the entry through sidebar reflow and rechecks hit testing when the right panel changes
+  fullscreen state. The open drawer owns the guide's focus order. Exit/disposal releases the
+  registration so the native occupant wins again. Native registrations
   and their child declarations remain owned by DSH. No DOM row order, array index, text label,
   private class, or measured coordinate selects the navigation mount point.
   `view/sidebar-workspace-slot.tsx` publishes the plugin-owned seat and the owner's `wide` state.
@@ -53,9 +65,10 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   valid persisted baseline exists or a captured acquisition commit supplies the implicit baseline; it does
   not add a Git-specific endpoint or branch-list read.
 - `entry.ts` injects `ctx.connection`, creates one adapter per Client fiber, and disposes it with
-  the fiber. `shell.overlay` retains the shared view owner; `sidebar.footer.action` retains the
-  existing mode entry. Navigation inherits the native sidebar background on all platforms,
-  including its reduced-transparency behavior, without modifying native DOM presentation.
+  the fiber. `shell.overlay` retains the shared view owner and the inline mode entry. Navigation
+  inherits the native sidebar background on all platforms, including its reduced-transparency
+  behavior; the only native DOM composition is the plugin-owned entry button mounted in the
+  documented Workspace toolbar or rail list area.
 - On Client load and `connection/reset`, a non-blocking, five-second Host probe uses the adapter's
   existing `listBindings` endpoint with an empty Workspace identity. An outer Gateway success,
   including an inner `WORKSPACE_NOT_FOUND`, proves Host composition without selecting user data.
@@ -256,7 +269,8 @@ both candidate reads and import mutations and releases the membership projection
 
 Sidebar navigation uses the workspace slot described above. Hero context and Dashboard stay
 in the shell overlay; navigation mount, fold, or declaration changes do not relocate them into
-the sidebar. The footer's plugin-owned marker remains available to Dashboard's frame resolver.
+the sidebar. The `data-worktree-mode-action` marker lives on the toolbar/rail entry and the
+surface exit, so Dashboard's frame resolver can reach the sidebar in either mode.
 
 ### Worktree dashboard
 
@@ -802,12 +816,13 @@ view state rather than a new domain error.
 
 The Worktree surface is additive:
 
-- the Sidebar entry remains the footer action; the Session header can open a Dashboard directly;
-- the footer action inherits the native Sidebar label line box and spacing; when the
-  Sidebar is collapsed on a platform with a rail, its icon-only footer action remains the
-  Sidebar Worktree control. macOS has no rail; its native titlebar control reopens navigation.
-  The plugin does not render a duplicate `WT` rail button;
-- no separate Workspace/Worktree mode Tab is added;
+- the Sidebar entry lives in the native Workspace toolbar as a branch icon button; the Session
+  header can open a Dashboard directly;
+- the entry keeps the native toolbar icon geometry and becomes a 36px rail control when the
+  host keeps a collapsed rail. The active Worktree surface exposes its own exit in the surface
+  header and in the visible rail through the workspace seat. Narrow Web drawers, macOS desktop
+  and Windows with a native title bar reopen through the host sidebar toggle;
+- no separate Workspace/Worktree mode Tab or footer action is added;
 - the navigation section is bounded by the native slot viewport and coordinates its inner scrollport through the section-scroller contract described above. When the native capability is absent, `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
   Thumb offsets are clamped to the track during elastic overscroll. Pointer up, pointer cancel, and lost capture end dragging; unmount disconnects the resize observer and scroll listener. `test/client-overlay-scrollbar.test.mjs` exercises the production component's geometry, track jumps, pointer lifecycle, and disposal with controlled DOM metrics.
 - Workspace folders prefer native `IconFolderOpenRegular` when expanded, retaining the legacy fallback. The expanded Workspace containing the current Session uses `--dsw-alias-state-business-primary`; other folders use `--dsw-alias-label-tertiary`, matching the native Workspace row. Membership comes from the complete Workspace Session projection before search and row limits, including bound and current blank Sessions. `--dsw-alias-brand-primary` is a neutral theme token and must not supply this highlight. Workspace and Worktree disclosures use the native filled right triangle with a 200ms `--ds-transition-duration` / `--ds-ease-in-out` rotation; reduced motion disables the transition. The 24×24 hit target stays centered on the 20px leading cell, uses the shared `--dsw-focus-ring-*` tokens, and is always visible without hover. This 2026-10-07 native parity update supersedes the historical 2026-08-21 plan's 18px outline chevrons;
@@ -1008,7 +1023,7 @@ Retry reloads the latest selection. Configuration changes do not invalidate Work
 
 ## Current Session popover
 
-`PluginAttribution` supplies this popover's footer, the Dashboard footer, and the label beside the Worktree settings title.
+`PluginAttribution` supplies this popover's footer, the Dashboard footer, the label beside the Worktree settings title, and the label beside the entry guide's dismiss button.
 The Dashboard footer replaces the former baseline-sync task hint with the same compact 8px label.
 It reuses native MenuSurface material and locale copy, with a body portal clamped to
 the viewport above the parent surface. Hover, click and focus open the card; leaving
