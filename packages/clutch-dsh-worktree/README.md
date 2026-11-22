@@ -55,10 +55,13 @@ Keep the checkout and its dependencies available while linked. See the
 
 ### Browse your tasks
 
-Select the branch control in the Workspace header, or its control in the collapsed rail, then
-open a Workspace and its Local/Main or Worktree group. Select a Session to continue the
-conversation. Use the Worktree panel header's exit control, or the rail exit while collapsed, to
-return to native Workspace navigation.
+Select the branch button in the Workspace header. Open a Workspace, choose its Local/Main or
+Worktree group, and select a Session to continue the conversation. The exit button in the
+Worktree panel header returns you to Workspace navigation.
+
+If collapsing the sidebar leaves a narrow rail, its branch button lets you enter or exit Worktree.
+In a narrow Web window, on macOS desktop, or on Windows with the native title bar, the sidebar
+closes completely. Use DSH’s sidebar toggle to reopen it and reach the header button.
 
 A hint points to the button the first time you can use it. It follows the button as the sidebar
 changes and closes if a panel covers it. If your browser cannot save this preference, the hint

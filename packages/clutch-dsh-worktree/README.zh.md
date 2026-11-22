@@ -55,9 +55,12 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 
 ### 浏览任务
 
-点击 Workspace 标题栏中的分支按钮（侧栏折叠时使用窄栏中的按钮），打开 Workspace 下的
-Local/Main 或 Worktree 分组，选择会话继续对话。使用 Worktree 面板标题栏的退出按钮，
-或折叠状态下的窄栏退出按钮，可返回原生 Workspace 导航。
+点击 Workspace 标题栏中的分支按钮，打开 Workspace 下的 Local/Main 或 Worktree 分组，
+选择会话继续对话。点击 Worktree 面板标题栏的退出按钮即可返回 Workspace 导航。
+
+如果折叠后仍有窄栏，可用窄栏中的分支按钮进入或退出 Worktree。在窄屏 Web、macOS 桌面端，
+以及使用原生标题栏的 Windows 桌面端，折叠会完全收起侧栏。先用 DSH 的侧栏开关重新展开，
+即可使用标题栏中的按钮。
 
 按钮首次可操作时，引导会指向它。侧栏布局变化时引导会跟随按钮，面板遮住按钮后引导会收起。
 如果浏览器无法保存这次展示，重新加载页面后可能再次出现。点击「知道了」、按 Esc 或点击引导外部即可收起。

@@ -819,9 +819,9 @@ The Worktree surface is additive:
 - the Sidebar entry lives in the native Workspace toolbar as a branch icon button; the Session
   header can open a Dashboard directly;
 - the entry keeps the native toolbar icon geometry and becomes a 36px rail control when the
-  Sidebar is collapsed; the active Worktree surface exposes its own exit in the surface header,
-  and the collapsed rail keeps that exit through the workspace seat. macOS has no rail; its
-  native titlebar control reopens navigation. The plugin does not render a duplicate `WT` button;
+  host keeps a collapsed rail. The active Worktree surface exposes its own exit in the surface
+  header and in the visible rail through the workspace seat. Narrow Web drawers, macOS desktop
+  and Windows with a native title bar reopen through the host sidebar toggle;
 - no separate Workspace/Worktree mode Tab or footer action is added;
 - the navigation section is bounded by the native slot viewport and coordinates its inner scrollport through the section-scroller contract described above. When the native capability is absent, `OverlayScrollbar` projects that scrollport into an absolute, theme-token thumb; the content's own scrollbar is hidden, preserving row widths and padding with and without overflow regardless of OS scrollbar preferences. Resize observation covers both the viewport and its stable content wrapper. The thumb appears on hover/focus or while dragging; pointer capture keeps dragging active outside the rail. Wheel, keyboard, current-Session reveal, and rail dragging share the native content scroll position;
   Thumb offsets are clamped to the track during elastic overscroll. Pointer up, pointer cancel, and lost capture end dragging; unmount disconnects the resize observer and scroll listener. `test/client-overlay-scrollbar.test.mjs` exercises the production component's geometry, track jumps, pointer lifecycle, and disposal with controlled DOM metrics.
