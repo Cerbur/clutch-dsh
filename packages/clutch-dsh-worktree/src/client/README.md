@@ -15,7 +15,8 @@ architecture, source-of-truth rules, sidecar ownership and module responsibiliti
   geometry; this supersedes the 2026-08-21 footer-action design. A one-time guide
   (`view/EntryGuide.tsx`, remembered through `view/entry-guide.ts`) points at the mounted entry
   when it intersects the native scrollport and DSH's foreground modal permits input at the button.
-  Mounting or removing the Settings portal triggers a fresh check. Its first positioned display in a visible tab
+  Mounting or removing the Settings portal triggers a fresh check. If a panel still covers the button's
+  click target, the guide waits until a pointer can reach it. Its first positioned display in a visible tab
   sets the browser-local marker. The open drawer owns the guide's focus order. Exit/disposal releases the
   registration so the native occupant wins again. Native registrations
   and their child declarations remain owned by DSH. No DOM row order, array index, text label,

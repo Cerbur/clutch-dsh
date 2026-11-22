@@ -24,6 +24,12 @@ function canShowEntryGuide(anchor: HTMLElement): boolean {
   return !anchor.ownerDocument.hidden && isEntryAvailable(anchor) && !isBehindModal(anchor);
 }
 
+function entryReceivesPointer(anchor: HTMLElement): boolean {
+  const rect = anchor.getBoundingClientRect();
+  const target = anchor.ownerDocument.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  return anchor.contains(target);
+}
+
 /** Keep the button mounted even when its native scrollport clips it completely. */
 export function EntryGuide(props: EntryGuideProps) {
   const { anchor } = props;
@@ -32,9 +38,16 @@ export function EntryGuide(props: EntryGuideProps) {
     if (hasSeenEntryGuide()) return;
     const doc = anchor.ownerDocument;
     let intersects = false;
+    let retry: number | undefined;
     const sync = () => {
+      window.clearTimeout(retry);
+      const available = intersects && canShowEntryGuide(anchor);
+      const clickable = available && entryReceivesPointer(anchor);
+      // A floating panel can uncover the button without changing its intersection
+      // or mounting a portal. Retry only while an unseen, on-screen entry is covered.
+      if (available && !clickable && !hasSeenEntryGuide()) retry = window.setTimeout(sync, 250);
       setVisibleAnchor(current => {
-        if (!intersects || !canShowEntryGuide(anchor)) return null;
+        if (!clickable) return null;
         return current === anchor || !hasSeenEntryGuide() ? anchor : null;
       });
     };
@@ -50,6 +63,7 @@ export function EntryGuide(props: EntryGuideProps) {
     portals.observe(doc.body, { childList: true });
     doc.addEventListener('visibilitychange', sync);
     return () => {
+      window.clearTimeout(retry);
       observer.disconnect();
       portals.disconnect();
       doc.removeEventListener('visibilitychange', sync);
@@ -65,7 +79,7 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   const titleId = useId();
   const positioned = position !== null;
   useEffect(() => {
-    if (positioned && canShowEntryGuide(anchor)) markEntryGuideSeen();
+    if (positioned && canShowEntryGuide(anchor) && entryReceivesPointer(anchor)) markEntryGuideSeen();
   }, [anchor, positioned]);
 
   const place = useCallback(() => {

@@ -319,6 +319,31 @@ test('closing settings keeps the guide pending while the entry is clipped', asyn
   }
 });
 
+test('closing settings waits for a fullscreen panel to release the entry click target', async () => {
+  const mounted = await mount(wideMarkup + settingsPortal, () => {}, { guide: guideCopy });
+  try {
+    const win = mounted.dom.window;
+    const doc = win.document;
+    const panel = doc.createElement('div');
+    const entry = doc.querySelector('[data-worktree-view-switch]');
+    const frame = doc.querySelector('[data-shell-overlay]').parentElement;
+    frame.append(panel);
+    doc.elementFromPoint = () => panel.isConnected ? panel : entry.firstElementChild;
+    await React.act(async () => { doc.querySelector('[data-shortcut-modal="settings"]').parentElement.remove(); });
+    await inputWhileHidden(win);
+    // Only the covering panel moves. The entry keeps the same visible intersection.
+    await React.act(async () => {
+      panel.remove();
+      await delay(350);
+    });
+    assert.ok(doc.querySelector('[data-worktree-entry-guide]'));
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
 test('omits the guide when the consumer provides no copy', async () => {
   const mounted = await mount(wideMarkup, () => {});
   try {

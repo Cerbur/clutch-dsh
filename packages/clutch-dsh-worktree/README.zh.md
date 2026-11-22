@@ -59,7 +59,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 Local/Main 或 Worktree 分组，选择会话继续对话。使用 Worktree 面板标题栏的退出按钮，
 或折叠状态下的窄栏退出按钮，可返回原生 Workspace 导航。
 
-新按钮首次可见且可操作时，会弹出一次引导。如果设置弹窗挡住侧栏，引导会等到设置关闭后再显示。
+新按钮首次可见且可操作时，会弹出一次引导。如果设置弹窗或其他面板挡住按钮，引导会等到按钮可以点击时再显示。
 该浏览器会记住这次展示。点击「知道了」、按 Esc 或点击引导外部即可收起。
 将鼠标悬停或键盘焦点移到「知道了」旁的 `from @cerbur/clutch-dsh-worktree`，
 即可查看插件说明和 GitHub 链接。
