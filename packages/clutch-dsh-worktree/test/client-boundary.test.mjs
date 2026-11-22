@@ -27,12 +27,14 @@ test('browser Client modules do not import Host, Manage, Provider, or Node runti
   }
 });
 
-test('Client retains footer and shell entries and mounts navigation through the workspace slot', async () => {
+test('Client mounts its entry in the native workspace toolbar and keeps the shell overlay', async () => {
   const sources = await Promise.all(
     (await sourceFiles(clientRoot)).map((file) => readFile(file, 'utf8')),
   );
   const source = sources.join('\n');
-  assert.match(source, /sidebar\.footer\.action/);
+  assert.match(source, /data-sidebar-workspace-header/);
+  assert.match(source, /data-sidebar-list-area/);
+  assert.doesNotMatch(source, /sidebar\.footer\.action/);
   assert.match(source, /shell\.overlay/);
   assert.match(source, /ResizeObserver/);
   assert.match(source, /data-shell-overlay/);

@@ -68,20 +68,28 @@ Workspace 与 Session 标题保持常规字重，展开的 Workspace 和当前 S
 悬浮在过长的 Session 标题或 Worktree 名称上时，文字以原生速度滚动到末尾；移出后恢复起点。
 启用减少动态效果时会直接显示末尾。
 
-1. 启动 DSH Web，在 DSH Sidebar 底部选择 **Worktree**。
+1. 启动 DSH Web，点击原生 Workspace 标题栏中的分支按钮；如果折叠后仍有窄栏，也可使用窄栏中的按钮。
 2. 在 Worktree 树中搜索或选择 Workspace。
 3. 选择 Local/Main 或某个 Worktree 浏览其 Session。这个视角是附加的，DSH 原生的 Workspace
    和 Session 导航仍然可用。每组初始显示五行，可使用**展开更多**和**收起**查看其余内容。
 4. 使用 header 中的 **Collapse All** 折叠其他无关的 Workspace 和 Worktree，当前 Session 所在的
    Workspace 与 Worktree 保持展开。
 
-收起原生 Sidebar 时，Web 和 desktop 的 Worktree 面板都会同步隐藏。macOS desktop 不保留
-收起后的窄栏，请使用原生标题栏控件重新展开。行动画遵循减少动态效果偏好，并在搜索、
-拖拽和首次加载时直接完成布局。
+收起原生 Sidebar 时，Worktree 面板会同步隐藏。如果仍有窄栏，可用窄栏中的分支按钮进入或退出
+Worktree。在窄屏 Web、macOS 桌面端和使用原生标题栏的 Windows 桌面端，先用 DSH 的侧栏开关
+重新展开，再使用标题栏中的按钮。行动画遵循减少动态效果偏好，并在搜索、拖拽和首次加载时直接完成布局。
 Worktree 通过 DSH 的 `sidebar.workspaces` 插槽，仅替换 Workspace 浏览区域。
-品牌、新会话按钮、插件菜单、底部入口和当前对话保持原位。
-再次点击同一个底部入口即可恢复原生 Workspace 浏览器。侧栏挂载和折叠遵循 DSH 插槽契约，
-不通过文字、DOM 顺序或坐标定位原生行。
+品牌、新会话按钮、插件菜单、底栏和当前对话保持原位。
+使用面板标题栏的退出按钮或可见窄栏中的退出按钮，即可恢复原生 Workspace 浏览器。
+模式入口只挂载在 DSH 公开的 `data-sidebar-workspace-header` 与 `data-sidebar-list-area`
+标记内，不插入原生行，也不占用底栏。侧栏挂载和折叠遵循 DSH 插槽契约，不通过文字、
+DOM 顺序或坐标定位原生行。工具栏加载中或侧栏隐藏时，引导会等待，点击页面或按 Esc 都会保留首次提示。
+入口进入侧栏可视范围且可操作后显示引导。设置关闭后会再次检查入口；如果还有其他面板挡住按钮，引导会继续等待。
+在打开的抽屉中，Tab 可访问引导操作。Esc 会先关闭已打开的 Workspace 菜单或署名卡片，
+再按 Esc 依次关闭引导和抽屉。
+引导显示期间会随侧栏行的移动调整位置；右栏全屏遮住入口后，引导会收起。
+当前页面会记住首次实际展示；浏览器存储可写时，刷新后也会记住。
+悬停、聚焦或点击「知道了」右侧的 `from @cerbur/clutch-dsh-worktree`，可打开与 Session 面板相同的插件说明卡片。
 导航继承原生 Sidebar 材质和透明度偏好。Dashboard 继续作为独立浮层，由已有操作显式打开。
 
 标题栏的**添加 Workspace** 使用 DSH 配置的目录选择器，包括 Web 的应用内目录浏览器及

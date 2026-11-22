@@ -1,5 +1,27 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.39 — 2026-11-22
+
+### 中文
+
+#### 优化
+
+- Worktree 入口移到 Workspace 工具栏的分支按钮，侧栏折叠后仍显示窄栏时也可以用分支按钮进入或退出。
+
+#### 新增
+
+- 分支按钮首次可操作时会显示引导，提示新用户和升级用户从哪里打开 Worktree。
+
+### English
+
+#### Improved
+
+- The Worktree entry moves to the branch button in the Workspace toolbar, and the button in the collapsed rail lets you enter or exit Worktree when the rail is visible.
+
+#### Added
+
+- A first-use hint appears when the branch button first becomes available and shows new and upgrading users where to open Worktree.
+
 ## 0.1.38 — 2026-11-20
 
 ### 中文

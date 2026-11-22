@@ -43,7 +43,7 @@ Keep the checkout and its dependencies available while linked. See the
 
 | Feature | Preview | What it does |
 | --- | --- | --- |
-| **Worktree navigation** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-en.png" width="420" alt="Workspace, Worktree, and Session navigation"> | Organize Sessions by checkout, filter by activity, and jump to tasks that need attention. |
+| **Worktree navigation** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-en.png" width="420" alt="First-use hint pointing to the branch button in the Workspace toolbar"> | Open Worktree from the Workspace toolbar to browse Sessions by checkout and filter by activity. |
 | **Create and import** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-import.png" width="420" alt="Worktree creation and import"> | Start from a local or fetched remote branch, or bring an existing Worktree into the view without moving its files. |
 | **Dashboard** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard"> | See Sessions, shared instructions, baseline relationships, and lifecycle actions in one place. |
 | **Git & Changes** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-git-reviewer.png" width="420" alt="Commits, changed files, and diff"> | Review baseline comparisons, individual or multiple commits, and uncommitted changes. |
@@ -55,9 +55,20 @@ Keep the checkout and its dependencies available while linked. See the
 
 ### Browse your tasks
 
-Select **Worktree** in the Sidebar footer, then open a Workspace and its Local/Main or Worktree
-group. Select a Session to continue the conversation. Select the footer entry again to return
-to native Workspace navigation.
+Select the branch button in the Workspace header. Open a Workspace, choose its Local/Main or
+Worktree group, and select a Session to continue the conversation. The exit button in the
+Worktree panel header returns you to Workspace navigation.
+
+If collapsing the sidebar leaves a narrow rail, its branch button lets you enter or exit Worktree.
+In a narrow Web window, on macOS desktop, or on Windows with the native title bar, the sidebar
+closes completely. Use DSH’s sidebar toggle to reopen it and reach the header button.
+
+A hint points to the button the first time you can use it. It follows the button as the sidebar
+changes and closes if a panel covers it. If your browser cannot save this preference, the hint
+can appear again after a reload. Dismiss it
+with **Got it**, Escape, or a click outside the hint. In the sidebar drawer, Escape closes an open
+Workspace menu first. Hover over or focus
+`from @cerbur/clutch-dsh-worktree` beside **Got it** for the plugin description and GitHub link.
 
 Filter Sessions by **Today**, **24 hours**, **7 days**, or **All**. Running and waiting Sessions,
 and the Session you are viewing, remain visible. The range menu lets you hide inactive groups

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeTranslate } from './surface/types.js';
@@ -8,7 +8,11 @@ const PACKAGE_NAME = '@cerbur/clutch-dsh-worktree';
 const PACKAGE_URL = 'https://github.com/Cerbur/clutch-dsh';
 
 /** UI-only attribution. Keep the interactive card open across the portal gap. */
-export function PluginAttribution({ t }: { readonly t: WorktreeTranslate }) {
+export function PluginAttribution({ t, cardContainer }: {
+  readonly t: WorktreeTranslate;
+  /** Keep the card within a parent dialog's stacking and outside-click boundary. */
+  readonly cardContainer?: RefObject<HTMLElement>;
+}) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<CSSProperties>({});
   const trigger = useRef<HTMLButtonElement>(null);
@@ -134,6 +138,6 @@ export function PluginAttribution({ t }: { readonly t: WorktreeTranslate }) {
         </svg>
         {PACKAGE_NAME}</a>
       {t('attribution.after')}
-    </MenuSurface>, document.body)}
+    </MenuSurface>, cardContainer?.current ?? document.body)}
   </div>;
 }

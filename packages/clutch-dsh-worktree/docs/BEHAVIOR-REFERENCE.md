@@ -81,7 +81,8 @@ An open Workspace containing the current Session uses the native blue folder; ot
 folders use the native gray. Hover over a long Session title or Worktree name to reveal its
 tail at native speed; leaving restores the start. Reduced motion reveals the tail immediately.
 
-1. Start DSH Web and select **Worktree** from the DSH Sidebar footer.
+1. Start DSH Web and select the branch control in the native Workspace header or, if visible,
+   in the collapsed rail.
 2. Search or select a Workspace in the Worktree tree.
 3. Select Local/Main or a Worktree to browse its Sessions. The view is additive; DSH's native
    Workspace and Session navigation remains available. Each group initially shows five rows;
@@ -89,13 +90,27 @@ tail at native speed; leaving restores the start. Reduced motion reveals the tai
 4. Use **Collapse All** in the header to collapse other unrelated Workspaces and Worktrees;
    the Workspace and Worktree containing the current Session remain expanded.
 
-Collapsing the native Sidebar also hides the Worktree panel on Web and desktop. macOS desktop
-keeps no collapsed rail; use the native titlebar control to reopen it. Row animation respects
+Collapsing the native Sidebar hides the full Worktree panel. Layouts with a visible rail keep
+a branch button there for entering or exiting Worktree. In a narrow Web window, on macOS
+desktop, and on Windows with the native title bar, use DSH’s sidebar toggle to reopen the
+sidebar and reach the header controls. Row animation respects
 reduced motion and settles immediately during search, drag, and initial loading.
 Worktree replaces only the Workspace browsing region through DSH's `sidebar.workspaces` slot.
 The brand, New Session button, plugin menus, footer, and current conversation stay in place.
-Select the same footer entry again to restore the native Workspace browser. Sidebar placement
-and folding follow DSH's slot contract, without locating native rows by text, DOM order, or coordinates.
+Use the surface header's exit control, or the rail exit when visible, to restore the native
+Workspace browser. The entry is mounted only inside DSH's documented
+`data-sidebar-workspace-header` and `data-sidebar-list-area` markers, so it injects no native
+row and no footer row. Sidebar placement and folding follow DSH's slot contract, without
+locating native rows by text, DOM order, or coordinates. While the toolbar is loading or the
+sidebar is hidden, the guide stays pending and ignores outside clicks and Escape.
+The guide appears when the button intersects the visible scrollport and can receive input.
+When Settings closes, the guide checks the button again and waits if another panel still covers it. Inside an open drawer,
+Tab reaches the guide controls. Escape closes an open Workspace menu or attribution card first,
+then the guide, then the drawer.
+While visible, the guide follows the entry when sidebar rows move. A fullscreen right panel
+that covers the entry closes the guide. The first display is remembered for the current page
+and, when browser storage is writable, across reloads.
+Next to **Got it**, hover over, focus, or click `from @cerbur/clutch-dsh-worktree` to open the same attribution card as the Session popover.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.
 

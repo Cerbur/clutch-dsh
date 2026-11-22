@@ -43,7 +43,7 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 
 | 功能 | 预览 | 说明 |
 | --- | --- | --- |
-| **Worktree 导航** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-zh.png" width="420" alt="Workspace、Worktree 与 Session 导航"> | 按目录组织会话，按活跃时间筛选，快速定位需要关注的任务。 |
+| **Worktree 导航** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-zh.png" width="420" alt="首次引导指向 Workspace 工具栏中的分支按钮"> | 从 Workspace 工具栏打开 Worktree，按工作目录浏览会话，并按活跃时间筛选。 |
 | **创建与导入** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-import.png" width="420" alt="创建与导入 Worktree"> | 从本地或已获取的远端分支开始，或接入已有 Worktree，无需移动文件。 |
 | **Dashboard** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-dashboard.png" width="420" alt="Worktree Dashboard"> | 集中查看会话、共享指引、基线关系和生命周期操作。 |
 | **Git 与变更** | <img src="https://raw.githubusercontent.com/Cerbur/clutch-dsh/main/packages/clutch-dsh-worktree/assets/screenshots/screenshots-git-reviewer.png" width="420" alt="提交、变更文件与差异"> | 查看基线对比、单个或多个提交，以及未提交的改动。 |
@@ -55,8 +55,18 @@ dsh plugin --profile web add /absolute/path/to/clutch-dsh/packages/clutch-dsh-wo
 
 ### 浏览任务
 
-点击侧栏底部的 **Worktree**，打开 Workspace 下的 Local/Main 或 Worktree 分组，
-选择会话继续对话。再次点击底部入口，可返回原生 Workspace 导航。
+点击 Workspace 标题栏中的分支按钮，打开 Workspace 下的 Local/Main 或 Worktree 分组，
+选择会话继续对话。点击 Worktree 面板标题栏的退出按钮即可返回 Workspace 导航。
+
+如果折叠后仍有窄栏，可用窄栏中的分支按钮进入或退出 Worktree。在窄屏 Web、macOS 桌面端，
+以及使用原生标题栏的 Windows 桌面端，折叠会完全收起侧栏。先用 DSH 的侧栏开关重新展开，
+即可使用标题栏中的按钮。
+
+按钮首次可操作时，引导会指向它。侧栏布局变化时引导会跟随按钮，面板遮住按钮后引导会收起。
+如果浏览器无法保存这次展示，重新加载页面后可能再次出现。点击「知道了」、按 Esc 或点击引导外部即可收起。
+在侧栏抽屉中，如果 Workspace 菜单已打开，按 Esc 会先关闭菜单。
+将鼠标悬停或键盘焦点移到「知道了」旁的 `from @cerbur/clutch-dsh-worktree`，
+即可查看插件说明和 GitHub 链接。
 
 使用**今天**、**24 小时**、**7 天**或**全部**筛选会话。运行中、等待交互和当前查看的会话
 始终可见。范围菜单支持隐藏不活跃分组、选择显示哪些时间范围。筛选不会归档或删除内容。
