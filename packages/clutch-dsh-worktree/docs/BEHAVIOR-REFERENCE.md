@@ -102,9 +102,10 @@ Workspace browser. The entry is mounted only inside DSH's documented
 row and no footer row. Sidebar placement and folding follow DSH's slot contract, without
 locating native rows by text, DOM order, or coordinates. While the toolbar is loading or the
 sidebar is hidden, the guide stays pending and ignores outside clicks and Escape.
-When the button is available, a one-time guide sits beside the entry
-until that browser dismisses or uses it; closing it, pressing Escape, clicking outside it, or
-opening Worktree mode records the read locally and sends nothing to the Host.
+The guide appears when the button intersects the visible scrollport. Inside an open drawer,
+Tab reaches the guide controls and Escape closes the attribution card, guide, then drawer in order.
+The first visible display sets a browser-local marker. The guide stays open for interaction
+and subsequent visits skip it, even if the user refreshed before dismissing it.
 Next to **Got it**, hover over, focus, or click `from @cerbur/clutch-dsh-worktree` to open the same attribution card as the Session popover.
 The navigation inherits the native Sidebar material and transparency preferences. Dashboard
 remains an independent overlay opened explicitly from its existing actions.

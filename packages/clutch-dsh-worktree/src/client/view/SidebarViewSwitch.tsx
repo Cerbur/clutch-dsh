@@ -5,15 +5,14 @@ import { IconBranchOutline16 } from '../dsh-icons.js';
 import styles from '../worktree.css';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { EntryGuide } from './EntryGuide.js';
-import { hasSeenEntryGuide, isEntryAvailable, markEntryGuideSeen } from './entry-guide.js';
+import { isEntryAvailable } from './entry-guide.js';
 
 /** Props owned by the Browser Consumer; placement comes from DSH's public markers. */
 export interface SidebarViewSwitchProps {
-  /** Render only while the native Workspace browser owns the sidebar region. */
   readonly visible: boolean;
   /** Localized entry label used for the accessible name and tooltip. */
   readonly label: string;
-  /** One-time coach mark shown next to the entry until this browser dismisses it. */
+  /** One-time hint for the relocated entry. */
   readonly guide?: WorktreeTranslate;
   readonly onOpen: () => void;
 }
@@ -127,6 +126,10 @@ function useSidebarTargets(visible: boolean): SidebarTargets {
             attributes: true,
             attributeFilter: ['data-sidebar-collapsed', 'data-sidebar-drawer', 'inert', 'hidden'],
           });
+          // DSH's onboarding dialog makes the application root above AppFrame inert.
+          for (let parent = frame.parentElement; parent; parent = parent.parentElement) {
+            frameObserver.observe(parent, { attributes: true, attributeFilter: ['inert', 'hidden'] });
+          }
         }
       }
       // Keep observing the native markers while their column is hidden.
@@ -149,20 +152,10 @@ function useSidebarTargets(visible: boolean): SidebarTargets {
 /** The Worktree mode entry, mounted inside DSH's native Workspace toolbar or rail. */
 export function SidebarViewSwitch({ visible, label, guide, onOpen }: SidebarViewSwitchProps) {
   const targets = useSidebarTargets(visible);
-  const [guideSeen, setGuideSeen] = useState(() => hasSeenEntryGuide());
+  const [dismissed, setDismissed] = useState(false);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const dismissGuide = useCallback(() => {
-    markEntryGuideSeen();
-    setGuideSeen(true);
-  }, []);
-  const open = useCallback(() => {
-    // Opening the mode proves the entry was found; never guide this browser again.
-    markEntryGuideSeen();
-    setGuideSeen(true);
-    onOpen();
-  }, [onOpen]);
+  const dismissGuide = useCallback(() => setDismissed(true), []);
   if (!visible) return null;
-  const showGuide = guide !== undefined && !guideSeen;
   return (
     <>
       {targets.wide !== undefined &&
@@ -175,7 +168,7 @@ export function SidebarViewSwitch({ visible, label, guide, onOpen }: SidebarView
               data-worktree-mode-action
               data-worktree-view-switch="header"
               aria-label={label}
-              onClick={open}
+              onClick={onOpen}
             >
               <IconBranchOutline16 size={16} />
             </button>
@@ -192,14 +185,14 @@ export function SidebarViewSwitch({ visible, label, guide, onOpen }: SidebarView
               data-worktree-mode-action
               data-worktree-view-switch="rail"
               aria-label={label}
-              onClick={open}
+              onClick={onOpen}
             >
               <IconBranchOutline16 size={18} />
             </button>
           </Tooltip>,
           targets.rail,
         )}
-      {showGuide && anchor !== null && (
+      {guide !== undefined && !dismissed && anchor !== null && (
         <EntryGuide
           anchor={anchor}
           t={guide}

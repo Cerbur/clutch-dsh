@@ -53,6 +53,9 @@
 
 .entryGuide {
   position: fixed;
+  inset: auto;
+  margin: 0;
+  overflow: visible;
   z-index: 2147483000;
   box-sizing: border-box;
   width: max-content;

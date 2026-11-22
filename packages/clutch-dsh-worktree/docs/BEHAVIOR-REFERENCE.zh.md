@@ -84,9 +84,8 @@ Worktree 通过 DSH 的 `sidebar.workspaces` 插槽，仅替换 Workspace 浏览
 模式入口只挂载在 DSH 公开的 `data-sidebar-workspace-header` 与 `data-sidebar-list-area`
 标记内，不插入原生行，也不占用底栏。侧栏挂载和折叠遵循 DSH 插槽契约，不通过文字、
 DOM 顺序或坐标定位原生行。工具栏加载中或侧栏隐藏时，引导会等待，点击页面或按 Esc 都会保留首次提示。
-入口可用后，尚未关闭提示或使用过入口的浏览器会显示一次性引导。关闭提示、
-按 Esc、点击引导外部或进入 Worktree 模式都会记录已读，已读状态保存在浏览器本地，不写入
-Sidecar，也不发送请求。
+入口进入侧栏可视范围后显示引导。在打开的抽屉中，Tab 可访问引导操作，Esc 依次关闭署名卡片、引导和抽屉。
+引导首次实际显示时即在浏览器本地记录已展示，并保持打开以便操作。即使直接刷新页面，以后也不会重复弹出。
 悬停、聚焦或点击「知道了」右侧的 `from @cerbur/clutch-dsh-worktree`，可打开与 Session 面板相同的插件说明卡片。
 导航继承原生 Sidebar 材质和透明度偏好。Dashboard 继续作为独立浮层，由已有操作显式打开。
 

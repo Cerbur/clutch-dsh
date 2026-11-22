@@ -60,11 +60,9 @@ open a Workspace and its Local/Main or Worktree group. Select a Session to conti
 conversation. Use the Worktree panel header's exit control, or the rail exit while collapsed, to
 return to native Workspace navigation.
 
-A one-time hint appears when the entry is available. Hover over or focus `from @cerbur/clutch-dsh-worktree`
-beside **Got it** to see the plugin description and GitHub link. If the sidebar is hidden or still loading,
-the hint waits until you can use the button. Dismissing
-the hint or opening the mode retires it for that browser, so users who were already inside
-Worktree mode see it once after their first exit.
+A hint points to the new button once per browser, the first time it is visible. Dismiss it
+with **Got it**, Escape, or a click outside the hint. Hover over or focus
+`from @cerbur/clutch-dsh-worktree` beside **Got it** for the plugin description and GitHub link.
 
 Filter Sessions by **Today**, **24 hours**, **7 days**, or **All**. Running and waiting Sessions,
 and the Session you are viewing, remain visible. The range menu lets you hide inactive groups

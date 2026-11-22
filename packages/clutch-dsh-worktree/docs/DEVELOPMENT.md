@@ -65,7 +65,8 @@ step tool admission、独立 native/PTC executor 和 `agent.model` owner。
 portal 挂载到 DSH 公开的 Workspace 工具栏（`data-sidebar-workspace-header`）与窄栏列表区
 （`data-sidebar-list-area`），不再注册 `sidebar.footer.action`。
 在启用了本地构建的独立 DSH Web 测试 profile 中，可执行以下浏览器回归。它从关闭的窄屏抽屉
-打开侧栏，在原生滑入动画完成后比较箭头和入口中心，无需手动调整窗口大小。
+打开侧栏，在原生滑入动画完成后比较箭头和入口中心，并用 Tab 访问引导和署名链接。
+引导首次显示时检查已展示标识，再验证 Esc 依次关闭卡片和引导，以及刷新后不重复弹出。
 
 ```bash
 DSH_WEB_URL="$TEST_PROFILE_URL" PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node test/manual/entry-guide-drawer.mjs

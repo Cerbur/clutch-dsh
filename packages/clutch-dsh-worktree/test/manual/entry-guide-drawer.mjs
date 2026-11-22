@@ -21,7 +21,9 @@ try {
   // A fresh Web profile may cover the sidebar with its initial preview notice.
   await page.addLocatorHandler(notice, () => notice.click());
   const guide = page.locator('[data-worktree-entry-guide]');
+  const marker = () => page.evaluate(() => globalThis.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'));
   assert.equal(await guide.count(), 0);
+  assert.equal(await marker(), null);
   await toggle.click();
   await guide.waitFor({ state: 'visible' });
   const centers = await page.locator('[data-worktree-view-switch="header"]').evaluate(async (entry) => {
@@ -38,6 +40,32 @@ try {
     return { button: center(entry), arrow: center(arrow) };
   });
   assert.ok(Math.abs(centers.button - centers.arrow) <= 2, JSON.stringify(centers));
+  assert.equal(await marker(), 'shown');
+  const entry = page.locator('[data-worktree-view-switch="header"]');
+  await entry.click({ trial: true });
+  await entry.focus();
+  const dismiss = guide.getByRole('button', { name: 'Got it', exact: true });
+  const drawerDialog = entry.locator('xpath=ancestor::*[@aria-modal="true"][1]');
+  const buttonCount = await drawerDialog.getByRole('button').count();
+  for (let i = 0; i <= buttonCount && !await dismiss.evaluate(el => el === el.ownerDocument.activeElement); i++) {
+    await page.keyboard.press('Tab');
+  }
+  assert.ok(await dismiss.evaluate(el => el === el.ownerDocument.activeElement), 'drawer Tab reaches Got it');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  const link = guide.getByRole('link');
+  assert.ok(await link.evaluate(el => el === el.ownerDocument.activeElement), 'Tab reaches the attribution link');
+  await page.keyboard.press('Escape');
+  await link.waitFor({ state: 'detached' });
+  await page.keyboard.press('Escape');
+  await guide.waitFor({ state: 'detached' });
+  assert.ok(await entry.isVisible(), 'Escape dismissed the guide and kept the drawer open');
+  await page.reload();
+  await page.locator('[data-sidebar-drawer]').waitFor({ state: 'attached' });
+  if (await drawer.count()) await toggle.click();
+  await entry.waitFor({ state: 'visible' });
+  assert.equal(await guide.count(), 0);
+  assert.equal(await marker(), 'shown');
 } finally {
   await browser.close();
 }

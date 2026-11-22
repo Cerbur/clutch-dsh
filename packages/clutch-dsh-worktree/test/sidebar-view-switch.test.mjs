@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';
+import { installEntryIntersection } from './helpers/entry-guide-intersection.mjs';
 
 async function loadTs(relative, dependencies) {
   const compiled = ts.transpileModule(
@@ -90,8 +91,9 @@ const guideCopy = (key, params) => en[key].replace('{plugin}', params?.plugin ??
 
 async function mount(markup, onOpen, options = {}) {
   const dom = new JSDOM(markup, { pretendToBeVisual: true, url: 'https://dsh.test/' });
-  if (options.guideSeen === true) {
-    dom.window.localStorage.setItem('clutch-dsh-worktree.entry-guide-seen', '1');
+  const intersect = installEntryIntersection(dom.window, options.ratio);
+  if (options.marker) {
+    dom.window.localStorage.setItem('clutch-dsh-worktree.entry-guide-seen', options.marker);
   }
   const previous = {
     window: globalThis.window,
@@ -111,20 +113,23 @@ async function mount(markup, onOpen, options = {}) {
   const container = dom.window.document.createElement('div');
   dom.window.document.body.appendChild(container);
   const root = createRoot(container);
-  await React.act(async () => {
+  const renderVisible = (visible) => React.act(async () => {
     root.render(
       React.createElement(SidebarViewSwitch, {
-        visible: true,
+        visible,
         label: 'Worktree',
         ...(options.guide === undefined ? {} : { guide: options.guide }),
         onOpen,
       }),
     );
   });
+  await renderVisible(options.visible ?? true);
   await React.act(async () => { await waitForFrame(); });
   return {
     dom,
     root,
+    renderVisible,
+    intersect,
     restore() {
       globalThis.window = previous.window;
       globalThis.document = previous.document;
@@ -155,7 +160,7 @@ test('portals the Worktree entry into the native workspace toolbar when wide', a
   }
 });
 
-test('shows the one-time entry guide and records it after opening the mode', async () => {
+test('records the visible guide before any interaction and keeps it open', async () => {
   let opened = 0;
   const mounted = await mount(wideMarkup, () => { opened += 1; }, { guide: guideCopy });
   try {
@@ -163,14 +168,17 @@ test('shows the one-time entry guide and records it after opening the mode', asy
     assert.ok(doc.querySelector('[data-worktree-entry-guide]'), 'guide renders next to the entry');
     assert.equal(doc.querySelector('.entry-guide-title')?.textContent, en['mode.guide.title']);
     assert.equal(doc.querySelector('.entry-guide-body')?.textContent, en['mode.guide.body']);
+    assert.equal(mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+    assert.equal(opened, 0);
     await React.act(async () => {
       doc.querySelector('[data-worktree-view-switch="header"]').click();
     });
     assert.equal(opened, 1);
+    await mounted.renderVisible(false);
     assert.equal(doc.querySelector('[data-worktree-entry-guide]'), null, 'guide disappears after opening');
     assert.equal(
       mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'),
-      '1',
+      'shown',
     );
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
@@ -178,7 +186,7 @@ test('shows the one-time entry guide and records it after opening the mode', asy
   }
 });
 
-test('dismissing the guide records it without opening the mode', async () => {
+test('the guide can be dismissed without opening the mode', async () => {
   let opened = 0;
   const mounted = await mount(wideMarkup, () => { opened += 1; }, { guide: guideCopy });
   try {
@@ -190,7 +198,7 @@ test('dismissing the guide records it without opening the mode', async () => {
     assert.equal(doc.querySelector('[data-worktree-entry-guide]'), null);
     assert.equal(
       mounted.dom.window.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'),
-      '1',
+      'shown',
     );
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
@@ -198,10 +206,66 @@ test('dismissing the guide records it without opening the mode', async () => {
   }
 });
 
-test('does not show the guide once this browser dismissed it', async () => {
-  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, guideSeen: true });
+test('does not show the guide when this browser already displayed it', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, marker: 'shown' });
   try {
     assert.equal(mounted.dom.window.document.querySelector('[data-worktree-entry-guide]'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('a previous mode opening leaves the guide pending until its first display', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, marker: 'opened', visible: false });
+  try {
+    const win = mounted.dom.window;
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'opened');
+    assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+    await mounted.renderVisible(true);
+    await React.act(async () => { await waitForFrame(); });
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    await mounted.renderVisible(false);
+    await mounted.renderVisible(true);
+    await React.act(async () => { await waitForFrame(); });
+    assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('onboarding can reveal the entry just by releasing inert on the application root', async () => {
+  const mounted = await mount(`<main inert>${wideMarkup}</main>`, () => {}, { guide: guideCopy });
+  try {
+    const win = mounted.dom.window;
+    await inputWhileHidden(win);
+    assert.equal(win.document.querySelector('[data-worktree-view-switch]'), null);
+    win.document.querySelector('main').removeAttribute('inert');
+    await React.act(async () => { await waitForFrame(); });
+    assert.ok(win.document.querySelector('[data-worktree-view-switch]'));
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('the guide waits for its first visible intersection and does not reappear after clipping', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, ratio: 0 });
+  try {
+    const win = mounted.dom.window;
+    const button = win.document.querySelector('[data-worktree-view-switch]');
+    assert.ok(button);
+    await inputWhileHidden(win);
+    await React.act(async () => mounted.intersect(1));
+    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    await React.act(async () => mounted.intersect(0));
+    await inputWhileHidden(win, 'shown');
+    await React.act(async () => mounted.intersect(1));
+    assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+    assert.equal(win.document.querySelector('[data-worktree-view-switch]'), button);
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();
@@ -254,7 +318,7 @@ test('portals the Worktree entry into the rail list area when the sidebar is col
   }
 });
 
-async function inputWhileHidden(win) {
+async function inputWhileHidden(win, marker = null) {
   assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
   const events = [
     new win.Event('pointerdown', { bubbles: true }),
@@ -262,7 +326,7 @@ async function inputWhileHidden(win) {
   ];
   for (const event of events) {
     await React.act(async () => { win.document.body.dispatchEvent(event); });
-    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), null, event.type);
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), marker, event.type);
   }
 }
 
@@ -285,12 +349,43 @@ test('keeps the first guide pending while a closed drawer retains its native mar
       win.document.body.dispatchEvent(new win.Event('pointerdown', { bubbles: true }));
       await waitForFrame();
     });
-    await inputWhileHidden(win);
+    await inputWhileHidden(win, 'shown');
     frame.removeAttribute('data-sidebar-drawer');
     column.removeAttribute('inert');
     await React.act(async () => { await waitForFrame(); });
     assert.ok(column.querySelector('[data-worktree-view-switch="rail"]'));
-    assert.ok(win.document.querySelector('[data-worktree-entry-guide]'));
+    assert.equal(win.document.querySelector('[data-worktree-entry-guide]'), null);
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
+test('the drawer owns the guide controls and receives Escape only after the guide closes', async () => {
+  const markup = `<main data-sidebar-drawer><div data-shell-overlay></div>
+    <aside role="dialog" aria-modal="true"><div data-sidebar-workspace-header></div></aside></main>`;
+  const mounted = await mount(markup, () => {}, { guide: guideCopy });
+  try {
+    const win = mounted.dom.window;
+    const drawer = win.document.querySelector('[aria-modal="true"]');
+    const button = drawer.querySelector('[data-worktree-view-switch]');
+    const dismiss = drawer.querySelector('[data-worktree-entry-guide] button');
+    assert.ok(dismiss, 'Tab traversal inside the drawer includes the guide');
+    let drawerEscapes = 0;
+    win.document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) drawerEscapes++;
+    });
+    const escape = () => win.document.activeElement.dispatchEvent(new win.KeyboardEvent('keydown', {
+      key: 'Escape', bubbles: true, cancelable: true,
+    }));
+    dismiss.focus();
+    await React.act(async () => { escape(); });
+    assert.equal(drawerEscapes, 0);
+    assert.equal(drawer.querySelector('[data-worktree-entry-guide]'), null);
+    assert.equal(win.document.activeElement, button);
+    assert.equal(win.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+    escape();
+    assert.equal(drawerEscapes, 1);
   } finally {
     await React.act(async () => { mounted.root.unmount(); });
     mounted.restore();
@@ -302,12 +397,7 @@ test('removes the portal when the switch becomes inactive', async () => {
   try {
     const doc = mounted.dom.window.document;
     assert.ok(doc.querySelector('[data-worktree-view-switch="header"]'));
-    const SidebarViewSwitch = await loadSwitch();
-    await React.act(async () => {
-      mounted.root.render(
-        React.createElement(SidebarViewSwitch, { visible: false, label: 'Worktree', onOpen: () => {} }),
-      );
-    });
+    await mounted.renderVisible(false);
     await React.act(async () => { await waitForFrame(); });
     assert.equal(doc.querySelector('[data-worktree-view-switch]'), null);
   } finally {

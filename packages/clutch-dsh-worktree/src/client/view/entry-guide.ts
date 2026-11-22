@@ -1,5 +1,6 @@
-/** Browser-local marker: the one-time Worktree entry guide has been dismissed. */
+/** Browser-local marker for the first visible display of the relocated entry guide. */
 export const ENTRY_GUIDE_STORAGE_KEY = 'clutch-dsh-worktree.entry-guide-seen';
+const SHOWN = 'shown';
 
 /** DSH keeps the native browser mounted in closed drawers and fully collapsed desktop columns. */
 export function isEntryAvailable(element: HTMLElement): boolean {
@@ -74,10 +75,10 @@ function resolveStorage(storage?: Storage): Storage | undefined {
   }
 }
 
-/** True when this browser profile already dismissed or used the entry guide. */
+/** Earlier marker values recorded actions that could occur before the guide appeared. */
 export function hasSeenEntryGuide(storage?: Storage): boolean {
   try {
-    return resolveStorage(storage)?.getItem(ENTRY_GUIDE_STORAGE_KEY) === '1';
+    return resolveStorage(storage)?.getItem(ENTRY_GUIDE_STORAGE_KEY) === SHOWN;
   } catch {
     return false;
   }
@@ -86,7 +87,10 @@ export function hasSeenEntryGuide(storage?: Storage): boolean {
 /** Record the guide as seen; a blocked or full storage only costs one repeat. */
 export function markEntryGuideSeen(storage?: Storage): void {
   try {
-    resolveStorage(storage)?.setItem(ENTRY_GUIDE_STORAGE_KEY, '1');
+    const target = resolveStorage(storage);
+    if (target && target.getItem(ENTRY_GUIDE_STORAGE_KEY) !== SHOWN) {
+      target.setItem(ENTRY_GUIDE_STORAGE_KEY, SHOWN);
+    }
   } catch {
     // Persistence is best effort; the guide must never break navigation.
   }

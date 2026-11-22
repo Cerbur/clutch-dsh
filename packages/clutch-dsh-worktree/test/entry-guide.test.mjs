@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';
+import { installEntryIntersection } from './helpers/entry-guide-intersection.mjs';
 
 const moduleCache = new Map();
 
@@ -99,10 +100,15 @@ test('flips above the entry when the viewport has no room below', async () => {
 test('records the guide once and tolerates blocked storage', async () => {
   const { hasSeenEntryGuide, markEntryGuideSeen, ENTRY_GUIDE_STORAGE_KEY } =
     await loadGuideModules();
-  const storage = memoryStorage();
+  const storage = memoryStorage({ [ENTRY_GUIDE_STORAGE_KEY]: '1' });
+  let writes = 0;
+  const write = storage.setItem;
+  storage.setItem = (...args) => { writes++; write(...args); };
   assert.equal(hasSeenEntryGuide(storage), false);
   markEntryGuideSeen(storage);
-  assert.equal(storage.getItem(ENTRY_GUIDE_STORAGE_KEY), '1');
+  markEntryGuideSeen(storage);
+  assert.equal(writes, 1, 'only the first display writes the marker');
+  assert.equal(storage.getItem(ENTRY_GUIDE_STORAGE_KEY), 'shown');
   assert.equal(hasSeenEntryGuide(storage), true);
 
   const blocked = {
@@ -132,6 +138,7 @@ async function mountGuide() {
     act: globalThis.IS_REACT_ACT_ENVIRONMENT,
   };
   globalThis.window = dom.window;
+  installEntryIntersection(dom.window);
   globalThis.document = dom.window.document;
   globalThis.Node = dom.window.Node;
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };

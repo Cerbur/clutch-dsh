@@ -6,7 +6,9 @@ import styles from '../worktree.css';
 import {
   computeEntryGuidePosition,
   ENTRY_GUIDE_FALLBACK_SIZE,
+  hasSeenEntryGuide,
   isEntryAvailable,
+  markEntryGuideSeen,
   type EntryGuidePosition,
 } from './entry-guide.js';
 
@@ -17,15 +19,44 @@ export interface EntryGuideProps {
   readonly onDismiss: () => void;
 }
 
-/**
- * One-time, non-modal coach mark for the relocated Worktree entry. It portals to
- * `document.body` so the native toolbar's overflow cannot clip it, follows the
- * anchor across resize and scroll, and never steals focus from the sidebar.
- */
-export function EntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
+/** Keep the button mounted even when its native scrollport clips it completely. */
+export function EntryGuide(props: EntryGuideProps) {
+  const { anchor } = props;
+  const [visibleAnchor, setVisibleAnchor] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (hasSeenEntryGuide()) return;
+    const doc = anchor.ownerDocument;
+    let intersects = false;
+    const sync = () => {
+      setVisibleAnchor(current => {
+        if (doc.hidden || !intersects) return null;
+        return current === anchor || !hasSeenEntryGuide() ? anchor : null;
+      });
+    };
+    const observer = new window.IntersectionObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      intersects = !!entry && entry.intersectionRatio > 0;
+      sync();
+    }, { threshold: [0, 0.001] });
+    observer.observe(anchor);
+    doc.addEventListener('visibilitychange', sync);
+    return () => {
+      observer.disconnect();
+      doc.removeEventListener('visibilitychange', sync);
+    };
+  }, [anchor]);
+  return visibleAnchor === anchor ? <VisibleEntryGuide {...props} /> : null;
+}
+
+function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   const bubble = useRef<HTMLDivElement>(null);
+  const drawer = anchor.closest<HTMLElement>('[role="dialog"][aria-modal="true"]');
   const [position, setPosition] = useState<EntryGuidePosition | null>(null);
   const titleId = useId();
+  const positioned = position !== null;
+  useEffect(() => {
+    if (positioned && !anchor.ownerDocument.hidden && isEntryAvailable(anchor)) markEntryGuideSeen();
+  }, [anchor, positioned]);
 
   const place = useCallback(() => {
     const rect = anchor.getBoundingClientRect();
@@ -44,6 +75,13 @@ export function EntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   }, [anchor]);
 
   useLayoutEffect(() => {
+    // Retain the drawer's DOM/focus ownership while escaping its transformed,
+    // clipped column. A manual popover leaves focus and dismissal to this guide.
+    const element = bubble.current;
+    if (drawer && element && typeof element.showPopover === 'function') {
+      element.popover = 'manual';
+      element.showPopover();
+    }
     place();
     // The native drawer slides an ancestor without resizing or scrolling the entry.
     const onTransition = (event: TransitionEvent) => {
@@ -55,16 +93,34 @@ export function EntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     return () => {
+      if (drawer && element?.popover === 'manual') {
+        element.hidePopover();
+        element.removeAttribute('popover');
+      }
       doc.removeEventListener('transitionend', onTransition, true);
       doc.removeEventListener('transitioncancel', onTransition, true);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
-  }, [anchor, place]);
+  }, [anchor, drawer, place]);
+
+  const dismissFromGuide = useCallback(() => {
+    if (bubble.current?.contains(anchor.ownerDocument.activeElement)) anchor.focus({ preventScroll: true });
+    onDismiss();
+  }, [anchor, onDismiss]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isEntryAvailable(anchor)) onDismiss();
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || !isEntryAvailable(anchor)) return;
+      if (drawer) {
+        // The nested attribution card and native menus own their first Escape.
+        const target = event.target;
+        if (!(target instanceof window.Element) || !drawer.contains(target) ||
+            target.closest('[role="menu"]') || bubble.current?.querySelector('[aria-expanded="true"]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      dismissFromGuide();
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
@@ -74,13 +130,13 @@ export function EntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
       if (anchor.contains(target)) return;
       onDismiss();
     };
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, drawer !== null);
     window.addEventListener('pointerdown', onPointerDown, true);
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onKeyDown, drawer !== null);
       window.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [anchor, onDismiss]);
+  }, [anchor, drawer, dismissFromGuide, onDismiss]);
 
   return createPortal(
     <div
@@ -102,12 +158,12 @@ export function EntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
       </p>
       <p className={styles.entryGuideBody}>{t('mode.guide.body')}</p>
       <div className={styles.entryGuideActions}>
-        <button type="button" className={styles.entryGuideDismiss} onClick={onDismiss}>
+        <button type="button" className={styles.entryGuideDismiss} onClick={dismissFromGuide}>
           {t('mode.guide.dismiss')}
         </button>
         <PluginAttribution t={t} cardContainer={bubble} />
       </div>
     </div>,
-    document.body,
+    drawer ?? anchor.ownerDocument.body,
   );
 }
