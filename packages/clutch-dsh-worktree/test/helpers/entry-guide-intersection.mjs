@@ -4,6 +4,7 @@ export function installEntryIntersection(win, initialRatio = 1) {
   const observers = new Set();
   // With no overlay in the fixture, a pointer hits the observed entry button.
   win.document.elementFromPoint = () => [...observers][0]?.target ?? null;
+  win.document.elementsFromPoint = () => [win.document.elementFromPoint()].filter(Boolean);
   win.IntersectionObserver = class {
     constructor(notify) { this.notify = notify; }
     observe(target) {

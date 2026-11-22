@@ -26,8 +26,11 @@ function canShowEntryGuide(anchor: HTMLElement): boolean {
 
 function entryReceivesPointer(anchor: HTMLElement): boolean {
   const rect = anchor.getBoundingClientRect();
-  const target = anchor.ownerDocument.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-  return anchor.contains(target);
+  // In a short viewport, positioning the guide can put it over the button.
+  // Check the shell layer immediately beneath our own guide in that case.
+  const stack = anchor.ownerDocument.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  const target = stack.find(element => !element.closest('[data-worktree-entry-guide]'));
+  return target !== undefined && anchor.contains(target);
 }
 
 /** Keep the button mounted even when its native scrollport clips it completely. */

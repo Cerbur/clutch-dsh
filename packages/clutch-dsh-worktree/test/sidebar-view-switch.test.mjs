@@ -344,6 +344,32 @@ test('closing settings waits for a fullscreen panel to release the entry click t
   }
 });
 
+test('a guide overlapping its anchor stays mounted and cannot hide a panel underneath', async () => {
+  const mounted = await mount(wideMarkup, () => {}, { guide: guideCopy, ratio: 0 });
+  try {
+    const doc = mounted.dom.window.document;
+    const entry = doc.querySelector('[data-worktree-view-switch]');
+    const panel = doc.createElement('div');
+    const guides = new Set();
+    const stack = () => {
+      const guide = doc.querySelector('[data-worktree-entry-guide]');
+      if (guide) guides.add(guide);
+      // Stop simulating the overlap after a remount so a regression fails promptly.
+      return [guides.size === 1 && guide, panel.isConnected && panel, entry].filter(Boolean);
+    };
+    doc.elementFromPoint = () => stack()[0];
+    doc.elementsFromPoint = stack;
+    await React.act(async () => mounted.intersect(1));
+    assert.equal(guides.size, 1, 'positioning the guide must not remount it');
+    assert.equal(doc.defaultView.localStorage.getItem('clutch-dsh-worktree.entry-guide-seen'), 'shown');
+    await React.act(async () => { doc.body.append(panel); });
+    assert.ok(!doc.querySelector('[data-worktree-entry-guide]'), 'another panel still blocks the entry');
+  } finally {
+    await React.act(async () => { mounted.root.unmount(); });
+    mounted.restore();
+  }
+});
+
 test('omits the guide when the consumer provides no copy', async () => {
   const mounted = await mount(wideMarkup, () => {});
   try {
