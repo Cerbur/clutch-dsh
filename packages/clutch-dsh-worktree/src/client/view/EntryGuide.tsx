@@ -139,13 +139,12 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
   }, [anchor, onDismiss]);
 
   useEffect(() => {
+    // DSH menus and the attribution card consume Escape in document capture.
+    // Handle the remaining key inside the drawer before its document bubble listener.
+    const keyboardTarget: GlobalEventHandlers = drawer ?? window;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || !canShowEntryGuide(anchor)) return;
       if (drawer) {
-        // The nested attribution card and native menus own their first Escape.
-        const target = event.target;
-        if (!(target instanceof window.Element) || !drawer.contains(target) ||
-            target.closest('[role="menu"]') || bubble.current?.querySelector('[aria-expanded="true"]')) return;
         event.preventDefault();
         event.stopPropagation();
       }
@@ -159,10 +158,10 @@ function VisibleEntryGuide({ anchor, t, onDismiss }: EntryGuideProps) {
       if (anchor.contains(target)) return;
       onDismiss();
     };
-    window.addEventListener('keydown', onKeyDown, drawer !== null);
+    keyboardTarget.addEventListener('keydown', onKeyDown);
     window.addEventListener('pointerdown', onPointerDown, true);
     return () => {
-      window.removeEventListener('keydown', onKeyDown, drawer !== null);
+      keyboardTarget.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerdown', onPointerDown, true);
     };
   }, [anchor, drawer, dismissFromGuide, onDismiss]);

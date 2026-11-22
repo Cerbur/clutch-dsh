@@ -43,6 +43,15 @@ try {
   assert.equal(await marker(), 'shown');
   const entry = page.locator('[data-worktree-view-switch="header"]');
   await entry.click({ trial: true });
+  const options = page.getByRole('button', { name: 'View options', exact: true });
+  await options.focus();
+  await page.keyboard.press('Enter');
+  const menu = page.getByRole('menu');
+  await menu.waitFor({ state: 'visible' });
+  assert.ok(await options.evaluate(el => el === el.ownerDocument.activeElement));
+  await page.keyboard.press('Escape');
+  await menu.waitFor({ state: 'detached' });
+  assert.ok(await guide.isVisible(), 'the native menu receives Escape before the guide');
   await entry.focus();
   const dismiss = guide.getByRole('button', { name: 'Got it', exact: true });
   const drawerDialog = entry.locator('xpath=ancestor::*[@aria-modal="true"][1]');

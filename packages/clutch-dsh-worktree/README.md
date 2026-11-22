@@ -63,7 +63,8 @@ return to native Workspace navigation.
 A hint points to the button the first time you can use it. It follows the button as the sidebar
 changes and closes if a panel covers it. If your browser cannot save this preference, the hint
 can appear again after a reload. Dismiss it
-with **Got it**, Escape, or a click outside the hint. Hover over or focus
+with **Got it**, Escape, or a click outside the hint. In the sidebar drawer, Escape closes an open
+Workspace menu first. Hover over or focus
 `from @cerbur/clutch-dsh-worktree` beside **Got it** for the plugin description and GitHub link.
 
 Filter Sessions by **Today**, **24 hours**, **7 days**, or **All**. Running and waiting Sessions,

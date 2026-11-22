@@ -518,9 +518,10 @@ test('keeps the first guide pending while a closed drawer retains its native mar
   }
 });
 
-test('the drawer owns the guide controls and receives Escape only after the guide closes', async () => {
+test('Escape closes the native Workspace menu, then the entry guide, then the drawer', async () => {
   const markup = `<main data-sidebar-drawer><div data-shell-overlay></div>
-    <aside role="dialog" aria-modal="true"><div data-sidebar-workspace-header></div></aside></main>`;
+    <aside role="dialog" aria-modal="true"><div data-sidebar-workspace-header>
+      <button type="button">View options</button></div></aside></main>`;
   const mounted = await mount(markup, () => {}, { guide: guideCopy });
   try {
     const win = mounted.dom.window;
@@ -535,6 +536,24 @@ test('the drawer owns the guide controls and receives Escape only after the guid
     const escape = () => win.document.activeElement.dispatchEvent(new win.KeyboardEvent('keydown', {
       key: 'Escape', bubbles: true, cancelable: true,
     }));
+    // DSH portals the menu to body, keeps focus on its trigger and consumes Escape in document capture.
+    const options = drawer.querySelector('[data-sidebar-workspace-header] button');
+    const menu = win.document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    options.focus();
+    win.document.body.append(menu);
+    win.document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        menu.remove();
+      }
+    }, { capture: true, once: true });
+    await React.act(async () => { escape(); });
+    assert.equal(menu.isConnected, false, 'the native menu receives the first Escape');
+    assert.ok(dismiss.isConnected, 'the guide stays visible');
+    assert.equal(win.document.activeElement, options);
+    assert.equal(drawerEscapes, 0);
+
     dismiss.focus();
     await React.act(async () => { escape(); });
     assert.equal(drawerEscapes, 0);
