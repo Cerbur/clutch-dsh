@@ -23,9 +23,9 @@ async function load(file, dependencies = {}) {
 const selection = await load('popover-target.ts');
 const placement = await load('popover-placement.ts');
 
-for (const dismiss of ['close', 'dashboard']) {
+for (const dismiss of ['close', 'dashboard', 'fullscreen']) {
   test(`real popover shares notification reads and stops history continuations on ${dismiss}`, async () => {
-    const dom = new JSDOM('<header><div data-conversation-header-leading></div><div id="root"></div></header>', { url: 'https://dsh.test' });
+    const dom = new JSDOM('<div id="frame"><header><div data-conversation-header-leading></div><div id="root"></div></header><div data-shell-overlay></div></div>', { url: 'https://dsh.test' });
     dom.window.ResizeObserver = class { observe() {} disconnect() {} };
     const { document } = dom.window;
     const originals = new Map();
@@ -108,7 +108,8 @@ for (const dismiss of ['close', 'dashboard']) {
       const fileCount = files.length;
       await React.act(async () => {
         if (dismiss === 'close') document.querySelector('[aria-haspopup="dialog"]').click();
-        else { dashboard = {}; dashboardChanged(); }
+        else if (dismiss === 'dashboard') { dashboard = {}; dashboardChanged(); }
+        else document.getElementById('frame').setAttribute('data-rightbar-fullscreen', 'true');
       });
       assert.equal(document.querySelector('[data-worktree-popover][data-state="open"]'), null);
       if (dismiss === 'close') {
@@ -508,6 +509,251 @@ test('production popover toggles accessibly, stays open during conversation, and
       dom.window.dispatchEvent(new dom.window.StorageEvent('storage', { key: 'clutch-dsh-worktree.popover-closed-sessions' }));
     });
     assert.equal(button().getAttribute('aria-expanded'), 'true', 'cross-tab marker removal opens the Session');
+  } finally {
+    await React.act(async () => root.unmount());
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+    }
+    dom.window.close();
+  }
+});
+
+test('observeRightbarFullscreen tracks only the owning AppFrame and disconnects on dispose', async () => {
+  const dom = new JSDOM(
+    '<div id="other" data-rightbar-fullscreen="true"><div data-shell-overlay></div></div>' +
+    '<div id="frame"><header><button id="trigger"></button></header><div data-shell-overlay></div></div>',
+  );
+  const { document } = dom.window;
+  const frame = document.getElementById('frame');
+  const other = document.getElementById('other');
+  const trigger = document.getElementById('trigger');
+  const values = [];
+  const dispose = placement.observeRightbarFullscreen(trigger, (value) => values.push(value));
+  assert.deepEqual(values, [false], 'unrelated fullscreen frame does not hide this trigger');
+  other.removeAttribute('data-rightbar-fullscreen');
+  await Promise.resolve();
+  assert.deepEqual(values, [false]);
+  frame.setAttribute('data-rightbar-fullscreen', 'true');
+  await Promise.resolve();
+  assert.equal(values.at(-1), true);
+  frame.setAttribute('data-rightbar-fullscreen', 'false');
+  await Promise.resolve();
+  assert.equal(values.at(-1), false);
+  frame.setAttribute('data-rightbar-fullscreen', '');
+  await Promise.resolve();
+  assert.equal(values.at(-1), true);
+  frame.removeAttribute('data-rightbar-fullscreen');
+  await Promise.resolve();
+  assert.equal(values.at(-1), false);
+  dispose();
+  const countAfterDispose = values.length;
+  frame.setAttribute('data-rightbar-fullscreen', 'true');
+  await Promise.resolve();
+  assert.equal(values.length, countAfterDispose, 'disposed observer stops reporting changes');
+  dom.window.close();
+});
+
+test('rightbar fullscreen hides Summary without overwriting preference, restores without stealing focus, and preserves manual close', async () => {
+  const dom = new JSDOM(
+    '<div id="frame">' +
+      '<header><div data-conversation-header-leading></div><div id="root"></div></header>' +
+      '<div data-rightbar-col><button id="rightbar-control">Rightbar</button></div>' +
+      '<div data-shell-overlay></div>' +
+    '</div>',
+    { url: 'https://dsh.test' },
+  );
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  const { document } = dom.window;
+  const frame = document.getElementById('frame');
+  const header = document.querySelector('header');
+  let headerBox = { left: 200, right: 1000, bottom: 100, height: 80 };
+  header.getBoundingClientRect = () => headerBox;
+  const timers = new Map();
+  let timerId = 0;
+  dom.window.setInterval = (callback, delay) => {
+    assert.equal(delay, 60_000);
+    timers.set(++timerId, callback);
+    return timerId;
+  };
+  dom.window.clearInterval = (id) => timers.delete(id);
+  const exits = new Map();
+  const nativeTimeout = dom.window.setTimeout.bind(dom.window);
+  const nativeClearTimeout = dom.window.clearTimeout.bind(dom.window);
+  let exitId = -1;
+  dom.window.setTimeout = (callback, delay) => {
+    if (delay !== 220) return nativeTimeout(callback, delay);
+    exits.set(exitId, callback);
+    return exitId--;
+  };
+  dom.window.clearTimeout = (id) => {
+    if (exits.has(id)) exits.delete(id);
+    else nativeClearTimeout(id);
+  };
+  const originals = new Map();
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
+    Node: dom.window.Node, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement,
+    IS_REACT_ACT_ENVIRONMENT: true })) {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+  }
+  const { WorktreePopover } = await load('WorktreePopover.tsx', {
+    react: React, 'react/jsx-runtime': jsx, 'react-dom': { createPortal },
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Tooltip: ({ children }) => children,
+      MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })),
+    },
+    '../dsh-icons.js': {
+      IconBranchOutline16: () => null,
+      IconLoadingOutline16: () => null,
+      IconRefreshOutline16: () => null,
+    },
+    './popover-target.js': selection,
+    './popover-placement.js': placement,
+    './worktree-popover.css': { default: {} },
+    '../PluginAttribution.js': { PluginAttribution: () => null },
+    './WorktreeDashboard.js': {
+      WorktreeBaselineEditor: () => null,
+      useWorktreeBaselineSync: () => ({ setSyncOpen() {}, syncPending: false, syncDialog: null }),
+    },
+    './git/WorktreeGitOverview.js': {
+      useWorktreeGitOverview: () => ({ status: 'ready', history: {} }),
+      WorktreeGitOverviewValue: ({ metric }) => React.createElement('span', null, metric),
+    },
+  });
+  let dashboard;
+  let dashboardListener;
+  const dashboardStore = {
+    getSnapshot: () => dashboard,
+    subscribe: (listener) => { dashboardListener = listener; return () => { dashboardListener = undefined; }; },
+  };
+  const watches = new Map();
+  let nextWatch = 0;
+  let reads = 0;
+  let context = { status: 'ready', workspaceId: 'w', sessionId: 's', workspaceTitle: 'Repo',
+    value: { kind: 'worktree', workspaceId: 'w', worktreeId: 'tree' } };
+  const props = {
+    sessionId: 's',
+    useWorktreeContext: (select) => select(context),
+    t: (key) => key,
+    dashboardStore,
+    manager: {
+      startGitWatch: async (input) => {
+        const id = String(++nextWatch);
+        watches.set(id, { input });
+        return id;
+      },
+      watchGitChanges: (id, _revision, signal) => new Promise((_resolve, reject) => {
+        watches.get(id).signal = signal;
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }),
+      stopGitWatch: async (id) => { watches.delete(id); return null; },
+    },
+    viewReader: { invalidate() {}, read: async () => { reads++; return view; } },
+    subscribeChanges: () => () => {},
+    refreshContext: async () => {},
+    createSession: async () => {},
+    openSession() {},
+    expand() {},
+  };
+  const root = createRoot(document.getElementById('root'));
+  const render = () => React.act(async () => root.render(React.createElement(WorktreePopover, props)));
+  const button = () => document.querySelector('[aria-haspopup="dialog"]');
+  const rightbarControl = document.getElementById('rightbar-control');
+  const closedMarks = () => JSON.parse(dom.window.localStorage.getItem('clutch-dsh-worktree.popover-closed-sessions') ?? '[]');
+  try {
+    await render();
+    assert.ok(document.querySelector('[data-worktree-popover][data-state="open"]'), 'normal layout shows Summary');
+    assert.equal(button().getAttribute('aria-expanded'), 'true');
+    assert.equal(timers.size, 1);
+    assert.equal(watches.size, 1);
+    const watchSignal = [...watches.values()][0].signal;
+
+    // Entering rightbar fullscreen hides Summary immediately without touching closed preference.
+    rightbarControl.focus();
+    assert.equal(document.activeElement, rightbarControl);
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'fullscreen removes Summary immediately');
+    assert.equal(button().getAttribute('aria-expanded'), 'false');
+    assert.equal(button().getAttribute('aria-pressed'), 'false');
+    assert.equal(button().getAttribute('aria-controls'), null);
+    assert.equal(timers.size, 0, 'fullscreen clears polling interval');
+    assert.equal(watches.size, 0, 'fullscreen releases Git watches');
+    assert.equal(watchSignal.aborted, true, 'fullscreen aborts in-flight watch wait');
+    assert.deepEqual(closedMarks(), [], 'fullscreen must not mark the Session as closed');
+
+    // Escape inside fullscreen must not close Summary or move focus to the hidden trigger.
+    await React.act(async () => {
+      document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    assert.deepEqual(closedMarks(), []);
+    assert.equal(document.activeElement, rightbarControl);
+
+    // Exiting fullscreen restores Summary at fresh header bounds without stealing focus.
+    headerBox = { left: 200, right: 760, bottom: 100, height: 80 };
+    await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+    const restored = document.querySelector('[data-worktree-popover][data-state="open"]');
+    assert.ok(restored, 'exiting fullscreen restores open Summary');
+    assert.equal(button().getAttribute('aria-expanded'), 'true');
+    assert.equal(restored.style.left, '492px', 'restored Summary measures current header edge');
+    assert.equal(document.activeElement, rightbarControl, 'restoring via fullscreen exit must not steal focus');
+    assert.equal(timers.size, 1, 'restoring recreates one polling interval');
+    assert.equal(watches.size, 1, 'restoring starts one Git watch');
+
+    // Manual close during exit animation: fullscreen cancels retention and stays closed on exit.
+    await React.act(async () => button().click());
+    assert.ok(document.querySelector('[data-state="closing"]'));
+    assert.equal(exits.size, 1);
+    assert.deepEqual(closedMarks(), ['s']);
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null);
+    assert.equal(exits.size, 0, 'fullscreen cancels pending exit animation timer');
+    await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'manually closed panel stays closed after fullscreen');
+    assert.equal(button().getAttribute('aria-expanded'), 'false');
+    assert.deepEqual(closedMarks(), ['s']);
+
+    // Repeat fullscreen toggle when already closed: remains closed.
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null);
+    assert.equal(button().getAttribute('aria-expanded'), 'false');
+
+    // Reopen manually (takes focus), then combine with Dashboard and fullscreen.
+    await React.act(async () => button().click());
+    assert.ok(document.querySelector('[data-worktree-popover][data-state="open"]'));
+    assert.equal(document.activeElement, document.querySelector('[data-worktree-popover]'));
+    assert.deepEqual(closedMarks(), []);
+
+    rightbarControl.focus();
+    await React.act(async () => { dashboard = {}; dashboardListener(); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null);
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'Dashboard still suppresses Summary after fullscreen exit');
+    await React.act(async () => { dashboard = undefined; dashboardListener(); });
+    assert.ok(document.querySelector('[data-worktree-popover][data-state="open"]'));
+    assert.equal(document.activeElement, rightbarControl, 'restoring after Dashboard + fullscreen does not steal focus');
+
+    // Switching/mounting a new Session while already in fullscreen stays hidden without starting reads.
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    const readsWhileFullscreen = reads;
+    await React.act(async () => root.unmount());
+    const remounted = createRoot(document.getElementById('root'));
+    try {
+      context = { ...context, sessionId: 'other' };
+      props.sessionId = 'other';
+      await React.act(async () => remounted.render(React.createElement(WorktreePopover, props)));
+      assert.equal(document.querySelector('[data-worktree-popover]'), null, 'mounting during fullscreen stays hidden');
+      assert.equal(reads, readsWhileFullscreen, 'mounting during fullscreen does not start reads');
+      assert.equal(timers.size, 0);
+      assert.equal(watches.size, 0);
+      rightbarControl.focus();
+      await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+      assert.ok(document.querySelector('[data-worktree-popover][data-state="open"]'));
+      assert.equal(document.activeElement, rightbarControl, 'exiting fullscreen after mount does not steal focus');
+    } finally {
+      await React.act(async () => remounted.unmount());
+    }
   } finally {
     await React.act(async () => root.unmount());
     for (const [key, descriptor] of originals) {

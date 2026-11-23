@@ -1066,14 +1066,16 @@ Every Session defaults to open. The browser-local `clutch-dsh-worktree.popover-c
 array stores up to ten most-recently-closed Session IDs (oldest first); manual opening removes
 that ID. The previous global open preference no longer hides unrelated Sessions.
 Automatic opening never takes focus. Escape records the current Session. The panel subscribes
-to the entry-owned Dashboard selection store: any open Dashboard suppresses the portal without
-overwriting the preference. Only the reload icon remains in the header, switching to
+to the entry-owned Dashboard selection store and observes `data-rightbar-fullscreen` on its
+owning DSH `AppFrame` (`[data-shell-overlay]` parent): any open Dashboard or fullscreen right
+sidebar suppresses the portal immediately without overwriting the preference, and exiting
+restores the Session preference without stealing focus. Only the reload icon remains in the header, switching to
 the native loading icon for the entire Workspace-plus-Git read. The title uses regular 12px
 text; uncommitted changes precede a divider, then the same-size worktree-to-baseline heading,
 ahead/behind and committed changes. Both headings share the same typography class.
 Entry slides from the right in 180ms; exit slides right in 160ms, with animationend cleanup
 and a 220ms fallback. Closing immediately disables reads, subscriptions and timers; the retained
-exit content is inert and aria-hidden. Dashboard removes it immediately. Reopening cancels
+exit content is inert and aria-hidden. Dashboard and rightbar fullscreen remove it immediately. Reopening cancels
 the exit cleanup and refreshes Workspace before resuming Git reads. Reduced motion skips exit retention.
 Trailing refresh/edit controls share
 a 28px border-box, 14px glyph and 1px row inset (22px glyph inset including panel padding).
@@ -1089,7 +1091,7 @@ Mounted content owns a Git watch lease via the existing Connection adapter's sta
 watchGitChanges and stopGitWatch endpoints, plus a 60-second fallback interval. Only
 changed revisions invalidate its Workspace. Events during reads queue one follow-up;
 fallback ticks skip pending reads. Each notification wait ends within five seconds without
-reading Git on empty responses. Deactivation on close, or unmounting on Dashboard entry or Session replacement,
+reading Git on empty responses. Deactivation on close, or unmounting on Dashboard entry, rightbar fullscreen, or Session replacement,
 aborts the wait, releases the lease and clears fallback/retry timers. Transport failures
 retry registration after 60 seconds; lost clients expire on Host after 15 seconds.
 Native fs.watch registration has no ready barrier. Host schedules one reconciliation

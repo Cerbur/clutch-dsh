@@ -11,7 +11,11 @@ import type { DashboardHeaderActionProps } from './DashboardHeaderAction.js';
 import { IconBranchOutline16, IconLoadingOutline16, IconRefreshOutline16 } from '../dsh-icons.js';
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import { selectPopoverTarget, type PopoverTarget } from './popover-target.js';
-import { observePopoverPlacement } from './popover-placement.js';
+import {
+  isDocumentRightbarFullscreen,
+  observePopoverPlacement,
+  observeRightbarFullscreen,
+} from './popover-placement.js';
 import { WorktreeBaselineEditor, useWorktreeBaselineSync } from './WorktreeDashboard.js';
 import styles from './worktree-popover.css';
 import type { NativeChangesResult } from './git/native-changes-navigation.js';
@@ -49,14 +53,16 @@ export function WorktreePopover(props: WorktreePopoverProps) {
   const sessionId = String(props.sessionId);
   const opened = !closedSessions.includes(sessionId);
   const dashboard = useSyncExternalStore(props.dashboardStore.subscribe, props.dashboardStore.getSnapshot);
+  const [rightbarFullscreen, setRightbarFullscreen] = useState(isDocumentRightbarFullscreen);
   const focusRequested = useRef(false);
   const [placement, setPlacement] = useState<CSSProperties>();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
-  const visible = opened && dashboard === undefined;
+  const suppressed = dashboard !== undefined || rightbarFullscreen;
+  const visible = opened && !suppressed;
   const [retainedSession, setRetainedSession] = useState<string>();
-  const present = dashboard === undefined && (visible || retainedSession === sessionId);
+  const present = !suppressed && (visible || retainedSession === sessionId);
   const saveOpen = (value: boolean) => {
     const next = updateClosedSessions(readClosedSessions(closedSessions), sessionId, value);
     setClosedSessions(next);
@@ -64,12 +70,16 @@ export function WorktreePopover(props: WorktreePopoverProps) {
   };
   const close = () => saveOpen(false);
   useLayoutEffect(() => {
+    if (!trigger.current) return;
+    return observeRightbarFullscreen(trigger.current, setRightbarFullscreen);
+  }, [props.sessionId]);
+  useLayoutEffect(() => {
     if (!visible || !trigger.current) return;
     return observePopoverPlacement(trigger.current, setPlacement);
   }, [visible, props.sessionId]);
   useLayoutEffect(() => {
     if (visible) { setRetainedSession(sessionId); return; }
-    if (dashboard !== undefined || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    if (suppressed || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       setRetainedSession(undefined);
       return;
     }
@@ -77,7 +87,7 @@ export function WorktreePopover(props: WorktreePopoverProps) {
     // CSS animationend is primary; this fallback also handles disabled/interrupted animations.
     const timer = window.setTimeout(() => setRetainedSession(undefined), 220);
     return () => window.clearTimeout(timer);
-  }, [visible, sessionId, dashboard, retainedSession]);
+  }, [visible, sessionId, suppressed, retainedSession]);
   useEffect(() => {
     const sync = (event: StorageEvent) => {
       if (event.key === POPOVER_CLOSED_SESSIONS_KEY || event.key === null) setClosedSessions(readClosedSessions());
@@ -86,7 +96,7 @@ export function WorktreePopover(props: WorktreePopoverProps) {
     return () => window.removeEventListener('storage', sync);
   }, []);
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) { focusRequested.current = false; return; }
     if (focusRequested.current) panel.current?.focus({ preventScroll: true });
     focusRequested.current = false;
     const document = trigger.current!.ownerDocument;
@@ -97,13 +107,13 @@ export function WorktreePopover(props: WorktreePopoverProps) {
     };
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
-  }, [visible, sessionId]);
+  }, [visible, sessionId, suppressed]);
   return <>
     <Tooltip label={props.t('popover.title')} side="bottom" delayMs={500} disabled={visible}>
       <button type="button" ref={trigger} className={styles.popoverTrigger}
         aria-label={props.t('popover.title')} aria-haspopup="dialog" aria-expanded={visible}
         aria-pressed={visible} aria-controls={visible ? id : undefined}
-        onClick={() => { focusRequested.current = !visible; saveOpen(!visible); }}>
+        onClick={() => { if (suppressed) return; focusRequested.current = !visible; saveOpen(!visible); }}>
         <IconBranchOutline16 />
       </button>
     </Tooltip>
@@ -179,8 +189,8 @@ function PopoverContent(props: WorktreePopoverProps & {
       // The monitor already invalidated this event and started the shared Context read.
       if (change.workspaceId === workspaceId) requestRefresh(false);
     });
-    // This content unmounts when closed or covered by Dashboard. Skip ticks until
-    // both Workspace and Git reads settle; never queue overlapping polling reads.
+    // This content unmounts when closed, covered by Dashboard, or hidden by rightbar fullscreen.
+    // Skip ticks until both Workspace and Git reads settle; never queue overlapping polling reads.
     const timer = workspaceId === undefined ? undefined : window.setInterval(() => {
       if (alive.current && !refreshBusy.current) void refresh(true);
     }, 60_000);

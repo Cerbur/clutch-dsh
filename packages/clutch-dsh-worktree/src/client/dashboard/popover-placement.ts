@@ -1,5 +1,50 @@
 import type { CSSProperties } from 'react';
 
+function hasFullscreenAttribute(frame: Element | null | undefined): boolean {
+  return Boolean(
+    frame?.hasAttribute('data-rightbar-fullscreen') &&
+      frame.getAttribute('data-rightbar-fullscreen') !== 'false',
+  );
+}
+
+/** Resolve the owning DSH AppFrame containing the trigger, if present. */
+export function findAppFrame(element: HTMLElement): HTMLElement | null {
+  const doc = element.ownerDocument;
+  for (const overlay of doc.querySelectorAll('[data-shell-overlay]')) {
+    const frame = overlay.parentElement;
+    if (frame?.contains(element)) return frame;
+  }
+  return null;
+}
+
+/** Check whether the current document's AppFrame is already in rightbar fullscreen. */
+export function isDocumentRightbarFullscreen(): boolean {
+  if (typeof document === 'undefined') return false;
+  for (const overlay of document.querySelectorAll('[data-shell-overlay]')) {
+    if (hasFullscreenAttribute(overlay.parentElement)) return true;
+  }
+  return false;
+}
+
+/** Observe DSH AppFrame's rightbar fullscreen state when the trigger lives inside it. */
+export function observeRightbarFullscreen(
+  trigger: HTMLElement,
+  publish: (fullscreen: boolean) => void,
+): () => void {
+  const frame = findAppFrame(trigger);
+  const view = trigger.ownerDocument.defaultView;
+  if (!frame) {
+    publish(false);
+    return () => {};
+  }
+  const update = () => publish(hasFullscreenAttribute(frame));
+  update();
+  if (!view?.MutationObserver) return () => {};
+  const observer = new view.MutationObserver(update);
+  observer.observe(frame, { attributes: true, attributeFilter: ['data-rightbar-fullscreen'] });
+  return () => observer.disconnect();
+}
+
 /** The native conversation header spans the Session column, including its view tabs. */
 export function observePopoverPlacement(
   trigger: HTMLElement,
