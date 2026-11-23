@@ -1,5 +1,86 @@
 import type { CSSProperties } from 'react';
 
+/** Resolve the owning DSH AppFrame containing the trigger, if present. */
+function findAppFrame(element: HTMLElement): HTMLElement | null {
+  for (let frame = element.parentElement; frame; frame = frame.parentElement) {
+    if (frame.querySelector(':scope > [data-shell-overlay]')) return frame;
+  }
+  return null;
+}
+
+/** An outgoing dock can still cover Summary after DSH clears both open flags. */
+function fullscreenCoverage(frame: HTMLElement): boolean | Animation {
+  const flag = frame.getAttribute('data-rightbar-fullscreen');
+  if (flag !== null && flag !== 'false') return true;
+  // DSH reports fullscreen on AppFrame after the slide. The visible Session's
+  // panel already has its open/mode attributes when the slide starts.
+  const panels = frame.querySelectorAll(
+    ':scope > [data-rightbar-col] [data-sidebar-right-panel="fullscreen"]',
+  );
+  for (const panel of panels) {
+    if (panel.closest('[hidden]')) continue;
+    if (panel.hasAttribute('data-sidebar-right-open')) return true;
+    // DSH slides the dock hosts, empty seat and dividers. Floats and animations
+    // inside a terminal, file preview or tab do not participate in that slide.
+    const parts = panel.querySelectorAll('[data-dockkit-host="dock"], [data-dockkit-empty], [data-dockkit-divider]');
+    for (const part of parts) {
+      const slide = part.getAnimations?.().find((animation) =>
+        'transitionProperty' in animation && animation.transitionProperty === 'transform' &&
+        animation.playState !== 'finished' && animation.playState !== 'idle');
+      // DSH keeps a closing dock visible until its slide ends. Resizing a
+      // collapsed dock can also animate its offset while it stays hidden.
+      if (slide && frame.ownerDocument.defaultView?.getComputedStyle(part).visibility === 'visible') return slide;
+    }
+  }
+  return false;
+}
+
+/** Input can arrive before a pending MutationObserver update commits to React. */
+export function isRightbarFullscreen(trigger: HTMLElement): boolean {
+  const frame = findAppFrame(trigger);
+  return frame !== null && fullscreenCoverage(frame) !== false;
+}
+
+/** Observe DSH AppFrame's rightbar fullscreen state when the trigger lives inside it. */
+export function observeRightbarFullscreen(
+  trigger: HTMLElement,
+  publish: (fullscreen: boolean) => void,
+): () => void {
+  const frame = findAppFrame(trigger);
+  const view = trigger.ownerDocument.defaultView;
+  if (!frame) {
+    publish(false);
+    return () => {};
+  }
+  let pendingSlide: Animation | undefined;
+  const update = () => {
+    const coverage = fullscreenCoverage(frame);
+    publish(coverage !== false);
+    const slide = typeof coverage === 'boolean' ? undefined : coverage;
+    if (slide === pendingSlide) return;
+    pendingSlide = slide;
+    if (slide) {
+      const recheck = () => { if (pendingSlide === slide) update(); };
+      void slide.finished.then(recheck, recheck);
+    }
+  };
+  update();
+  const stopWaiting = () => { pendingSlide = undefined; };
+  if (!view?.MutationObserver) return stopWaiting;
+  const observer = new view.MutationObserver((records) => {
+    // Changes to terminal output or file content inside a mounted panel cannot
+    // change its presentation. Recheck when the panel or its host changes.
+    if (records.some(({ target }) => !target.parentElement?.closest('[data-sidebar-right-panel]'))) update();
+  });
+  observer.observe(frame, { attributes: true, attributeFilter: ['data-rightbar-fullscreen'] });
+  const rightbar = frame.querySelector(':scope > [data-rightbar-col]');
+  if (rightbar) observer.observe(rightbar, {
+    subtree: true, childList: true, attributes: true,
+    attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'hidden'],
+  });
+  return () => { observer.disconnect(); stopWaiting(); };
+}
+
 /** The native conversation header spans the Session column, including its view tabs. */
 export function observePopoverPlacement(
   trigger: HTMLElement,

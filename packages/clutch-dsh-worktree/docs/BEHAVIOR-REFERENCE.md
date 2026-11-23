@@ -507,15 +507,21 @@ Sessions remain visible by default. There is no close button; conversation click
 The panel is up to 256px wide, uses a frosted glass background with a light shadow and slides in from the right and out toward the right; reduced-motion
 preferences disable these animations. Reads and listeners stop immediately when closing,
 while the exit animation retains only the existing visual content.
-Dashboard hides the panel immediately without changing the markers; returning to the
-conversation restores its Session preference. Refresh switches the icon to a loading indicator until both Workspace and Git
+Opening Dashboard or starting the right sidebar's fullscreen slide hides the Summary immediately.
+Escape in the right sidebar leaves focus and the Session's closed marker alone, including during the slide.
+If the Session mounts while covered, the Summary starts no Workspace reads, Git watches or polling.
+With Dashboard closed, the Summary follows the current Session's preference once the fullscreen
+sidebar finishes sliding out, or immediately when reduced motion skips the slide. Focus stays in
+place. A manually closed Summary stays closed. Resizing the window with the right
+sidebar already collapsed keeps an open Summary mounted with its current Git watch and polling timer.
+Refresh switches the icon to a loading indicator until both Workspace and Git
 reads finish. While visible, the panel refreshes on local file and Git metadata changes,
 with a 60-second polling fallback and a one-time reconciliation for changes missed while
-native watchers are starting. Closing it or opening Dashboard releases the listeners and
-cancels both the startup reconciliation and the polling timer.
+native watchers are starting. Closing it, opening Dashboard, or entering right-sidebar fullscreen
+releases the listeners and cancels both the startup reconciliation and the polling timer.
 Changes during pending reads are coalesced into one follow-up refresh.
-Shared tool notifications reuse the same Workspace read. After closing or entering Dashboard,
-late responses cannot start further popover reads.
+Shared tool notifications reuse the same Workspace read. After closing, entering Dashboard, or
+entering right-sidebar fullscreen, late responses cannot start further popover reads.
 Automatic and manual refresh preserve ready content while
 reading. Initial loading fills fixed-size placeholders in the
 same layout without loading text or changing the panel size. Main, unbound, detached,
