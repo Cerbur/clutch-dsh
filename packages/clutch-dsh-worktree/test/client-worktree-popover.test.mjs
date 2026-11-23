@@ -561,7 +561,7 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
         '<div data-sidebar-right-session="background" hidden>' +
           '<div data-sidebar-right-panel="fullscreen" data-sidebar-right-open></div></div>' +
         '<div data-sidebar-right-session="s"><div id="panel" data-sidebar-right-panel="fullscreen">' +
-          '<button id="rightbar-control">Rightbar</button></div></div></div>' +
+          '<div data-dockkit-host="dock"><button id="rightbar-control">Rightbar</button></div></div></div></div>' +
       '<div data-shell-overlay></div>' +
     '</div>',
     { url: 'https://dsh.test' },
@@ -703,10 +703,27 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
     headerBox = { left: 200, right: 760, bottom: 100, height: 80 };
     await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
     assert.equal(document.querySelector('[data-worktree-popover]'), null);
+    const beforeExitReads = reads;
+    let finishSlide;
+    let cancelSlide;
+    const slide = { transitionProperty: 'transform', playState: 'running',
+      finished: new Promise((_resolve, reject) => { cancelSlide = reject; }) };
+    const replacement = { transitionProperty: 'transform', playState: 'running',
+      finished: new Promise((resolve) => { finishSlide = resolve; }) };
+    let animations = [slide];
+    panel.querySelector('[data-dockkit-host]').getAnimations = () => animations;
     await React.act(async () => {
       panel.removeAttribute('data-sidebar-right-open');
       frame.removeAttribute('data-rightbar-fullscreen');
     });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'the outgoing fullscreen dock still covers Summary');
+    assert.equal(placement.isRightbarFullscreen(button()), true);
+    assert.equal(reads, beforeExitReads);
+    assert.equal(watches.size, 0);
+    assert.equal(timers.size, 0);
+    await React.act(async () => { animations = [replacement]; cancelSlide(new Error('slide replaced')); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'a replacement slide still covers Summary');
+    await React.act(async () => { animations = []; finishSlide(); });
     const restored = document.querySelector('[data-worktree-popover][data-state="open"]');
     assert.ok(restored, 'exiting fullscreen restores open Summary');
     assert.equal(button().getAttribute('aria-expanded'), 'true');
@@ -714,6 +731,12 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
     assert.equal(document.activeElement, rightbarControl, 'restoring via fullscreen exit must not steal focus');
     assert.equal(timers.size, 1, 'restoring recreates one polling interval');
     assert.equal(watches.size, 1, 'restoring starts one Git watch');
+
+    // Reduced motion creates no native dock transition to wait for.
+    await React.act(async () => { panel.setAttribute('data-sidebar-right-open', 'true'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null);
+    await React.act(async () => { panel.removeAttribute('data-sidebar-right-open'); });
+    assert.ok(document.querySelector('[data-worktree-popover][data-state="open"]'));
 
     // Manual close during exit animation: fullscreen cancels retention and stays closed on exit.
     await React.act(async () => button().click());

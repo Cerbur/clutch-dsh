@@ -8,21 +8,35 @@ function findAppFrame(element: HTMLElement): HTMLElement | null {
   return null;
 }
 
-function frameIsFullscreen(frame: HTMLElement): boolean {
+/** An outgoing dock can still cover Summary after DSH clears both open flags. */
+function fullscreenCoverage(frame: HTMLElement): boolean | Animation {
   const flag = frame.getAttribute('data-rightbar-fullscreen');
   if (flag !== null && flag !== 'false') return true;
   // DSH reports fullscreen on AppFrame after the slide. The visible Session's
   // panel already has its open/mode attributes when the slide starts.
   const panels = frame.querySelectorAll(
-    ':scope > [data-rightbar-col] [data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]',
+    ':scope > [data-rightbar-col] [data-sidebar-right-panel="fullscreen"]',
   );
-  return Array.from(panels).some((panel) => !panel.closest('[hidden]'));
+  for (const panel of panels) {
+    if (panel.closest('[hidden]')) continue;
+    if (panel.hasAttribute('data-sidebar-right-open')) return true;
+    // DSH slides the dock hosts, empty seat and dividers. Floats and animations
+    // inside a terminal, file preview or tab do not participate in that slide.
+    const parts = panel.querySelectorAll('[data-dockkit-host="dock"], [data-dockkit-empty], [data-dockkit-divider]');
+    for (const part of parts) {
+      const slide = part.getAnimations?.().find((animation) =>
+        'transitionProperty' in animation && animation.transitionProperty === 'transform' &&
+        animation.playState !== 'finished' && animation.playState !== 'idle');
+      if (slide) return slide;
+    }
+  }
+  return false;
 }
 
 /** Input can arrive before a pending MutationObserver update commits to React. */
 export function isRightbarFullscreen(trigger: HTMLElement): boolean {
   const frame = findAppFrame(trigger);
-  return frame !== null && frameIsFullscreen(frame);
+  return frame !== null && fullscreenCoverage(frame) !== false;
 }
 
 /** Observe DSH AppFrame's rightbar fullscreen state when the trigger lives inside it. */
@@ -36,9 +50,21 @@ export function observeRightbarFullscreen(
     publish(false);
     return () => {};
   }
-  const update = () => publish(frameIsFullscreen(frame));
+  let pendingSlide: Animation | undefined;
+  const update = () => {
+    const coverage = fullscreenCoverage(frame);
+    publish(coverage !== false);
+    const slide = typeof coverage === 'boolean' ? undefined : coverage;
+    if (slide === pendingSlide) return;
+    pendingSlide = slide;
+    if (slide) {
+      const recheck = () => { if (pendingSlide === slide) update(); };
+      void slide.finished.then(recheck, recheck);
+    }
+  };
   update();
-  if (!view?.MutationObserver) return () => {};
+  const stopWaiting = () => { pendingSlide = undefined; };
+  if (!view?.MutationObserver) return stopWaiting;
   const observer = new view.MutationObserver((records) => {
     // Changes to terminal output or file content inside a mounted panel cannot
     // change its presentation. Recheck when the panel or its host changes.
@@ -50,7 +76,7 @@ export function observeRightbarFullscreen(
     subtree: true, childList: true, attributes: true,
     attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'hidden'],
   });
-  return () => observer.disconnect();
+  return () => { observer.disconnect(); stopWaiting(); };
 }
 
 /** The native conversation header spans the Session column, including its view tabs. */
