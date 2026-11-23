@@ -557,7 +557,11 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
   const dom = new JSDOM(
     '<div id="frame">' +
       '<header><div data-conversation-header-leading></div><div id="root"></div></header>' +
-      '<div data-rightbar-col><button id="rightbar-control">Rightbar</button></div>' +
+      '<div data-rightbar-col>' +
+        '<div data-sidebar-right-session="background" hidden>' +
+          '<div data-sidebar-right-panel="fullscreen" data-sidebar-right-open></div></div>' +
+        '<div data-sidebar-right-session="s"><div id="panel" data-sidebar-right-panel="fullscreen">' +
+          '<button id="rightbar-control">Rightbar</button></div></div></div>' +
       '<div data-shell-overlay></div>' +
     '</div>',
     { url: 'https://dsh.test' },
@@ -671,8 +675,15 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
     // Entering rightbar fullscreen hides Summary immediately without touching closed preference.
     rightbarControl.focus();
     assert.equal(document.activeElement, rightbarControl);
-    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
-    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'fullscreen removes Summary immediately');
+    const panel = document.getElementById('panel');
+    await React.act(async () => {
+      panel.setAttribute('data-sidebar-right-open', 'true');
+      const escape = new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      rightbarControl.dispatchEvent(escape);
+      assert.equal(escape.defaultPrevented, false, 'the rightbar owns Escape as soon as the slide starts');
+    });
+    assert.equal(frame.hasAttribute('data-rightbar-fullscreen'), false, 'AppFrame reports after the slide');
+    assert.equal(document.querySelector('[data-worktree-popover]'), null, 'the entering panel already covers Summary');
     assert.equal(button().getAttribute('aria-expanded'), 'false');
     assert.equal(button().getAttribute('aria-pressed'), 'false');
     assert.equal(button().getAttribute('aria-controls'), null);
@@ -690,7 +701,12 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
 
     // Exiting fullscreen restores Summary at fresh header bounds without stealing focus.
     headerBox = { left: 200, right: 760, bottom: 100, height: 80 };
-    await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+    await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), null);
+    await React.act(async () => {
+      panel.removeAttribute('data-sidebar-right-open');
+      frame.removeAttribute('data-rightbar-fullscreen');
+    });
     const restored = document.querySelector('[data-worktree-popover][data-state="open"]');
     assert.ok(restored, 'exiting fullscreen restores open Summary');
     assert.equal(button().getAttribute('aria-expanded'), 'true');
@@ -738,19 +754,28 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
     await React.act(async () => { frame.setAttribute('data-rightbar-fullscreen', 'true'); });
     const readsWhileFullscreen = reads;
     await React.act(async () => root.unmount());
-    const remounted = createRoot(document.getElementById('root'));
+    const container = document.createElement('div');
+    frame.replaceWith(container);
+    const remounted = createRoot(container);
     try {
       context = { ...context, sessionId: 'other' };
       props.sessionId = 'other';
-      await React.act(async () => remounted.render(React.createElement(WorktreePopover, props)));
+      // No owning frame exists at render time. React commits it together with the Summary.
+      await React.act(async () => remounted.render(React.createElement('div', { 'data-rightbar-fullscreen': 'true' },
+        React.createElement('header', null,
+          React.createElement('div', { 'data-conversation-header-leading': '' }),
+          React.createElement(WorktreePopover, props)),
+        React.createElement('div', { 'data-shell-overlay': '' }),
+        React.createElement('button', { id: 'new-rightbar-control' }))));
       assert.equal(document.querySelector('[data-worktree-popover]'), null, 'mounting during fullscreen stays hidden');
       assert.equal(reads, readsWhileFullscreen, 'mounting during fullscreen does not start reads');
       assert.equal(timers.size, 0);
       assert.equal(watches.size, 0);
-      rightbarControl.focus();
-      await React.act(async () => { frame.removeAttribute('data-rightbar-fullscreen'); });
+      const newControl = document.getElementById('new-rightbar-control');
+      newControl.focus();
+      await React.act(async () => { container.firstElementChild.removeAttribute('data-rightbar-fullscreen'); });
       assert.ok(document.querySelector('[data-worktree-popover][data-state="open"]'));
-      assert.equal(document.activeElement, rightbarControl, 'exiting fullscreen after mount does not steal focus');
+      assert.equal(document.activeElement, newControl, 'exiting fullscreen after mount does not steal focus');
     } finally {
       await React.act(async () => remounted.unmount());
     }

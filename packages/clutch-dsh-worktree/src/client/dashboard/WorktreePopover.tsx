@@ -12,7 +12,7 @@ import { IconBranchOutline16, IconLoadingOutline16, IconRefreshOutline16 } from 
 import { useWorktreeGitOverview, WorktreeGitOverviewValue } from './git/WorktreeGitOverview.js';
 import { selectPopoverTarget, type PopoverTarget } from './popover-target.js';
 import {
-  isDocumentRightbarFullscreen,
+  isRightbarFullscreen,
   observePopoverPlacement,
   observeRightbarFullscreen,
 } from './popover-placement.js';
@@ -53,13 +53,13 @@ export function WorktreePopover(props: WorktreePopoverProps) {
   const sessionId = String(props.sessionId);
   const opened = !closedSessions.includes(sessionId);
   const dashboard = useSyncExternalStore(props.dashboardStore.subscribe, props.dashboardStore.getSnapshot);
-  const [rightbarFullscreen, setRightbarFullscreen] = useState(isDocumentRightbarFullscreen);
+  const [uncoveredSession, setUncoveredSession] = useState<string>();
   const focusRequested = useRef(false);
   const [placement, setPlacement] = useState<CSSProperties>();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
-  const suppressed = dashboard !== undefined || rightbarFullscreen;
+  const suppressed = dashboard !== undefined || uncoveredSession !== sessionId;
   const visible = opened && !suppressed;
   const [retainedSession, setRetainedSession] = useState<string>();
   const present = !suppressed && (visible || retainedSession === sessionId);
@@ -71,8 +71,10 @@ export function WorktreePopover(props: WorktreePopoverProps) {
   const close = () => saveOpen(false);
   useLayoutEffect(() => {
     if (!trigger.current) return;
-    return observeRightbarFullscreen(trigger.current, setRightbarFullscreen);
-  }, [props.sessionId]);
+    return observeRightbarFullscreen(trigger.current, (fullscreen) => {
+      setUncoveredSession(fullscreen ? undefined : sessionId);
+    });
+  }, [sessionId]);
   useLayoutEffect(() => {
     if (!visible || !trigger.current) return;
     return observePopoverPlacement(trigger.current, setPlacement);
@@ -102,6 +104,7 @@ export function WorktreePopover(props: WorktreePopoverProps) {
     const document = trigger.current!.ownerDocument;
     const key = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented ||
+        !trigger.current || isRightbarFullscreen(trigger.current) ||
         document.querySelector('[role="dialog"]:not([data-worktree-popover])')) return;
       event.preventDefault(); close(); trigger.current?.focus({ preventScroll: true });
     };

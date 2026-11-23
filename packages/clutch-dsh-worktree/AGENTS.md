@@ -104,9 +104,9 @@ Refresh scope is determined by the smallest affected identity.
 ## 文档同步要求 (Documentation Synchronization)
 
 - **README 面向插件用户**：DSH 会展示 npm 中的 README；两种语言只保留功能介绍、安装、截图、常用操作、兼容要求与必要的使用限制。不要加入代码结构、API/schema 参数、实现算法、刷新时序或测试门禁。代码与架构说明放入 `docs/ARCHITECTURE.md`，开发与检查命令放入 `docs/DEVELOPMENT.md`，工具契约放入 `docs/WORKTREE-TOOLS.md` 和 `docs/TOOL-SCHEMA-STANDARD.md`。需要 agent 关注的新文档必须加入本文件的文档地图。
-- **详细行为参考**：从旧 README 迁出的完整行为与接缝细节见 [docs/BEHAVIOR-REFERENCE.md](docs/BEHAVIOR-REFERENCE.md) 和 [中文版](docs/BEHAVIOR-REFERENCE.zh.md)。修改相关行为时阅读并同步对应段落，避免重新将实现细节堆回 README；架构和工具规范仍以各自权威文档为准。
+- **已有功能的行为变更**：显示与隐藏、焦点、快捷键、会话偏好和读取生命周期等交互规则，统一在 [docs/BEHAVIOR-REFERENCE.md](docs/BEHAVIOR-REFERENCE.md) 和 [中文版](docs/BEHAVIOR-REFERENCE.zh.md) 的对应功能段落单独记录。写清触发条件、可观察结果和恢复条件，并用回归测试验证。此类变更（含缺陷修复）不向 README 追加行为约束，也不要求为了双语校验而修改 README。
 - **npm 展示链接**：README 中的文档链接使用完整 GitHub URL，截图使用完整 raw URL，避免依赖 npm/DSH 的相对路径解析。双语链接指向对应语言，截图保持在安装后的 Features 表中。
-- **公开行为变动**：修改用户可见能力、菜单项、安装命令或前置兼容条件时，必须同步更新 `README.md` 与 `README.zh.md`，确保标题级别序列和语义完全对齐；
+- **公开使用指南变动**：新增或移除公开能力、更名操作入口、更改安装命令、兼容要求或用户必须执行的步骤时，同步更新 `README.md` 与 `README.zh.md` 中对应的使用说明，保持标题级别序列和语义对齐。
 - **架构与模型变动**：调整领域模型、数据边界、生命周期状态、并发锁或依赖拓扑时，必须更新 `docs/ARCHITECTURE.md`；
 - **开发与构建变动**：修改开发依赖、upstream DSH 基线、测试命令、本地联调步骤时，必须更新 `docs/DEVELOPMENT.md`；
 - **版本发布前**：在 `RELEASE-LOG.md` 追加中英文双语变更日志；`package.json` 的 `version` 是版本唯一事实来源，禁止在 README 中硬编码当前版本号。

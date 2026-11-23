@@ -507,9 +507,11 @@ Sessions remain visible by default. There is no close button; conversation click
 The panel is up to 256px wide, uses a frosted glass background with a light shadow and slides in from the right and out toward the right; reduced-motion
 preferences disable these animations. Reads and listeners stop immediately when closing,
 while the exit animation retains only the existing visual content.
-Opening Dashboard or switching the DSH right sidebar to fullscreen hides the panel immediately
-without changing the markers; returning to the conversation or exiting right-sidebar fullscreen
-restores its Session preference without stealing focus (a manually closed panel remains closed).
+Opening Dashboard or starting the right sidebar's fullscreen slide hides the Summary immediately.
+Escape in the right sidebar leaves focus and the Session's closed marker alone, including during the slide.
+If the Session mounts while covered, the Summary starts no Workspace reads, Git watches or polling.
+Once Dashboard and the fullscreen sidebar are both closed, the Summary follows the current Session's
+preference and leaves focus in place. A manually closed Summary stays closed.
 Refresh switches the icon to a loading indicator until both Workspace and Git
 reads finish. While visible, the panel refreshes on local file and Git metadata changes,
 with a 60-second polling fallback and a one-time reconciliation for changes missed while

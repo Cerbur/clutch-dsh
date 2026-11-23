@@ -1,29 +1,28 @@
 import type { CSSProperties } from 'react';
 
-function hasFullscreenAttribute(frame: Element | null | undefined): boolean {
-  return Boolean(
-    frame?.hasAttribute('data-rightbar-fullscreen') &&
-      frame.getAttribute('data-rightbar-fullscreen') !== 'false',
-  );
-}
-
 /** Resolve the owning DSH AppFrame containing the trigger, if present. */
-export function findAppFrame(element: HTMLElement): HTMLElement | null {
-  const doc = element.ownerDocument;
-  for (const overlay of doc.querySelectorAll('[data-shell-overlay]')) {
-    const frame = overlay.parentElement;
-    if (frame?.contains(element)) return frame;
+function findAppFrame(element: HTMLElement): HTMLElement | null {
+  for (let frame = element.parentElement; frame; frame = frame.parentElement) {
+    if (frame.querySelector(':scope > [data-shell-overlay]')) return frame;
   }
   return null;
 }
 
-/** Check whether the current document's AppFrame is already in rightbar fullscreen. */
-export function isDocumentRightbarFullscreen(): boolean {
-  if (typeof document === 'undefined') return false;
-  for (const overlay of document.querySelectorAll('[data-shell-overlay]')) {
-    if (hasFullscreenAttribute(overlay.parentElement)) return true;
-  }
-  return false;
+function frameIsFullscreen(frame: HTMLElement): boolean {
+  const flag = frame.getAttribute('data-rightbar-fullscreen');
+  if (flag !== null && flag !== 'false') return true;
+  // DSH reports fullscreen on AppFrame after the slide. The visible Session's
+  // panel already has its open/mode attributes when the slide starts.
+  const panels = frame.querySelectorAll(
+    ':scope > [data-rightbar-col] [data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]',
+  );
+  return Array.from(panels).some((panel) => !panel.closest('[hidden]'));
+}
+
+/** Input can arrive before a pending MutationObserver update commits to React. */
+export function isRightbarFullscreen(trigger: HTMLElement): boolean {
+  const frame = findAppFrame(trigger);
+  return frame !== null && frameIsFullscreen(frame);
 }
 
 /** Observe DSH AppFrame's rightbar fullscreen state when the trigger lives inside it. */
@@ -37,11 +36,20 @@ export function observeRightbarFullscreen(
     publish(false);
     return () => {};
   }
-  const update = () => publish(hasFullscreenAttribute(frame));
+  const update = () => publish(frameIsFullscreen(frame));
   update();
   if (!view?.MutationObserver) return () => {};
-  const observer = new view.MutationObserver(update);
+  const observer = new view.MutationObserver((records) => {
+    // Changes to terminal output or file content inside a mounted panel cannot
+    // change its presentation. Recheck when the panel or its host changes.
+    if (records.some(({ target }) => !target.parentElement?.closest('[data-sidebar-right-panel]'))) update();
+  });
   observer.observe(frame, { attributes: true, attributeFilter: ['data-rightbar-fullscreen'] });
+  const rightbar = frame.querySelector(':scope > [data-rightbar-col]');
+  if (rightbar) observer.observe(rightbar, {
+    subtree: true, childList: true, attributes: true,
+    attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'hidden'],
+  });
   return () => observer.disconnect();
 }
 
