@@ -1,5 +1,21 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.41 — 2026-11-24
+
+### 中文
+
+#### 修复
+
+- Worktree Summary 在右侧栏开始进入全屏时立即隐藏，并在退出全屏且侧栏滑出后恢复先前的显示状态。
+- 调整已折叠侧栏的宽度时，已显示的 Worktree Summary 会保持可见。
+
+### English
+
+#### Fixed
+
+- Worktree Summary hides as soon as the right sidebar starts entering fullscreen and returns to its previous visibility after the sidebar slides out on exit.
+- A visible Worktree Summary stays open when you resize a collapsed sidebar.
+
 ## 0.1.39 — 2026-11-22
 
 ### 中文
