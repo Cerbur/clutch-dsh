@@ -560,7 +560,7 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
       '<div data-rightbar-col>' +
         '<div data-sidebar-right-session="background" hidden>' +
           '<div data-sidebar-right-panel="fullscreen" data-sidebar-right-open></div></div>' +
-        '<div data-sidebar-right-session="s"><div id="panel" data-sidebar-right-panel="fullscreen">' +
+        '<div data-sidebar-right-session="s"><div id="panel" data-sidebar-right-panel="push">' +
           '<div data-dockkit-host="dock"><button id="rightbar-control">Rightbar</button></div></div></div></div>' +
       '<div data-shell-overlay></div>' +
     '</div>',
@@ -672,10 +672,29 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
     assert.equal(watches.size, 1);
     const watchSignal = [...watches.values()][0].signal;
 
+    // Below 768px DSH changes the offset of the already hidden dock.
+    const panel = document.getElementById('panel');
+    const dock = panel.querySelector('[data-dockkit-host]');
+    const summary = document.querySelector('[data-worktree-popover]');
+    const readsBeforeResize = reads;
+    const pollBeforeResize = [...timers.keys()];
+    const resize = Promise.withResolvers();
+    dock.style.visibility = 'hidden';
+    dock.getAnimations = () => [{ transitionProperty: 'transform', playState: 'running', finished: resize.promise }];
+    await React.act(async () => { panel.setAttribute('data-sidebar-right-panel', 'fullscreen'); });
+    assert.equal(placement.isRightbarFullscreen(button()), false, 'a hidden dock cannot cover Summary');
+    assert.equal(document.querySelector('[data-worktree-popover]'), summary);
+    await React.act(async () => { dock.getAnimations = () => []; resize.resolve(); });
+    assert.equal(document.querySelector('[data-worktree-popover]'), summary);
+    assert.equal(reads, readsBeforeResize);
+    assert.equal(watchSignal.aborted, false);
+    assert.equal(nextWatch, 1);
+    assert.deepEqual([...timers.keys()], pollBeforeResize);
+
     // Entering rightbar fullscreen hides Summary immediately without touching closed preference.
+    dock.style.visibility = 'visible';
     rightbarControl.focus();
     assert.equal(document.activeElement, rightbarControl);
-    const panel = document.getElementById('panel');
     await React.act(async () => {
       panel.setAttribute('data-sidebar-right-open', 'true');
       const escape = new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
@@ -711,7 +730,7 @@ test('rightbar fullscreen hides Summary without overwriting preference, restores
     const replacement = { transitionProperty: 'transform', playState: 'running',
       finished: new Promise((resolve) => { finishSlide = resolve; }) };
     let animations = [slide];
-    panel.querySelector('[data-dockkit-host]').getAnimations = () => animations;
+    dock.getAnimations = () => animations;
     await React.act(async () => {
       panel.removeAttribute('data-sidebar-right-open');
       frame.removeAttribute('data-rightbar-fullscreen');

@@ -27,7 +27,9 @@ function fullscreenCoverage(frame: HTMLElement): boolean | Animation {
       const slide = part.getAnimations?.().find((animation) =>
         'transitionProperty' in animation && animation.transitionProperty === 'transform' &&
         animation.playState !== 'finished' && animation.playState !== 'idle');
-      if (slide) return slide;
+      // DSH keeps a closing dock visible until its slide ends. Resizing a
+      // collapsed dock can also animate its offset while it stays hidden.
+      if (slide && frame.ownerDocument.defaultView?.getComputedStyle(part).visibility === 'visible') return slide;
     }
   }
   return false;

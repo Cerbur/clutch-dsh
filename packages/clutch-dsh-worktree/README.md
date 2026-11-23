@@ -114,7 +114,8 @@ together. Main can show its history without a comparison branch by selecting **N
 Refresh to see later edits; the Dashboard is read-only.
 
 The Session header's **Worktree panel** keeps a compact change summary beside the conversation.
-An open summary stays hidden until the fullscreen right sidebar finishes sliding out.
+An open summary stays visible when resizing the window with the right sidebar collapsed.
+Opening the fullscreen sidebar hides the summary until the sidebar finishes sliding out.
 Use its refresh button or open the full Dashboard for more detail.
 
 **Open native local changes** checks for a Session in the target directory first. If only another

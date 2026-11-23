@@ -512,7 +512,8 @@ Escape in the right sidebar leaves focus and the Session's closed marker alone, 
 If the Session mounts while covered, the Summary starts no Workspace reads, Git watches or polling.
 With Dashboard closed, the Summary follows the current Session's preference once the fullscreen
 sidebar finishes sliding out, or immediately when reduced motion skips the slide. Focus stays in
-place. A manually closed Summary stays closed.
+place. A manually closed Summary stays closed. Resizing the window with the right
+sidebar already collapsed keeps an open Summary mounted with its current Git watch and polling timer.
 Refresh switches the icon to a loading indicator until both Workspace and Git
 reads finish. While visible, the panel refreshes on local file and Git metadata changes,
 with a 60-second polling fallback and a one-time reconciliation for changes missed while
