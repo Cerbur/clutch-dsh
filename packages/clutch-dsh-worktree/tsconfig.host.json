@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "preserveSymlinks": true,
     "baseUrl": "../..",
     "paths": {
       "@deepseek-ai/dsh-client-locale/client": [
