@@ -1,4 +1,4 @@
-import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand';
+import { CommandDefinitionId } from '@deepseek-ai/dsh-commands';
 import { WORKTREE_TOOL_IDS, type WorktreeToolId, type WorktreeToolSettingsScope } from '../contract/tool-settings.js';
 import { authorize, available, ToolAuthorizationError } from './context.js';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
