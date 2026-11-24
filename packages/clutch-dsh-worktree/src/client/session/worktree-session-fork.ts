@@ -28,6 +28,8 @@ export interface WorktreeForkRecovery {
   readonly key: string;
   readonly sourceSessionId: string;
   readonly childSessionId: string;
+  /** The child was already listed when the Client started, and no user action requested this bind. */
+  readonly historical: boolean;
   readonly binding?: SessionBinding;
   readonly error: unknown;
 }
@@ -189,6 +191,12 @@ export function createWorktreeSessionForkCoordinator(
   let reconciliationAgain = false;
   let reconciliationForce = false;
   let lastSessionLineageSignature: string | undefined;
+  let restoredSessionIds: Set<string> | undefined;
+  const interactiveBeforeRestore = new Set<string>();
+  const markInteractive = (childSessionId: string): void => {
+    if (restoredSessionIds) restoredSessionIds.delete(childSessionId);
+    else if (options.sessions) interactiveBeforeRestore.add(childSessionId);
+  };
   const sourceGeneration = new Map<string, number>();
   const worktreeGeneration = new Map<string, number>();
   const keyOf = (workspaceId: string, worktreeId: string): string =>
@@ -218,6 +226,7 @@ export function createWorktreeSessionForkCoordinator(
       key,
       sourceSessionId,
       childSessionId,
+      historical: restoredSessionIds?.has(childSessionId) === true,
       ...(target === undefined ? {} : { binding: target }),
       error,
     });
@@ -336,6 +345,11 @@ export function createWorktreeSessionForkCoordinator(
     const snapshot = options.sessions.getSnapshot();
     const normalized = reconciliationSnapshot(snapshot);
     if (normalized === undefined) return;
+    if (!restoredSessionIds) {
+      // Native fork completion can precede the first usable list or join a bind already in flight.
+      restoredSessionIds = new Set(snapshot.ids.filter((id) => !interactiveBeforeRestore.has(id)));
+      interactiveBeforeRestore.clear();
+    }
     if (!force && normalized.signature === lastSessionLineageSignature) return;
     lastSessionLineageSignature = normalized.signature;
     const candidates = normalized.candidates.filter(
@@ -408,6 +422,7 @@ export function createWorktreeSessionForkCoordinator(
       const generation = versionOf(sourceGeneration, input.sessionId);
       const childSessionId = await options.fork(input);
       if (!disposed && generation === versionOf(sourceGeneration, input.sessionId)) {
+        markInteractive(childSessionId);
         await bindChild(input.sessionId, childSessionId);
       }
       return childSessionId;
@@ -416,6 +431,7 @@ export function createWorktreeSessionForkCoordinator(
     async retry(key) {
       const item = pending.get(key);
       if (item === undefined || disposed) return false;
+      markInteractive(item.childSessionId);
       const providedLookup = item.binding === undefined
         ? undefined
         : { status: 'found' as const, binding: item.binding };

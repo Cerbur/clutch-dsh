@@ -465,6 +465,11 @@ The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bu
 If DSH creates a Session but binding fails, the Session is kept. The Worktree view exposes retry
 or open recovery actions; the plugin does not delete or rewrite the DSH Session.
 
+Opening or refreshing the Worktree view can uncover a binding failure for an existing fork.
+Find its original error and recovery actions in **Settings → Worktree → Errors & recovery**.
+This background check is silent. A binding failure for a newly forked Session or an explicit
+binding retry still shows a toast. A successful bind clears the pending recovery.
+
 ### Current Session Worktree panel
 
 The bottom of this panel, the Dashboard footer, and the right of the **Worktree** title in **Settings → Worktree** share a small gray

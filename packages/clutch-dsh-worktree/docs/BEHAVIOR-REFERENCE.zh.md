@@ -388,6 +388,10 @@ Local/Main 和 Worktree 行的新建 Session 按钮使用 DSH 原生的气泡加
 如果 DSH 已创建 Session 但 binding 失败，Session 会被保留。Worktree 视图会提供重试或直接打开
 的恢复操作；插件不会删除或改写 DSH Session。
 
+打开或刷新 Worktree 视图时，后台可能发现已有 fork 会话绑定失败。可以在**设置 → Worktree →
+报错与修复**中查看原始错误并使用恢复操作，这次后台检查不弹出 toast。新 fork 的会话绑定失败、
+或手动重试绑定失败时仍会弹出提示。绑定成功后，该项退出待处理列表。
+
 ### 当前 Session 的 Worktree 面板
 
 此面板底部、Dashboard 底部和 **设置 → Worktree** 的 **Worktree** 标题右侧都显示小号灰色来源标签

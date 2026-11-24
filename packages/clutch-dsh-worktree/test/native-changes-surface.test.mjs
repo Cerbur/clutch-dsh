@@ -16,6 +16,8 @@ import { en, zh } from '../lib/client/locales.js';
 import * as queue from '../lib/client/surface/notification-queue.js';
 import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { useSurfaceMutation } from '../lib/client/surface/actions/useSurfaceMutation.js';
+import { forkRecoveryError } from '../lib/client/surface/shared.js';
+import { createWorktreeSessionForkCoordinator } from '../lib/client/session/worktree-session-fork.js';
 
 async function clientModule(file) {
   const compiled = ts.transpileModule(await readFile(new URL('../src/client/' + file, import.meta.url), 'utf8'), {
@@ -42,6 +44,7 @@ const notifications = (await clientModule('surface/components/NotificationToasts
   '@deepseek-ai/dsh-client-ui-primitives': { Toast: ({ text }) => React.createElement('output', null, text) },
 });
 const { SurfaceContent } = (await clientModule('surface/components/SurfaceContent.tsx'))({
+  '../shared.js': { forkRecoveryError },
   './NotificationToasts.js': notifications, '../notification-queue.js': queue,
   '../../view/worktree-error-copy.js': errorCopy,
 });
@@ -127,6 +130,37 @@ async function fixture(t, { main, external, openNativeChanges }) {
   if (!external) await React.act(async () => f.openDashboard(record));
   return f;
 }
+
+test('historical fork repair appears only in Settings across reloads, but a new failed fork shows its toast', async (t) => {
+  const f = await fixture(t, { external: true });
+  const options = {
+    sessions: { getSnapshot: () => ({ phase: 'ready', ids: ['parent', 'old-child'],
+      byId: { parent: {}, 'old-child': { parentId: 'parent' } } }) },
+    fork: async () => 'new-child',
+    findBindings: async () => ({ bySessionId: new Map([['parent', { status: 'found',
+      binding: { workspaceId: 'ws', worktreeId: 'wt', status: 'active', sessionId: 'parent' } }]]) }),
+    bindSession: async () => { throw Object.assign(new Error('checkout missing'), { code: 'WORKTREE_NOT_FOUND' }); },
+  };
+  for (const withNewFork of [false, true]) {
+    const coordinator = createWorktreeSessionForkCoordinator(options);
+    await coordinator.reconcile();
+    f.source.forkRecoverySnapshot = coordinator.recovery.getSnapshot();
+    await f.render(zh);
+    await f.render(zh, true);
+    assert.equal(f.document.querySelector('output'), null);
+    const entry = f.document.querySelector('[data-worktree-diagnostic]');
+    assert.match(entry.textContent, /old-child/);
+    assert.match(entry.querySelector('pre').textContent, /WORKTREE_NOT_FOUND/);
+    assert.ok(entry.textContent.includes(zh['action.openCreatedSession']));
+    if (withNewFork) {
+      await coordinator.fork({ sessionId: 'parent' });
+      f.source.forkRecoverySnapshot = coordinator.recovery.getSnapshot();
+      await f.render(zh, true);
+      assert.ok(f.document.querySelector('output').textContent.includes(zh['error.worktreeNotFound']));
+    }
+    coordinator.dispose();
+  }
+});
 
 test('a synchronous native selection commit preserves the Dashboard and retry feedback', async (t) => {
   const f = await fixture(t, { external: true });

@@ -174,6 +174,7 @@ export function SurfaceContent({
     const error = forkRecoveryError(recovery);
     notices.push({
       key: 'fork:' + recovery.key, error, text: formatWorktreeViewError(error, t),
+      diagnosticOnly: recovery.historical,
       toastKey: failureToastKey(error),
       context: t('settings.binding') + ' · ' + sessionLabel(recovery.childSessionId),
       actions: [

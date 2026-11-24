@@ -441,6 +441,36 @@ test('does not invent a Workspace scope for an unknown binding lookup failure', 
   coordinator.dispose();
 });
 
+test('historical fork failures stay silent on replay while new children and explicit retries can notify', async () => {
+  let snapshot = { phase: 'pending', ids: [], byId: {} };
+  const coordinator = createWorktreeSessionForkCoordinator({
+    sessions: { getSnapshot: () => snapshot },
+    fork: async () => 'direct-child',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: async () => { throw Object.assign(new Error('missing checkout'), { code: 'WORKTREE_NOT_FOUND' }); },
+  });
+  const failures = () => Object.fromEntries(coordinator.recovery.getSnapshot().pending.map(
+    (item) => [item.childSessionId, item.historical],
+  ));
+  await coordinator.reconcile();
+  await coordinator.fork({ sessionId: 'parent-session' });
+  snapshot = sessionList();
+  snapshot.ids.push('direct-child');
+  snapshot.byId['direct-child'] = { blank: false, parentId: 'parent-session' };
+  await coordinator.reconcile();
+  assert.deepEqual(failures(), { 'direct-child': false, 'child-session': true });
+  snapshot.ids.push('new-child');
+  snapshot.byId['new-child'] = { blank: false, parentId: 'parent-session' };
+  await coordinator.reconcile();
+  await coordinator.reconcile({ force: true });
+  assert.deepEqual(failures(), { 'direct-child': false, 'child-session': true, 'new-child': false });
+  const historical = coordinator.recovery.getSnapshot().pending.find((item) => item.historical);
+  assert.equal(historical.error.code, 'WORKTREE_NOT_FOUND');
+  assert.equal(await coordinator.retry(historical.key), false);
+  assert.equal(failures()['child-session'], false);
+  coordinator.dispose();
+});
+
 test('waits for a usable Session snapshot after malformed data', async () => {
   let snapshot = { phase: 'pending', ids: [], byId: {} };
   let lookupCount = 0;
