@@ -1,5 +1,19 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.42 — 2026-11-24
+
+### 中文
+
+#### 修复
+
+- 修复 Worktree 在部分 DSH RC 和 alpha 版本中的命令 ID 导入错误，避免插件因此加载失败。
+
+### English
+
+#### Fixed
+
+- Fix a command ID import error that could prevent Worktree from loading on some DSH RC and alpha builds.
+
 ## 0.1.41 — 2026-11-24
 
 ### 中文
