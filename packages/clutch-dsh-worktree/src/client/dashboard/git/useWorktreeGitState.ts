@@ -57,7 +57,7 @@ export interface WorktreeGitStateController {
   readonly acceptBranches: (branches: readonly BranchRecord[]) => void;
   readonly loadHistory: () => Promise<void>;
   readonly loadMore: () => Promise<void>;
-  readonly refresh: () => Promise<void>;
+  readonly refresh: (origin?: 'user' | 'background') => Promise<void>;
   readonly selectBaselineBranch: (branch: string | undefined) => void;
   readonly selectView: (view: WorktreeGitView) => void;
   readonly selectSummary: () => void;
@@ -133,6 +133,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   let diffRequest = 0;
   let branchesInFlight: Promise<void> | undefined;
   let historyInFlight: Promise<void> | undefined;
+  let backgroundHistory = false;
   let moreInFlight: Promise<void> | undefined;
   const filesInFlight = new Map<string, Promise<WorktreeGitCommitFiles>>();
   const diffInFlight = new Map<string, Promise<WorktreeGitFileDiff>>();
@@ -276,6 +277,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     target: GitTarget,
     selectedPath: string,
     diffPath: string,
+    previous?: WorktreeGitFileDiff,
   ): Promise<void> => {
     const baselineBranch = state.baselineBranch;
     if (!canRead(baselineBranch)) return;
@@ -286,7 +288,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       update({ ...state, selectedPath, diff: { status: 'ready', value: cached } });
       return;
     }
-    update({ ...state, selectedPath, diff: { status: 'loading' } });
+    update({ ...state, selectedPath, diff: previous ? { status: 'ready', value: previous, refreshing: true } : { status: 'loading' } });
     try {
       const value = await requestDiff(baselineBranch, state.history, target, diffPath);
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
@@ -297,22 +299,26 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       update({ ...state, diff: { status: 'ready', value } });
     } catch (error) {
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
-      update({ ...state, diff: { status: 'error', error: asError(error) } });
+      update({ ...state, diff: previous
+        ? { status: 'ready', value: previous, error: asError(error), showingCachedView: true }
+        : { status: 'error', error: asError(error) } });
     }
   };
 
-  const applyFiles = (target: GitTarget, value: WorktreeGitCommitFiles): void => {
-    const selectedPath = value.files[0]?.path;
+  const applyFiles = (target: GitTarget, value: WorktreeGitCommitFiles, background = false): void => {
+    const selectedPath = background && value.files.some((file) => file.path === state.selectedPath)
+      ? state.selectedPath : value.files[0]?.path;
+    const previous = background && state.selectedPath === selectedPath && state.diff.status === 'ready' ? state.diff.value : undefined;
     update({
       ...state,
       files: { status: 'ready', value },
       selectedPath,
       diff: { status: 'idle' },
     });
-    if (selectedPath !== undefined) void loadDiff(target, selectedPath, selectedPath);
+    if (selectedPath !== undefined) void loadDiff(target, selectedPath, selectedPath, previous);
   };
 
-  const loadFiles = async (target: GitTarget, preserveReady = false): Promise<void> => {
+  const loadFiles = async (target: GitTarget, preserveReady = false, background = false): Promise<void> => {
     const baselineBranch = state.baselineBranch;
     if (!canRead(baselineBranch)) return;
     const request = ++filesRequest;
@@ -320,7 +326,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     const key = gitCacheKey(baselineBranch, state.history, target);
     const cached = isLiveTarget(target) ? undefined : filesCache.get(key);
     if (cached !== undefined) {
-      applyFiles(target, cached);
+      applyFiles(target, cached, background);
       return;
     }
     const previousFiles = state.files.status === 'ready' ? state.files : undefined;
@@ -336,11 +342,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         filesCache.set(key, value);
         trimCache(filesCache, MAX_FILE_CACHE);
       }
-      applyFiles(target, value);
+      applyFiles(target, value, background);
     } catch (error) {
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       if (preserveReady && previousFiles !== undefined) {
-        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: asError(error) } });
+        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: asError(error), showingCachedView: background } });
       } else {
         update({ ...state, files: { status: 'error', error: asError(error) }, selectedPath: undefined, diff: { status: 'idle' } });
       }
@@ -548,10 +554,14 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     return promise;
   };
 
-  const loadHistory = (refresh = false): Promise<void> => {
+  const loadHistory = (refresh = false, background = false): Promise<void> => {
     if (disposed || !canRead(state.baselineBranch)) return Promise.resolve();
-    if (historyInFlight !== undefined) return historyInFlight;
+    if (historyInFlight !== undefined) {
+      if (!background) backgroundHistory = false;
+      return historyInFlight;
+    }
     if (!refresh && historyLoaded) return Promise.resolve();
+    backgroundHistory = background;
     const baselineBranch = state.baselineBranch;
     const request = ++historyRequest;
     moreInFlight = undefined;
@@ -622,7 +632,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         if (state.view === 'summary') {
           void loadFiles(
             { kind: 'selection', selection: summarySelection(state.includeWorkingTree) },
-            true,
+            true, backgroundHistory,
           );
         } else if (nextSelectedCommit === undefined) {
           resetTarget({ selectedCommit: undefined, selectedCommits: [] });
@@ -630,16 +640,16 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           const target: GitTarget = nextSelectedCommit !== WORKTREE_GIT_WORKING_TREE && selectedCommits.length > 1
             ? { kind: 'selection', selection: { kind: 'commits', commits: selectedCommits } }
             : { kind: 'commit', commit: nextSelectedCommit };
-          void loadFiles(target, refresh);
+          void loadFiles(target, refresh && selectedCommitStillExists, backgroundHistory && selectedCommitStillExists);
         }
       } catch (error) {
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
         historyLoaded = true;
         const nextError = asError(error);
         if (previous.status === 'ready') {
-          update({ ...state, history: { status: 'ready', value: previous.value, error: nextError } });
+          update({ ...state, history: { status: 'ready', value: previous.value, error: nextError, showingCachedView: backgroundHistory } });
         } else if (previous.status === 'error' && previous.previous !== undefined) {
-          update({ ...state, history: { status: 'ready', value: previous.previous, error: nextError } });
+          update({ ...state, history: { status: 'ready', value: previous.previous, error: nextError, showingCachedView: backgroundHistory } });
         } else {
           update({ ...state, history: { status: 'error', error: nextError } });
         }
@@ -711,7 +721,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       branchesInFlight = undefined;
       update({ ...state, branches: { status: 'ready', value: branches } });
     },
-    refresh: () => loadHistory(true),
+    refresh: (origin) => loadHistory(true, origin === 'background'),
     selectBaselineBranch,
     selectView,
     selectSummary,

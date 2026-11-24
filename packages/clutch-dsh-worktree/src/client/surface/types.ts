@@ -153,7 +153,7 @@ export interface ReadState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly views: readonly WorktreeWorkspaceView[];
   readonly error?: WorktreeViewError;
-  readonly targetErrors?: Readonly<Record<string, WorktreeViewError>>;
+  readonly targetErrors?: Readonly<Record<string, WorktreeViewError & { readonly showingCachedView?: boolean }>>;
 }
 
 export type WorktreeRefreshScope =
@@ -163,6 +163,8 @@ export type WorktreeRefreshScope =
 
 
 export interface RefreshOptions {
+  /** An explicit refresh/retry reports failure even when cached rows remain. */
+  readonly userRequested?: boolean;
   /** Ensure a newly observed Workspace is loaded without retiring an equivalent read. */
   readonly ensureLoaded?: boolean;
   /** Navigation must wait for this confirmed binding to be committed to the tree. */
@@ -422,6 +424,7 @@ export interface WorktreeCreateDialogProps {
   readonly onSelectedBranchChange: (branch: string) => void;
   readonly onFetchBranches?: () => Promise<readonly BranchRecord[]>;
   readonly onLoadBranches?: () => Promise<readonly BranchRecord[]>;
+  readonly branchConflict?: WorktreeViewError;
   readonly onNewBranchChange: (branch: string) => void;
   readonly onSubmit: () => void;
 }

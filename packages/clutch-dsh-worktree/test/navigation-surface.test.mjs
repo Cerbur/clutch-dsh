@@ -348,6 +348,17 @@ test('progressive surface, bounded reads, re-entry, additions and mutation race'
   });
   assert.equal(state.readState.targetErrors.slow.code, 'SIDECAR_CORRUPTED');
   assert.equal(state.readState.targetErrors.failed.code, 'WORKTREE_RECOVERY_REQUIRED');
+  assert.equal(state.readState.targetErrors.failed.showingCachedView, true);
+  await React.act(async () => {
+    const scope = { kind: 'workspace', workspaceId: 'failed' };
+    const foreground = state.refresh({ scope, userRequested: true });
+    await tick();
+    const observer = state.refresh({ scope, reuseInFlight: true });
+    await tick();
+    gates.get('failed').at(-1).reject({ code: 'WORKTREE_RECOVERY_REQUIRED', message: 'B' });
+    await Promise.all([foreground, observer]);
+  });
+  assert.equal(state.readState.targetErrors.failed.showingCachedView, false);
   await React.act(async () => { void state.refresh({ scope: { kind: 'workspace', workspaceId: 'failed' } }); await tick(); });
   await finish('failed');
   assert.equal(state.readState.targetErrors.slow.code, 'SIDECAR_CORRUPTED');

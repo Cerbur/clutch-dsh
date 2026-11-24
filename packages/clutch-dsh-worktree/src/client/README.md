@@ -979,7 +979,7 @@ All three supply a local-ref read callback. Opening the picker reads candidates 
 window focus and visibility changes never reload them. Fetch already reads the catalog once in Host
 and returns it; clients consume that result directly without a second `listBranches` RPC.
 Dropdown reads start after the loading shell paint; ready rows and search/filter/selection are retained. Read failures
-keep the roster and use the native error toast with retry. The Connection adapter shares concurrent
+keep the roster and expose retry in the picker. The structured error remains in Settings. The Connection adapter shares concurrent
 branch reads by Workspace but never caches settled results. Git comparison uses its controller's
 forced branch read, retaining ready state and avoiding history/file/diff refreshes.
 Workspace navigation uses `readWorkspaceNavigation` to share Git and Sidecar facts within one

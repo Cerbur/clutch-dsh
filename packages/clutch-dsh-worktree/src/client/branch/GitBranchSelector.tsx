@@ -94,6 +94,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       if (alive.current && generation.current === token) {
         setFetched({ source, branches: next });
         setFetchError(undefined);
+        setReadError(undefined);
         setStatus('success');
         resetTimer.current = setTimeout(() => {
           if (alive.current && generation.current === token) setStatus('idle');
@@ -118,10 +119,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       ? <span role="alert">{t('branch.fetchRetry')}</span>
       : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
-  return { status, notice: <><ErrorToast error={readError} t={t} scope={'branch-read:' + scope}
+  return { status, notice: <><ErrorToast diagnosticOnly error={readError} t={t} scope={'branch-read:' + scope}
     context={t('dashboard.searchBranches')}
     actions={[{ label: t('action.retry'), disabled: reading, onClick: () => void reload() }]} />
-    <ErrorToast error={fetchError} t={t} scope={'branch-fetch:' + scope}
+    <ErrorToast diagnosticOnly error={fetchError} t={t} scope={'branch-fetch:' + scope}
       context={t('branch.fetch')}
       actions={[{ label: t('branch.fetchRetry'), disabled: props.disabled || props.loading || reading || status === 'pending',
         onClick: () => void fetchBranches() }]} /></>, picker: {
@@ -132,6 +133,9 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     loadingLabel: t('select.loading'),
     searchLabel: t('dashboard.searchBranches'),
     noMatchesLabel: t('dashboard.noMatchingBranches'),
+    readFailure: readError && <div role="status">{t('status.branchReadFailed')} {' '}
+      <button type="button" disabled={reading || props.disabled} onClick={() => void reload()}>{t('action.retry')}</button>
+    </div>,
     allLabel: t('branch.all'),
     groups: [{ value: 'local', label: t('branch.local') }, { value: 'remote', label: t('branch.remote'), action }],
     options: [

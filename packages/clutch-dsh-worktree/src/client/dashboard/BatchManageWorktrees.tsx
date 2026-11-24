@@ -37,6 +37,7 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
   }, [workspaceId, onManage]);
   const picked = rows.filter((record) => selected.has(record.worktreeId));
   const disabled = pending || actionPending || onManage === undefined;
+  const failed = results.filter((result) => result.error).length;
   const allSelected = rows.length > 0 && picked.length === rows.length;
   const close = () => { if (!busy.current) setConfirmation(undefined); };
   const submit = async () => {
@@ -45,7 +46,7 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
     busy.current = true;
     setPending(true);
     setResults([]);
-    const lifetime = generation.current;
+    const lifetime = ++generation.current;
     const isCurrent = () => generation.current === lifetime;
     try {
       await runWorktreeBatch(confirmation.action, confirmation.records, onManage, isCurrent, (result) => {
@@ -108,10 +109,17 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           : t('dashboard.manage.success')}
       </li>)}
     </ul>
-    <NotificationToasts notices={results.flatMap(({ record, error }) => error ? [{
-      key: 'batch:' + record.worktreeId, error, context: record.branch + ' · ' + record.absolutePath,
-      text: formatWorktreeViewError(error, t), message: (translate: WorktreeTranslate) => formatWorktreeViewError(error, translate),
-    }] : [])} />
+    <NotificationToasts notices={[
+      ...(!pending && failed > 0 ? [{
+        key: 'batch-summary:' + workspaceId + ':' + generation.current,
+        text: t('dashboard.manage.batchFailed', { failed, total: results.length }),
+        message: (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed, total: results.length }),
+      }] : []),
+      ...results.flatMap(({ record, error }) => error ? [{
+        key: 'batch:' + record.worktreeId, diagnosticOnly: true, error, context: record.branch + ' · ' + record.absolutePath,
+        text: formatWorktreeViewError(error, t), message: (translate: WorktreeTranslate) => formatWorktreeViewError(error, translate),
+      }] : []),
+    ]} />
     <Modal open={confirmation !== undefined} onClose={close} closeLabel={t('dialog.cancel')}
       title={confirmation ? t(`dashboard.manage.${confirmation.action}`) : ''}
       description={confirmation ? t(`dashboard.manage.confirm.${confirmation.action}`) : ''}

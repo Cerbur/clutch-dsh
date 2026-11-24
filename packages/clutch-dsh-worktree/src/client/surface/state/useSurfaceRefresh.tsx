@@ -91,6 +91,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     promise: Promise<WorktreeWorkspaceView>;
     sessionIds: readonly string[];
     pending: boolean;
+    userRequested: boolean;
   }>());
   const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
   const guardFor = (workspaceId: string) => {
@@ -159,7 +160,11 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
               ? undefined
               : invalidateWorktreeContext?.(workspaceId, { alreadyInvalidated: true })
                 ?.catch(() => undefined);
+          // Current reads follow invalidations. A later observer must carry the
+          // pending explicit retry through to the generation that actually publishes.
+          const previous = targetReads.current.get(workspaceId);
           let request = { generation: guard.begin(), promise: viewReader.read(workspaceId, { current: true }),
+            userRequested: options.userRequested === true || (previous?.pending === true && previous.userRequested),
             pending: true,
             sessionIds: workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [] };
           targetReads.current.set(workspaceId, request);
@@ -218,7 +223,8 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
                 views: mergeWorktreeViews(current.views, workspaceIdsRef.current, []),
                 error: undefined,
                 targetErrors: { ...current.targetErrors,
-                  [workspaceId]: { ...toWorktreeViewError(error), retryable: true },
+                  [workspaceId]: { ...toWorktreeViewError(error), retryable: true,
+                    showingCachedView: !request.userRequested && current.views.some((view) => view.workspaceId === workspaceId) },
                 },
               };
             });

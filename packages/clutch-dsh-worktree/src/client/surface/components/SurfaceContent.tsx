@@ -162,7 +162,7 @@ export function SurfaceContent({
   const retryRead = (workspaceIds?: readonly string[]) => ({
     label: t('action.retry'), disabled: actionPending,
     onClick: () => { void refresh({
-      scope: workspaceIds === undefined ? { kind: 'global' } : { kind: 'workspaces', workspaceIds },
+      userRequested: true, scope: workspaceIds === undefined ? { kind: 'global' } : { kind: 'workspaces', workspaceIds },
       preserveCurrent: true,
     }); },
   });
@@ -205,7 +205,7 @@ export function SurfaceContent({
           onClick: () => {
             setActionError(undefined);
             void refresh({
-              scope: typeof workspaceId === 'string'
+              userRequested: true, scope: typeof workspaceId === 'string'
                 ? { kind: 'workspace', workspaceId } : { kind: 'global' },
               preserveCurrent: true,
             });
@@ -253,7 +253,7 @@ export function SurfaceContent({
     const workspaceIds = [workspaceId];
     notices.push({
       key: 'target:' + JSON.stringify([workspaceIds, error.code, error.details]),
-      diagnosticOnly: error.code === 'WORKSPACE_ROOT_MISSING',
+      diagnosticOnly: error.showingCachedView || error.code === 'WORKSPACE_ROOT_MISSING',
       error, text: formatWorktreeViewError(error, t),
       context: t('settings.read') + ' · ' + workspaceIds.map(workspaceLabel).join(', '),
       actions: [...actionsFor(error), retryRead(workspaceIds)],

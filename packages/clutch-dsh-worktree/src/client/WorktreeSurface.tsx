@@ -474,7 +474,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
             onClose={closeDashboard}
             onRetry={() => {
               void read.refresh({
-                scope: { kind: 'workspace', workspaceId: dashboard.workspaceId },
+                userRequested: true, scope: { kind: 'workspace', workspaceId: dashboard.workspaceId },
                 preserveCurrent: true,
               });
             }}

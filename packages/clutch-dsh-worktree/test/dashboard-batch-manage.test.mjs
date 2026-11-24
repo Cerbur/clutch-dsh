@@ -329,7 +329,8 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
       Modal: ({ open, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog' }, title, description, children, footer) : null,
     },
     '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
-    '../surface/components/NotificationToasts.js': { NotificationToasts: () => null },
+    '../surface/components/NotificationToasts.js': { NotificationToasts: ({ notices }) =>
+      notices.map((notice) => React.createElement('output', { key: notice.key, 'data-diagnostic-only': !!notice.diagnosticOnly }, notice.text)) },
     '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
     './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
   });
@@ -351,7 +352,7 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
         { ...record, workspaceId: 'other', worktreeId: 'hidden' }],
       t, actionPending: false, onManage: async (action, target) => {
         calls.push([action, target.worktreeId]);
-        if (target.worktreeId === 'one') await deferred;
+        if (target.worktreeId === 'one' && calls.length === 1) await deferred;
         else throw { code: 'WORKTREE_DIRTY', message: 'dirty' };
       },
     })));
@@ -375,10 +376,19 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
     assert.deepEqual(calls, [['clean', 'one'], ['clean', 'two']]);
     assert.equal(doc.querySelectorAll('[data-batch-result="success"]').length, 1);
     assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 1);
+    assert.deepEqual([...doc.querySelectorAll('output[data-diagnostic-only="false"]')].map((el) => el.textContent), ['2 项操作中有 1 项失败。']);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 1);
     assert.equal(doc.querySelector('input[aria-label="feat/one · /repo/one"]').checked, false);
     assert.equal(doc.querySelector('input[aria-label="feat/two · /repo/two"]').checked, true);
     assert.equal(doc.querySelector('input[aria-label="active · /repo/active"]').checked, true);
     assert.equal(doc.querySelector('[role="dialog"]'), null);
+    await click('input[aria-label="全选"]');
+    await click('[data-batch-action="clean"]');
+    await click('[role="dialog"] input');
+    await click('[data-batch-confirm]');
+    assert.deepEqual([...doc.querySelectorAll('output[data-diagnostic-only="false"]')].map((el) => el.textContent), ['2 项操作中有 2 项失败。']);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 2);
+    assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 2);
     for (const locale of [en, zh]) assert.ok(locale['dashboard.manage.stopped']);
   } finally {
     await React.act(async () => root.unmount());

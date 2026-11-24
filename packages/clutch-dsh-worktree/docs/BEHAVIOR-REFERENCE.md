@@ -802,15 +802,22 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 
 ### Resolve errors
 
-Failures in the Worktree list, dialogs, and Dashboard normally appear as native toasts in the current DSH
-language (English or Chinese). Each message explains the problem and how to recover. The list
-keeps its existing content and has no error banner or diagnostics drawer at the top.
+An unsuccessful explicit operation or a first read with no usable content normally shows one toast.
+A background Workspace or Git refresh that can keep showing the previous result marks that content as stale
+and records the failure in **Errors & recovery**. The next successful read clears the stale message.
+An explicit refresh or retry can report the same failure. Reading a missing Workspace root remains silent.
+
+A duplicate Workspace name is flagged at the field until corrected and creates no diagnostic entry.
+A conflicting new branch name stays in the creation dialog with its error. Branch list, remote Fetch and
+import candidate failures show a local retry and retain their diagnostics. At the end of a batch, one toast
+gives the number of failures. Each item's result remains in the batch list and each failure has diagnostic details.
+Partial operations such as a created Session with a failed binding keep their toast and recovery actions.
 
 Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,
 to read each failure and expand its original
 diagnostics (including Git stderr). Retry reads, recover interrupted Worktree operations, retry
 Session bindings, or open retained Sessions from the same tab. Records remain after the toast
-fades; the list and Git panels have no inline error or retry controls. Closed operation views
+fades. Closed operation views
 disable their recovery actions; reopen the corresponding view to load its current state.
 Records stay in page memory and clear on reload. **Clear history** keeps active recoveries.
 Dialogs keep input; failed instruction and baseline saves retain drafts. Git setup guidance

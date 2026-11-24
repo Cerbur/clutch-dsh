@@ -259,7 +259,7 @@ test('routes Surface reads through explicit shared-reader scopes', async () => {
   const refreshSource = coordinator.slice(refreshStart, refreshEnd);
 
   assert.match(types, /type WorktreeRefreshScope/);
-  assert.match(types, /targetErrors\?: Readonly<Record<string, WorktreeViewError>>/);
+  assert.match(types, /targetErrors\?: Readonly<Record<string, WorktreeViewError & \{ readonly showingCachedView\?: boolean/);
   assert.match(coordinator, /viewReader/);
   assert.doesNotMatch(refreshSource, /viewReader\.readMany\(/);
   assert.match(refreshSource, /viewReader\.read\(/);

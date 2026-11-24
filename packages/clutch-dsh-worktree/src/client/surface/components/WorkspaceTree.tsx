@@ -377,6 +377,9 @@ export function WorkspaceTree({
                       ? t('status.workspaceFailed') : t('status.loading')}
                   </p>
                 )}
+                {expanded && view !== undefined && read.readState.targetErrors?.[workspace.workspaceId]?.showingCachedView && (
+                  <p className={styles.message} role="status">{t('status.refreshStale')}</p>
+                )}
                 {expanded && view !== undefined && (
                   <div className={styles.treeChildren}>
                     <WorktreeGroupRow

@@ -99,10 +99,12 @@ export function ErrorToast({
   context,
   actions,
   describe,
+  diagnosticOnly,
 }: {
   readonly error?: WorktreeViewError;
   readonly t: WorktreeTranslate;
   readonly scope: string;
+  readonly diagnosticOnly?: boolean;
   readonly context?: string;
   readonly actions?: WorktreeNotification['actions'];
   readonly describe?: WorktreeNotification['describe'];
@@ -113,7 +115,7 @@ export function ErrorToast({
       notices={
         text === undefined ? [] : [{
           key: JSON.stringify([scope, error?.code, error?.details]), text, error, context, actions, describe,
-          toastKey: failureToastKey(error!),
+          diagnosticOnly, toastKey: failureToastKey(error!),
         }]
       }
     />

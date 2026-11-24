@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { en, zh } from '../lib/client/locales.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
+import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 
 const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector', 'surface/components/dialogs']
   .map(async (name) => [name, await readFile(new URL('../src/client/' + name + '.tsx', import.meta.url), 'utf8')]));
@@ -82,6 +83,7 @@ function harness({ deferPreparation = false, geometry } = {}) {
       '../../branch/GitBranchSelector.js': modules['branch/GitBranchSelector'],
       '../../select/WorktreeSelector.js': modules['select/WorktreeSelector'],
       '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
+      '../../view/worktree-error-copy.js': { formatWorktreeViewError },
       './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
       '../surface/components/NotificationToasts.js': { ErrorToast: errorToast },
       '../view/worktree-view.js': { toWorktreeViewError },
@@ -322,6 +324,10 @@ for (const outcome of ['success', 'failure']) {
         const option = options(node).find((item) => item.props['data-single-select-option'] === expected);
         assert.ok(option);
         assert.equal(option.props.disabled, false);
+        if (outcome === 'failure') {
+          assert.ok(find(node, (item) => item.props?.role === 'status').length > 0);
+          assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.diagnosticOnly, true);
+        }
         option.props.onClick();
         assert.deepEqual(chosen, [expected]);
         const fetch = find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
@@ -330,6 +336,7 @@ for (const outcome of ['success', 'failure']) {
         await Promise.resolve(); await Promise.resolve();
         assert.equal(fetches, 1);
         assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['recovered']);
+        assert.equal(find(render(), (item) => item.props?.role === 'status').length, 0);
       });
     }
   }
@@ -531,6 +538,25 @@ test('creation branch picker opens before the Workspace callback and refreshes w
   assert.deepEqual(chosen, ['origin/main']);
 });
 
+test('registration keeps branch conflicts and import read failures in the dialog with diagnostic details', () => {
+  for (const mode of ['create', 'import']) {
+    const h = harness();
+    const error = { code: mode === 'create' ? 'WORKTREE_BRANCH_CONFLICT' : 'WORKTREE_NOT_FOUND', message: 'failure', retryable: true };
+    let retries = 0;
+    const props = { ...registrationProps(), mode, canCreate: true, branchesLoading: false,
+      branchConflict: mode === 'create' ? error : undefined, newBranch: 'main',
+      importCandidates: { status: 'error', candidates: [], error }, onRetryImportCandidates: () => { retries++; } };
+    const node = h.render(['surface/components/dialogs', 'WorktreeCreateDialog'], props);
+    const message = formatWorktreeViewError(error, props.t);
+    assert.ok(find(node, (item) => item.props?.role === 'status' && item.props.children === message).length);
+    assert.ok(find(node, (item) => item.type === 'error-toast' && item.props.error === error)[0].props.diagnosticOnly);
+    if (mode === 'import') {
+      find(node, (item) => item.type === 'button' && item.props.children === en['action.retry'])[0].props.onClick();
+      assert.equal(retries, 1);
+    }
+  }
+});
+
 test('import picker opens before candidate callback and updates in place', () => {
   const h = harness();
   const chosen = [];
@@ -590,6 +616,18 @@ test('fetch is available with no remote rows, preserves selection, and restores 
   assert.equal(search(node).props.value, 'new');
 });
 
+test('duplicate Workspace name is field feedback and clears when corrected', () => {
+  const h = harness();
+  const render = (duplicate) => h.render(['surface/components/dialogs', 'WorktreeWorkspaceRenameDialog'], {
+    t: (key) => en[key], target: { workspaceId: 'ws', currentTitle: 'old' }, draft: 'draft', duplicate,
+  });
+  const node = render(true);
+  assert.equal(find(node, (item) => item.props?.role === 'status')[0].props.children, en['workspace.duplicate']);
+  assert.ok(find(node, (item) => item.type === 'input')[0].props['aria-invalid']);
+  assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error).length, 0);
+  assert.equal(find(render(false), (item) => item.props?.role === 'status').length, 0);
+});
+
 test('fetch failure keeps old branch rows and exposes an inline retryable localized error', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();
@@ -603,6 +641,7 @@ test('fetch failure keeps old branch rows and exposes an inline retryable locali
   let node = render();
   assert.equal(find(fetchButton(node), (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchRetry']);
   assert.ok(fetchButton(node).props.title.includes(en['branch.fetchFailed']));
+  assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.diagnosticOnly, true);
   assert.equal(options(node)[0].props['aria-selected'], true);
   fetchButton(node).props.onClick();
   await Promise.resolve();

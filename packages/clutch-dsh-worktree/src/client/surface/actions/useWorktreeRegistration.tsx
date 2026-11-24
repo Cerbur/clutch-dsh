@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import {
   createDefaultWorktreeName,
@@ -8,6 +8,7 @@ import {
   toWorktreeViewError,
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
+  type WorktreeViewError,
 } from '../../view/worktree-view.js';
 import { WorktreeCreateDefaults } from '../shared.js';
 import type {
@@ -71,6 +72,7 @@ export function useWorktreeRegistration({
   session,
 }: Input) {
   const { workspaces } = source;
+  const [branchConflict, setBranchConflict] = useState<WorktreeViewError>();
   const {
     worktreeModalWorkspaceId,
     modalReadLoading,
@@ -186,6 +188,7 @@ export function useWorktreeRegistration({
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
     setWorktreeModalWorkspaceId(workspace.workspaceId);
+    setBranchConflict(undefined);
     setModalBranches(undefined);
     setWorktreeModalMode('create');
     setImportCandidates({ status: 'idle', candidates: [] });
@@ -275,7 +278,9 @@ export function useWorktreeRegistration({
     )
       return;
     if (worktreeModalMode === 'import' && selectedImportCandidate === undefined) return;
+    const generation = modalGenerationRef.current;
     setActionPending(true);
+    setBranchConflict(undefined);
     setActionError(undefined);
     setPendingSessionBinding(undefined);
     try {
@@ -309,12 +314,17 @@ export function useWorktreeRegistration({
       }
       await continueWorktreeRegistration(registeredWorktree);
     } catch (error) {
-      setActionError(toWorktreeViewError(error));
+      const failure = toWorktreeViewError(error);
+      if (worktreeModalMode === 'create' && failure.code === 'WORKTREE_BRANCH_CONFLICT' && generation === modalGenerationRef.current) {
+        setBranchConflict(failure);
+      } else setActionError(failure);
     } finally {
       setActionPending(false);
     }
   };
   return {
+    branchConflict,
+    setBranchConflict,
     modalWorkspace,
     modalView,
     modalReadiness,

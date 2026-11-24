@@ -158,11 +158,8 @@ export function WorktreeGitPanel({
   const branchRoster = state.branches.status === 'ready' ? state.branches.value : undefined;
   const branchOptions = useMemo(() => (branchRoster ?? [])
     .filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch), [branchRoster, currentBranch]);
-  const branchError = state.branches.status === 'error'
-    ? state.branches.error
-    : state.branches.status === 'ready'
-      ? state.branches.error
-      : undefined;
+  const reads = [['history', state.history], ['files', state.files], ['diff', state.diff]] as const;
+  const stale = reads.some(([, read]) => read?.status === 'ready' && read.showingCachedView && read.error);
   const nativeSelection = useRef<object | undefined>(undefined);
   useLayoutEffect(() => {
     nativeSelection.current = {};
@@ -186,22 +183,13 @@ export function WorktreeGitPanel({
     <section className={styles.gitPanel} data-dashboard-git-panel>
       <NotificationToasts
         notices={[
-          ['branches', branchError],
-          ['pagination', state.loadMoreError],
-          [
-            'history',
-            state.history.status === 'error' || state.history.status === 'ready'
-              ? state.history.error
-              : undefined,
-          ],
-          [
-            'files',
-            state.files.status === 'error' || state.files.status === 'ready'
-              ? state.files.error
-              : undefined,
-          ],
-          ['diff', state.diff.status === 'error' ? state.diff.error : undefined],
-        ].flatMap(([scope, error]) => {
+          // Branch list and Fetch errors belong to the picker, which also owns retry.
+          ['pagination', state.loadMoreError, false] as const,
+          ...reads.map(([scope, read]) => [scope,
+            read?.status === 'ready' || read?.status === 'error' ? read.error : undefined,
+            read?.status === 'ready' && read.showingCachedView,
+          ] as const),
+        ].flatMap(([scope, error, showingCachedView]) => {
           if (!(error instanceof Error)) return [];
           const diagnostic = toWorktreeViewError(error);
           const text = formatWorktreeViewError(diagnostic, t);
@@ -210,11 +198,10 @@ export function WorktreeGitPanel({
               key: JSON.stringify([workspaceId, worktreeId, scope, diagnostic.code, diagnostic.details]),
               toastKey: failureToastKey(diagnostic, [workspaceId, worktreeId]),
               error: diagnostic,
-              diagnosticOnly: diagnostic.code === 'WORKSPACE_ROOT_MISSING',
+              diagnosticOnly: diagnostic.code === 'WORKSPACE_ROOT_MISSING' || showingCachedView,
               context: context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · '),
               describe: (translate) => translate('settings.git', {
-                operation: translate(scope === 'branches' ? 'dashboard.base'
-                  : scope === 'history' ? 'dashboard.git.commits'
+                operation: translate(scope === 'history' ? 'dashboard.git.commits'
                   : scope === 'files' ? 'dashboard.git.changedFiles' : 'dashboard.git.diff'),
               }) + ' · ' + (context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · ')),
               text,
@@ -222,8 +209,7 @@ export function WorktreeGitPanel({
                 {
                   label: t('dashboard.git.retry'),
                   onClick: () => {
-                    if (scope === 'branches') void state.loadBranches();
-                    else if (scope === 'pagination' && diagnostic.code !== 'WORKTREE_STATE_CONFLICT') void state.loadMore();
+                    if (scope === 'pagination' && diagnostic.code !== 'WORKTREE_STATE_CONFLICT') void state.loadMore();
                     else void state.refresh();
                   },
                 },
@@ -253,7 +239,7 @@ export function WorktreeGitPanel({
                   state.acceptBranches(branches);
                   return branches.filter((branch) => branch.kind === 'remote' || branch.name !== currentBranch);
                 } finally {
-                  await state.refresh();
+                  await state.refresh('background');
                 }
               }}
               onChange={(value) => state.selectBaselineBranch(value || undefined)}
@@ -349,6 +335,7 @@ export function WorktreeGitPanel({
       </header>
 
 
+      {stale && <p role="status">{t('status.refreshStale')}</p>}
       {!isMain && unavailable === 'baseline-unselected' && (
         <div className={styles.gitBaselinePrompt} data-dashboard-git-baseline-prompt>
           <strong>{t('dashboard.git.selectBaselineTitle')}</strong>

@@ -301,9 +301,14 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
   assert.ok(notice.text.length > 25);
   notice.actions[0].onClick();
   assert.deepEqual(refreshed, [
-    { scope: { kind: 'workspaces', workspaceIds: ['affected'] }, preserveCurrent: true },
+    { userRequested: true, scope: { kind: 'workspaces', workspaceIds: ['affected'] }, preserveCurrent: true },
   ]);
   assert.ok(nodes(node).some((item) => item.type === 'tree'));
+  assert.equal(notice.diagnosticOnly, false);
+  input.read.readState.targetErrors.affected.showingCachedView = true;
+  const cached = nodes(h.render('SurfaceContent', input)).find((item) => item.type === 'notices').props.notices[0];
+  assert.equal(cached.diagnosticOnly, true);
+  assert.equal(cached.error.code, notice.error.code);
   // A read retry may clear actionError while the retained Session still needs binding repair.
   input.read.readState = { status: 'ready', views: [{ workspaceId: 'unrelated', readiness: { status: 'ready' } }] };
   let opened;

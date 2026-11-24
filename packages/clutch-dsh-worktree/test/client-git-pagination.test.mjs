@@ -19,7 +19,7 @@ import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
 import { createWorktreeViewReader } from '../lib/client/view/worktree-view-read.js';
 import { readWorkspaceNavigation } from '../lib/manage/manager-navigation.js';
-import { listWorktreeCommits } from '../lib/manage/manager-git-history.js';
+import { listWorktreeCommits, listWorktreeCommitFiles } from '../lib/manage/manager-git-history.js';
 import { LocalGitAdapter } from '../lib/provider/git/adapter.js';
 
 const t = (key, values = {}) => en[key].replace(/\{(\w+)\}/gu, (_, name) => String(values[name]));
@@ -65,7 +65,8 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
     git: new LocalGitAdapter(),
   };
   const manager = { readWorkspaceNavigation: (input) => readWorkspaceNavigation(context, input),
-    listWorktreeCommits: (input) => listWorktreeCommits(context, input) };
+    listWorktreeCommits: (input) => listWorktreeCommits(context, input),
+    listWorktreeCommitFiles: (input) => listWorktreeCommitFiles(context, input) };
   const reader = createWorktreeViewReader(manager);
   const controller = createWorktreeGitStateController({ manager, workspaceId, worktreeId, defaultBaselineBranch: 'main' });
   const Toasts = await loadComponent('../../surface/components/NotificationToasts', {
@@ -92,9 +93,9 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
     globalThis.IS_REACT_ACT_ENVIRONMENT = before.act;
     await rm(temp, { recursive: true, force: true });
   });
-  const renderNotices = async (refresh) => {
+  const renderNotices = async (refresh, origin) => {
     if (refresh) reader.invalidate(workspaceId);
-    const [view] = await Promise.all([reader.read(workspaceId), refresh ? controller.refresh() : controller.loadHistory()]);
+    const [view] = await Promise.all([reader.read(workspaceId), refresh ? controller.refresh(origin) : controller.loadHistory()]);
     const surface = Surface({ source: { workspaces: { items: [{ workspaceId, path: rootPath, title: 'Workspace' }] },
       forkRecoverySnapshot: { pending: [] } }, props: { t }, lifecycle: {}, mutation: {}, session: {},
       read: { readState: { status: 'ready', views: [view] } }, expansion: { contentRef: { current: null } } });
@@ -119,7 +120,25 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
   git(['init', '-b', 'main']);
   git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '-m', 'initial']);
   git(['worktree', 'add', '-b', record.branch, record.absolutePath]);
+  await renderNotices(true);
+  if (controller.getSnapshot().files.status === 'loading') {
+    await new Promise((resolve) => {
+      const unsubscribe = controller.subscribe(() => {
+        if (controller.getSnapshot().files.status === 'loading') return;
+        unsubscribe(); resolve();
+      });
+    });
+  }
+  assert.equal(controller.getSnapshot().files.status, 'ready');
+  const previous = controller.getSnapshot().history.value;
+  assert.ok(previous);
   await rm(record.absolutePath, { recursive: true });
+  await renderNotices(true, 'background');
+  assert.equal(controller.getSnapshot().history.value, previous);
+  assert.equal(controller.getSnapshot().history.showingCachedView, true);
+  assert.equal(dom.window.document.querySelector('output')?.textContent, undefined);
+  assert.ok(diagnostics.worktreeDiagnostics.getSnapshot().some((entry) =>
+    entry.status === 'active' && entry.error?.code === 'WORKTREE_NOT_FOUND'));
   const view = await renderNotices(true);
   assert.equal(view.readiness.status, 'ready');
   assert.equal(controller.getSnapshot().history.error.code, 'WORKTREE_NOT_FOUND');
