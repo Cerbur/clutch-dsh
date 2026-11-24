@@ -22,6 +22,7 @@ import { worktreeDiagnostics } from '../../settings/diagnostics.js';
 
 type Publish = (source: string, notices: readonly WorktreeNotification[]) => void;
 const Notifications = createContext<Publish | undefined>(undefined);
+const showToast = (notice: WorktreeNotification) => !notice.diagnosticOnly;
 
 /** One queue for the list, dialogs and Dashboard; unmount removes a source's notices. */
 export function NotificationProvider({ children, t, openSettings }: {
@@ -59,8 +60,8 @@ export function NotificationToasts({ notices }: { notices: readonly WorktreeNoti
   const alive = useRef(true);
   latest.current = notices;
   const signature = JSON.stringify(
-    notices.map(({ key, text, context, error, actions }) => [
-      key, text, context, error, actions?.map(({ label, disabled, leaveSettings }) => [label, disabled, leaveSettings]),
+    notices.map(({ key, text, context, error, diagnosticOnly, actions }) => [
+      key, text, context, error, diagnosticOnly, actions?.map(({ label, disabled, leaveSettings }) => [label, disabled, leaveSettings]),
     ]),
   );
   useEffect(() => {
@@ -78,7 +79,7 @@ export function NotificationToasts({ notices }: { notices: readonly WorktreeNoti
       })),
     }));
     worktreeDiagnostics.publish(id, registered);
-    publish?.(id, registered);
+    publish?.(id, registered.filter(showToast));
   }, [publish, id, signature]);
   useEffect(() => {
     alive.current = true;
@@ -88,7 +89,7 @@ export function NotificationToasts({ notices }: { notices: readonly WorktreeNoti
       publish?.(id, []);
     };
   }, [publish, id]);
-  return publish === undefined ? <ToastQueue notices={notices} /> : null;
+  return publish === undefined ? <ToastQueue notices={notices.filter(showToast)} /> : null;
 }
 
 export function ErrorToast({

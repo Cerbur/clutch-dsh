@@ -209,7 +209,8 @@ export function WorktreeGitPanel({
             {
               key: JSON.stringify([workspaceId, worktreeId, scope, diagnostic.code, diagnostic.details]),
               toastKey: failureToastKey(diagnostic, [workspaceId, worktreeId]),
-              error: toWorktreeViewError(error),
+              error: diagnostic,
+              diagnosticOnly: diagnostic.code === 'WORKSPACE_ROOT_MISSING',
               context: context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · '),
               describe: (translate) => translate('settings.git', {
                 operation: translate(scope === 'branches' ? 'dashboard.base'

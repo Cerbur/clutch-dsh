@@ -20,7 +20,7 @@ import {
 import type { GitBranchWorktreeInfo, GitChangedFileRead, GitCommitHistoryRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
-import { isDirectory, requireWorkspace, samePhysicalPath } from './manager-support.js';
+import { isDirectory, requireWorkspace, requireWorkspaceRoot, samePhysicalPath } from './manager-support.js';
 import { projectWorktreePath } from '../provider/worktree-path.js';
 import { workspaceGitPaths } from './manager-git-paths.js';
 
@@ -196,6 +196,8 @@ async function resolveWorktree(
     });
   }
   if (!(await isDirectory(gitWorktreeRoot(record)))) {
+    // A checkout inside the Workspace disappears with its parent, even after the initial root check.
+    await requireWorkspaceRoot(workspace);
     throw providerError('WORKTREE_NOT_FOUND', `Worktree directory is unavailable: ${gitWorktreeRoot(record)}`, {
       workspaceId: input.workspaceId,
       worktreeId: input.worktreeId,

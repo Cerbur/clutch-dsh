@@ -205,6 +205,18 @@ test('shared registration keeps the latest recovery callback and withdraws on un
   assert.equal(recovered, undefined, 'unmounted recovery actions must be inert');
 });
 
+test('a silent read keeps its diagnostic while another operation can announce the same error code', async () => {
+  let announced;
+  const h = await toastHarness((_source, notices) => { announced = notices; });
+  const error = { code: 'WORKSPACE_ROOT_MISSING', message: 'missing', retryable: false };
+  const read = { key: 'read', text: 'Missing directory', error, diagnosticOnly: true };
+  const action = { key: 'action', text: 'Operation failed', error };
+  h.render('NotificationToasts', { notices: [read, action] });
+  assert.deepEqual(announced.map(({ key }) => key), ['action']);
+  assert.deepEqual(h.diagnostics.getSnapshot().map(({ key }) => key), ['read', 'action']);
+  h.dispose();
+});
+
 test('the shared toast opens Settings while repair callbacks stay in the diagnostic record', async () => {
   const h = await toastHarness();
   let opened = 0;
@@ -265,7 +277,7 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
       refresh: (options) => refreshed.push(options),
       readState: {
         status: 'ready',
-        views: [{ workspaceId: 'unrelated' }],
+        views: [{ workspaceId: 'unrelated', readiness: { status: 'ready' } }],
         targetErrors: {
           affected: { code: 'CONNECTION_CALL_FAILED', message: '', retryable: true },
         },
@@ -293,7 +305,7 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
   ]);
   assert.ok(nodes(node).some((item) => item.type === 'tree'));
   // A read retry may clear actionError while the retained Session still needs binding repair.
-  input.read.readState = { status: 'ready', views: [{ workspaceId: 'unrelated' }] };
+  input.read.readState = { status: 'ready', views: [{ workspaceId: 'unrelated', readiness: { status: 'ready' } }] };
   let opened;
   input.props.openSession = (sessionId) => { opened = sessionId; };
   input.mutation.setActionError = () => {};

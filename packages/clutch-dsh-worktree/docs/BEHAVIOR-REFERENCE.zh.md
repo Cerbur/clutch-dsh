@@ -644,7 +644,7 @@ UTF-16 代码单元。下一次模型请求会通过 DSH pre-step hook 收到独
 
 ### 处理错误
 
-Worktree 列表、弹窗和 Dashboard 的失败统一通过原生 toast 显示，跟随 DSH 当前界面语言
+Worktree 列表、弹窗和 Dashboard 的失败通常通过原生 toast 显示，跟随 DSH 当前界面语言
 （中文或英文）。提示会说明问题和解决办法。列表保留已有内容，顶部不再显示错误窗口或诊断抽屉。
 
 点击 toast 的**报错与修复**，或打开 **设置 → Worktree → 报错与修复**，可查看每次失败的问题说明，并展开原始诊断详情（包括
@@ -750,7 +750,9 @@ Worktree 设置采用 DSH 原生 Tab、状态标签和紧凑按钮。说明文�
 - Git 必须已安装且可在 PATH 中使用。Git 可执行文件缺失时显示安装提示且不显示命令块；插件
   不会执行 setup 或安装命令。
 - Workspace 根目录缺失时，Worktree 视图仍会渲染索引中的 Worktree、Session 绑定和指令，并显示
-  本地化的目录缺失状态，而不会让整个视图读取失败。该 Workspace 的 Git 读取、Worktree 创建与
+  本地化的目录缺失状态。首次打开和再次刷新时，已确认的根目录缺失只在**设置 → Worktree →
+  报错与修复**中记录 `WORKSPACE_ROOT_MISSING` 和根目录路径，不弹出 toast。恢复目录并刷新后，
+  缺失状态解除。如果仅某个 Worktree 的目录缺失，读取其 Git 数据时仍会弹出原有的修复提示。该 Workspace 的 Git 读取、Worktree 创建与
   导入以及清理操作仍会被拒绝，直到目录恢复。
 - 如果插件的外部索引不可用或损坏，原生 DSH Workspace 和 Session 视图保持完全可读，插件
   进入降级只读状态，绝不会使用空索引覆盖原生数据。

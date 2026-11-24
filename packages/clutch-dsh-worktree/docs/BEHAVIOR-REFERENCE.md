@@ -797,7 +797,7 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 
 ### Resolve errors
 
-Failures in the Worktree list, dialogs, and Dashboard appear as native toasts in the current DSH
+Failures in the Worktree list, dialogs, and Dashboard normally appear as native toasts in the current DSH
 language (English or Chinese). Each message explains the problem and how to recover. The list
 keeps its existing content and has no error banner or diagnostics drawer at the top.
 
@@ -925,7 +925,10 @@ made native-owned by this integration.
   and no command block; the plugin does not run setup or installation commands.
 - If a Workspace root directory is missing, the Worktree view still renders the indexed Worktrees,
   Session bindings, and recorded instructions, and reports a localized missing-directory state
-  instead of failing the whole view. Git-backed reads, Worktree creation and import, and cleanup
+  in the view. On entry and refresh, a confirmed missing root is recorded in **Settings → Worktree →
+  Errors & recovery** with code `WORKSPACE_ROOT_MISSING` and the root path, without a toast.
+  Restore the directory and refresh to clear the missing state. If only a Worktree checkout is
+  missing, its Git read still shows the usual repair guidance. Git-backed reads, Worktree creation and import, and cleanup
   actions remain rejected for that Workspace until its directory returns.
 - If the plugin's external index is unavailable or corrupt, native DSH Workspace and Session views
   remain readable and the plugin enters a degraded read-only state. It never replaces native data

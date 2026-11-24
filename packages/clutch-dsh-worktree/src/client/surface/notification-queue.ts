@@ -5,6 +5,7 @@ export interface WorktreeNotification {
   readonly key: string;
   readonly text: string;
   readonly toastKey?: string;
+  readonly diagnosticOnly?: boolean;
   readonly context?: string;
   readonly error?: WorktreeViewError;
   readonly describe?: (t: WorktreeTranslate) => string;

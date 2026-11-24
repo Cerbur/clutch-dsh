@@ -240,10 +240,19 @@ export function SurfaceContent({
       ],
     });
   }
+  for (const { workspaceId, readiness } of readState.views) {
+    if (readiness.status !== 'workspaceMissing') continue;
+    const { error } = readiness;
+    notices.push({
+      key: 'workspace-root:' + workspaceId, error, text: formatWorktreeViewError(error, t),
+      context: t('settings.read') + ' · ' + workspaceLabel(workspaceId), diagnosticOnly: true,
+    });
+  }
   for (const [workspaceId, error] of Object.entries(readState.targetErrors ?? {})) {
     const workspaceIds = [workspaceId];
     notices.push({
       key: 'target:' + JSON.stringify([workspaceIds, error.code, error.details]),
+      diagnosticOnly: error.code === 'WORKSPACE_ROOT_MISSING',
       error, text: formatWorktreeViewError(error, t),
       context: t('settings.read') + ' · ' + workspaceIds.map(workspaceLabel).join(', '),
       actions: [...actionsFor(error), retryRead(workspaceIds)],

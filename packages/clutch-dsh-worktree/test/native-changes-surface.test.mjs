@@ -63,7 +63,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
   const source = { mode: 'worktree', currentSessionId: 'old', workspaceIds: ['ws'], forkRecoverySnapshot: { pending: [] },
     workspaces: { items: [{ workspaceId: 'ws', path: '/checkout', sessionIds: ['old', 'matching'] }] },
     sessions: { ids: ['old', 'matching'], byId: {}, phase: 'ready' }, archivedSessionIds: [], sessionPresentations: {} };
-  const view = { worktrees: main ? [] : [record], branches: [], knownSessionIds: ['old', 'matching'],
+  const view = { workspaceId: 'ws', readiness: { status: 'ready' }, worktrees: main ? [] : [record], branches: [], knownSessionIds: ['old', 'matching'],
     bindings: main ? [] : ['old', 'matching'].map((sessionId) => ({ workspaceId: 'ws', worktreeId: 'wt', sessionId, status: 'active' })) };
   const listeners = new Set();
   let snapshot = { workspaceId: 'ws', worktreeId: record.worktreeId, sessionId: 'old' };
@@ -89,7 +89,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
       return React.createElement(SurfaceContent, input);
     } },
     './surface/state/useSurfaceSources.js': { useSurfaceSources: () => source },
-    './surface/state/useSurfaceRefresh.js': { useSurfaceRefresh: () => ({ viewByWorkspace: new Map([['ws', view]]), readState: { status: 'ready' } }) },
+    './surface/state/useSurfaceRefresh.js': { useSurfaceRefresh: () => ({ viewByWorkspace: new Map([['ws', view]]), readState: { status: 'ready', views: [view] } }) },
     './surface/actions/useSurfaceMutation.js': { useSurfaceMutation },
     './surface/actions/useLifecycleActions.js': { useLifecycleActions: () => ({ recoveryAction: () => null }) },
     './surface/state/useSessionOrdering.js': { useSessionOrdering: () => ({ orderedSessionIdsByAccount: new Map() }) },

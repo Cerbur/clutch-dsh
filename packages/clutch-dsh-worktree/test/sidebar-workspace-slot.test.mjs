@@ -74,7 +74,7 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
           source: { forkRecoverySnapshot: { pending: [] }, workspaces: { items: [] }, sessions: { byId: {} } },
           props: { sidebarSeat, t: (key) => key },
           lifecycle: {}, mutation: {}, session: {},
-          read: { readState: { status: 'ready' } },
+          read: { readState: { status: 'ready', views: [] } },
           expansion: { contentRef },
         })), sidebarSeat.element));
   }

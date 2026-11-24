@@ -55,6 +55,23 @@ test('shared status filters stale imports and repairs managed stale registration
   });
 });
 
+test('a Workspace disappearing during a Git history read reports the missing root', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, sidecar, provider }) => {
+    const input = { workspaceId: 'ws_one' };
+    const record = await provider.createWorktree({ ...input, branch: 'main', newBranch: 'nested-checkout' });
+    const read = sidecar.read.bind(sidecar);
+    sidecar.read = async (workspaceId) => {
+      const snapshot = await read(workspaceId);
+      // The Workspace passed the initial root check. Its checkout disappears with it.
+      await rename(workspaceRoot, path.join(tempRoot, 'moved-workspace'));
+      return snapshot;
+    };
+    await assert.rejects(provider.listWorktreeCommits({ ...input, worktreeId: record.worktreeId }), {
+      code: 'WORKSPACE_ROOT_MISSING', details: { workspaceId: input.workspaceId, rootPath: workspaceRoot },
+    });
+  });
+});
+
 test('loads an imported Workspace Worktree view after its root directory disappears', async () => {
   await withGitFixture(async ({ workspaceRoot, tempRoot, sidecar, provider }) => {
     const imported = {
