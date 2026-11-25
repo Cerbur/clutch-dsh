@@ -312,13 +312,13 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     });
   }), [props.subscribeToolChanges, mode, refresh]);
   const loadModalWorktreeView = useCallback(
-    (workspaceId: string, options?: { revalidate: boolean }): void => {
+    (workspaceId: string, options?: { revalidate: boolean; reuseInFlight?: boolean }): void => {
       const recordModalReport = (reportId: ReportId): void => {
         const previous = modalReadReportRef.current;
         if (previous?.workspaceId === workspaceId) previous.reportIds.push(reportId);
         else modalReadReportRef.current = { workspaceId, reportIds: [reportId] };
       };
-      if (options?.revalidate) viewReader.invalidate(workspaceId);
+      if (options?.revalidate) viewReader.invalidate(workspaceId, { reuseInFlight: options.reuseInFlight });
       setModalReadError(undefined);
       setModalReadLoading(true);
       if (manager === undefined) {

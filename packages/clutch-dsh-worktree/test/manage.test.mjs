@@ -1243,6 +1243,22 @@ test('rejects a non-Git Workspace', async () => {
   }
 });
 
+test('Create readiness propagates Git configuration errors and recovers after repair', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot }) => {
+    const config = path.join(workspaceRoot, '.git', 'config');
+    const original = await readFile(config, 'utf8');
+    await writeFile(config, original + '\n[invalid section\n');
+    await assert.rejects(loadWorktreeView(provider, 'ws_one'), (error) => {
+      assert.equal(error.code, 'GIT_OPERATION_FAILED');
+      assert.match(error.details.gitStderr, /bad config line/);
+      assert.deepEqual(error.details.gitArgs, ['rev-parse', '--is-inside-work-tree']);
+      return true;
+    });
+    await writeFile(config, original);
+    assert.equal((await loadWorktreeView(provider, 'ws_one')).readiness.status, 'ready');
+  });
+});
+
 test('reports a missing Git executable separately from a non-Git Workspace', async () => {
   await withGitFixture(async ({ dsh, dshHome, workspaceRoot, tempRoot }) => {
     const git = new LocalGitAdapter({ executable: path.join(tempRoot, 'missing-git') });

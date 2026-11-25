@@ -394,6 +394,10 @@ export function WorktreeCreateDialog({
           </div>
         ) : readError !== undefined ? (
           <div className={styles.gitReadiness} data-worktree-readiness="error">
+            <p role="status">{formatWorktreeViewError(readError, t)}</p>
+            {readError.retryable && onRetry && (
+              <Button variant="outline" disabled={actionPending} onClick={onRetry}>{t('action.retry')}</Button>
+            )}
             <ErrorRecovery error={readError} t={t} scope={'modal-read:' + workspace.workspaceId}
               context={t('settings.create') + ' · ' + workspace.title + ' · ' + workspace.path}
               actions={readError.retryable && onRetry !== undefined

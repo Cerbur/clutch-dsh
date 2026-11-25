@@ -32,6 +32,7 @@ type Input = {
     ReturnType<typeof useRegistrationState>,
     | 'worktreeModalWorkspaceId'
     | 'modalReadLoading'
+    | 'modalReadError'
     | 'modalBranches'
     | 'setModalBranches'
     | 'setSelectedBranch'
@@ -88,6 +89,7 @@ export function useWorktreeRegistration({
   const {
     worktreeModalWorkspaceId,
     modalReadLoading,
+    modalReadError,
     modalBranches,
     setModalBranches,
     setSelectedBranch,
@@ -132,7 +134,7 @@ export function useWorktreeRegistration({
         ? undefined
         : modalReadiness?.status;
   const modalCanCreate =
-    !modalReadLoading && modalSetupStatus === undefined && modalReadiness?.status === 'ready';
+    !modalReadLoading && modalReadError === undefined && modalReadiness?.status === 'ready';
   useEffect(() => {
     if (worktreeModalWorkspaceId === undefined || modalView === undefined) return;
     if (modalReadLoading) return;
@@ -207,7 +209,6 @@ export function useWorktreeRegistration({
     defaults: WorktreeCreateDefaults = {},
   ): void => {
     const view = viewByWorkspace.get(workspace.workspaceId);
-    const loadOptions = view?.readiness.status === 'workspaceMissing' ? { revalidate: true } : undefined;
     modalGenerationRef.current++;
     modalLifetimeRef.current++;
     modalReadLoader.current.invalidate();
@@ -223,11 +224,10 @@ export function useWorktreeRegistration({
     setSelectedImportPath(undefined);
     clearActionError();
     setModalReadError(undefined);
-    setModalReadLoading(false);
+    loadModalWorktreeView(workspace.workspaceId, { revalidate: true, reuseInFlight: true });
     if (view === undefined || view.branches.length === 0) {
       setSelectedBranch(defaults.baseBranch ?? '');
       setNewBranch(defaults.newBranch ?? '');
-      loadModalWorktreeView(workspace.workspaceId, loadOptions);
       return;
     }
     setSelectedBranch(defaults.baseBranch ?? (view.checkout?.currentHead !== undefined && view.checkout.currentHead.kind !== 'branch'
@@ -239,7 +239,6 @@ export function useWorktreeRegistration({
           ...view.worktrees.map((worktree) => worktree.branch),
         ]),
     );
-    loadModalWorktreeView(workspace.workspaceId, loadOptions);
   };
   const changeWorktreeModalMode = (mode: WorktreeRegistrationMode): void => {
     if (mode !== worktreeModalMode) modalGenerationRef.current++;

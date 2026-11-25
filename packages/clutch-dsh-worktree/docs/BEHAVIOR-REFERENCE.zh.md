@@ -186,8 +186,8 @@ checkout（包括精确 Tag 或游离 Commit）创建新分支。Main 会显示�
 本地化的 HEAD 选项会包含当前引用名称，例如**当前 HEAD (v1.0.0)**。
 创建使用选择时显示的 commit；提交前 HEAD 已变化时，以 `WORKTREE_STATE_CONFLICT` 拒绝创建，
 请刷新弹窗并重新选择来源。
-如果仓库尚未准备好，DSH 会显示对应
-的 readiness 提示和可复制的 setup 指引。
+每次打开**新建 Worktree**，弹窗都会先检查所选 Workspace，再启用创建。目录已移走时显示目录缺失提示，恢复目录并重新打开即可继续。
+Git 配置无效等读取故障会显示错误并提供重试入口，原始 Git 诊断可在**报错与修复**中查看。只有 Git 确认仓库尚未完成初始化时，弹窗才提供相应的初始化命令。
 
 如果 Workspace 位于仓库子目录，其 Worktree 会保留相同的相对目录。例如，位于
 `/repo/packages/app` 的 Workspace 使用 `<worktree-root>/packages/app` 作为新 Session 的

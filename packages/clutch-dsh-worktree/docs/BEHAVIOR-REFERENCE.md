@@ -227,8 +227,10 @@ The localized HEAD option includes the current reference name, for example **HEA
 Creation uses the commit shown when selected. If HEAD changes before submission, creation is rejected
 with `WORKTREE_STATE_CONFLICT`; refresh the dialog and select the source again.
 Main displays the current branch, exact Tag, or short Commit and retains its creation action when detached.
-If setup is incomplete, DSH
-shows the relevant readiness message and copyable setup guidance.
+Each time **Create Worktree** opens, it checks the selected Workspace before enabling creation.
+If the directory was moved, the dialog shows the missing-directory message. Restore it and reopen the dialog to continue.
+A Git read failure, including invalid configuration, shows an error with a retry action. The original Git diagnostic
+is available in **Errors & recovery**. The dialog offers initialization commands when Git confirms that setup is incomplete.
 
 When the Workspace is a repository subdirectory, its Worktrees preserve that relative directory.
 For example, a Workspace at `/repo/packages/app` uses `<worktree-root>/packages/app` for new

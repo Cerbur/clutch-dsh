@@ -147,6 +147,32 @@ test('a registered checkout stays visible for a Session retry when Forge rejects
   assert.deepEqual(opened, ['first-session']);
 });
 
+test('reopening Create checks a cached ready Workspace before enabling creation', async () => {
+  let missing = false;
+  const { render, workspace, projection } = await harness({
+    onModalRead(id, options) {
+      assert.equal(id, 'ws');
+      if (missing && options?.revalidate) return { ...projection, readiness: {
+        status: 'workspaceMissing', error: { code: 'WORKSPACE_ROOT_MISSING', message: 'gone', retryable: true },
+      } };
+    },
+  });
+  projection.branches = [{ name: 'main', isCurrent: true }];
+  render().registration.openWorktreeCreator(workspace);
+  assert.equal(render().dialog.canCreate, true);
+  render().registration.closeWorktreeCreator();
+  missing = true;
+  render().registration.openWorktreeCreator(workspace);
+  assert.equal(render().dialog.setupStatus, 'workspaceMissing');
+  assert.equal(render().dialog.canCreate, false);
+  render().registration.closeWorktreeCreator();
+  missing = false;
+  render().registration.openWorktreeCreator(workspace);
+  assert.equal(render().dialog.canCreate, true);
+  render().registrationState.setModalReadError({ code: 'GIT_OPERATION_FAILED', message: 'bad config', retryable: true });
+  assert.equal(render().dialog.canCreate, false, 'a failed read must block the cached ready form');
+});
+
 test('a Workspace removed after opening Create is revalidated in the same dialog', async () => {
   const failure = { code: 'WORKSPACE_ROOT_MISSING', message: 'missing', details: { rootPath: '/repo' }, retryable: true };
   const errors = [], reads = [];
@@ -154,14 +180,14 @@ test('a Workspace removed after opening Create is revalidated in the same dialog
     onActionError: error => errors.push(error),
     onModalRead(id, options) {
       reads.push([id, options]);
-      if (options?.revalidate) return { ...projection, readiness: { status: 'workspaceMissing', error: failure } };
+      if (reads.length > 1 && options?.revalidate) return { ...projection, readiness: { status: 'workspaceMissing', error: failure } };
     },
   });
   props.manager.createWorktree = async () => { throw failure; };
   render().registration.openWorktreeCreator(workspace);
   render();
   await render().registration.submitWorktree();
-  assert.deepEqual(reads, [['ws', undefined], ['ws', { revalidate: true }]]);
+  assert.deepEqual(reads, [['ws', { revalidate: true, reuseInFlight: true }], ['ws', { revalidate: true }]]);
   assert.deepEqual(errors.at(-1), failure);
   assert.equal(render().dialog.setupStatus, 'workspaceMissing');
   assert.equal(render().dialog.canCreate, false);
@@ -343,7 +369,7 @@ test('opening Create revalidates workspaceMissing, stale branch conflict retires
   projection.readiness = { status: 'workspaceMissing', error: { code: 'WORKSPACE_ROOT_MISSING', message: 'gone', retryable: false } };
   render().registration.openWorktreeCreator(workspace);
   render();
-  assert.deepEqual(reads, [['ws', { revalidate: true }]]);
+  assert.deepEqual(reads, [['ws', { revalidate: true, reuseInFlight: true }]]);
 
   projection.readiness = { status: 'ready' };
   let rejectCreate;
