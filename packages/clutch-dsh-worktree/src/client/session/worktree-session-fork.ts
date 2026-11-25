@@ -232,9 +232,23 @@ export function createWorktreeSessionForkCoordinator(
     childSessionId: string,
     error: unknown,
     target?: SessionBinding,
+    explicit = false,
   ): void => {
     if (disposed) return;
     const key = recoveryKey(sourceSessionId, childSessionId);
+    const existing = pending.get(key);
+    if (!explicit && existing !== undefined) {
+      const targetChanged =
+        existing.binding?.workspaceId !== target?.workspaceId ||
+        existing.binding?.worktreeId !== target?.worktreeId;
+      pending = new Map(pending).set(key, {
+        ...existing,
+        ...(target === undefined ? {} : { binding: target }),
+        error,
+      });
+      if (targetChanged) publish(target === undefined ? [] : [target.workspaceId]);
+      return;
+    }
     const historical = restoredSessionIds?.has(childSessionId) === true;
     const reported = worktreeNotifications.reportError(forkRecoveryError({ error, childSessionId }), {
       origin: historical ? 'restored-fork' : undefined, context: childSessionId,
@@ -279,17 +293,23 @@ export function createWorktreeSessionForkCoordinator(
     sourceSessionId: string,
     childSessionId: string,
     providedLookup?: WorktreeForkBindingLookupResult,
+    explicit = false,
   ): Promise<BindingAttempt> => {
     if (disposed || boundChildren.has(childSessionId)) return { bound: false };
     const initialSourceGen = versionOf(sourceGeneration, sourceSessionId);
 
     const lookup = providedLookup ?? (await lookupBinding(sourceSessionId));
-    if (disposed) return { bound: false };
-    if (versionOf(sourceGeneration, sourceSessionId) !== initialSourceGen) {
+    if (disposed || versionOf(sourceGeneration, sourceSessionId) !== initialSourceGen) {
+      if (lookup.status === 'error') {
+        worktreeNotifications.reportError(forkRecoveryError({ error: lookup.error, childSessionId }), {
+          origin: 'retired',
+          context: childSessionId,
+        });
+      }
       return { bound: false };
     }
     if (lookup.status === 'error') {
-      setRecovery(sourceSessionId, childSessionId, lookup.error);
+      setRecovery(sourceSessionId, childSessionId, lookup.error, undefined, explicit);
       return { bound: false };
     }
     if (lookup.status === 'missing' || lookup.binding.status !== 'active') {
@@ -335,9 +355,13 @@ export function createWorktreeSessionForkCoordinator(
         versionOf(sourceGeneration, sourceSessionId) !== initialSourceGen ||
         versionOf(worktreeGeneration, wtKey) !== initialWtGen
       ) {
+        worktreeNotifications.reportError(forkRecoveryError({ error, childSessionId }), {
+          origin: 'retired',
+          context: childSessionId,
+        });
         return { bound: false };
       }
-      setRecovery(sourceSessionId, childSessionId, error, target);
+      setRecovery(sourceSessionId, childSessionId, error, target, explicit);
       return { bound: false };
     }
   };
@@ -346,6 +370,7 @@ export function createWorktreeSessionForkCoordinator(
     sourceSessionId: string,
     childSessionId: string,
     providedLookup?: WorktreeForkBindingLookupResult,
+    explicit = false,
   ): Promise<BindingAttempt> => {
     if (disposed || boundChildren.has(childSessionId)) {
       return Promise.resolve({ bound: false });
@@ -353,7 +378,7 @@ export function createWorktreeSessionForkCoordinator(
     const key = recoveryKey(sourceSessionId, childSessionId);
     const current = bindingInFlight.get(key);
     if (current !== undefined) return current;
-    const promise = attemptBinding(sourceSessionId, childSessionId, providedLookup).finally(() => {
+    const promise = attemptBinding(sourceSessionId, childSessionId, providedLookup, explicit).finally(() => {
       if (bindingInFlight.get(key) === promise) bindingInFlight.delete(key);
     });
     bindingInFlight.set(key, promise);
@@ -373,7 +398,9 @@ export function createWorktreeSessionForkCoordinator(
     if (!force && normalized.signature === lastSessionLineageSignature) return;
     lastSessionLineageSignature = normalized.signature;
     const candidates = normalized.candidates.filter(
-      ({ childSessionId }) => !boundChildren.has(childSessionId),
+      ({ childSessionId, sourceSessionId }) =>
+        !boundChildren.has(childSessionId) &&
+        (force || !pending.has(recoveryKey(sourceSessionId, childSessionId))),
     );
     if (candidates.length === 0) return;
     const sourceSessionIds = [...new Set(candidates.map(({ sourceSessionId }) => sourceSessionId))];
@@ -443,7 +470,7 @@ export function createWorktreeSessionForkCoordinator(
       const childSessionId = await options.fork(input);
       if (!disposed && generation === versionOf(sourceGeneration, input.sessionId)) {
         markInteractive(childSessionId);
-        await bindChild(input.sessionId, childSessionId);
+        await bindChild(input.sessionId, childSessionId, undefined, true);
       }
       return childSessionId;
     },
@@ -455,7 +482,7 @@ export function createWorktreeSessionForkCoordinator(
       const providedLookup = item.binding === undefined
         ? undefined
         : { status: 'found' as const, binding: item.binding };
-      return (await bindChild(item.sourceSessionId, item.childSessionId, providedLookup)).bound;
+      return (await bindChild(item.sourceSessionId, item.childSessionId, providedLookup, true)).bound;
     },
     forgetWorktree(input: ForgottenWorktree): void {
       if (disposed) return;

@@ -126,23 +126,49 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   const capturedBaseline = input.capturedBaseline === true;
   const canRead = (baselineBranch: string | undefined): boolean =>
     main || capturedBaseline || baselineBranch !== undefined;
-  // Only a successful read of the same target can resolve that operation's latest failure.
-  const failedReads = new Map<string, { key: string | undefined; reportId: ReportId }>();
+  // Only a successful read of the same target can resolve that operation's failed occurrences.
+  const failedReads = new Map<string, Array<{ key: string | undefined; baselineBranch?: string; reportId: ReportId }>>();
   const resolveRead = (operation: string, key: string | undefined) => {
     const previous = failedReads.get(operation);
-    if (previous && previous.key === key) {
-      worktreeNotifications.resolve(previous.reportId);
-      failedReads.delete(operation);
-    }
+    if (!previous) return;
+    const remaining = previous.filter((entry) => {
+      if (entry.key !== key) return true;
+      worktreeNotifications.resolve(entry.reportId);
+      return false;
+    });
+    if (remaining.length) failedReads.set(operation, remaining);
+    else failedReads.delete(operation);
   };
-  const reportRead = (cause: unknown, operation: string, key: string | undefined, cached = false): Error => {
+  const resolvePaginationForBaseline = (baselineBranch: string | undefined) => {
+    const previous = failedReads.get('pagination');
+    if (!previous) return;
+    const remaining = previous.filter((entry) => {
+      if (entry.baselineBranch !== baselineBranch) return true;
+      worktreeNotifications.resolve(entry.reportId);
+      return false;
+    });
+    if (remaining.length) failedReads.set('pagination', remaining);
+    else failedReads.delete('pagination');
+  };
+  const reportRead = (
+    cause: unknown,
+    operation: string,
+    key: string | undefined,
+    options: { cached?: boolean; retired?: boolean; baselineBranch?: string } = {},
+  ): Error => {
     const error = toWorktreeViewError(cause);
     const scope = [input.workspaceId, input.worktreeId];
+    const retired = disposed || options.retired === true;
     const reported = worktreeNotifications.reportError(error, {
-      origin: disposed ? 'retired' : cached ? 'cached-refresh' : undefined, context: [...scope, operation].join(' · '),
+      origin: retired ? 'retired' : options.cached ? 'cached-refresh' : undefined,
+      context: [...scope, operation].join(' · '),
       toastKey: failureToastKey(error, scope),
     });
-    if (!disposed) failedReads.set(operation, { key, reportId: reported.reportId });
+    if (!retired) {
+      const list = failedReads.get(operation) ?? [];
+      list.push({ key, baselineBranch: options.baselineBranch, reportId: reported.reportId });
+      failedReads.set(operation, list);
+    }
     return Object.assign(new Error(error.message), reported);
   };
   let state = emptyState(main ? undefined : input.defaultBaselineBranch, main);
@@ -256,7 +282,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         if (filesInFlight.get(key) === promise) filesInFlight.delete(key);
       },
       (cause) => {
-        if (disposed) reportRead(cause, 'files', key);
+        if (disposed) reportRead(cause, 'files', key, { retired: true });
         if (filesInFlight.get(key) === promise) filesInFlight.delete(key);
       },
     );
@@ -290,7 +316,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         if (diffInFlight.get(key) === promise) diffInFlight.delete(key);
       },
       (cause) => {
-        if (disposed) reportRead(cause, 'diff', key);
+        if (disposed) reportRead(cause, 'diff', key, { retired: true });
         if (diffInFlight.get(key) === promise) diffInFlight.delete(key);
       },
     );
@@ -323,9 +349,12 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       }
       update({ ...state, diff: { status: 'ready', value } });
     } catch (error) {
-      if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
+      if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) {
+        if (!disposed) reportRead(error, 'diff', key, { retired: true });
+        return;
+      }
       update({ ...state, diff: previous
-        ? { status: 'ready', value: previous, error: reportRead(error, 'diff', key, true), showingCachedView: true }
+        ? { status: 'ready', value: previous, error: reportRead(error, 'diff', key, { cached: true }), showingCachedView: true }
         : { status: 'error', error: reportRead(error, 'diff', key) } });
     }
   };
@@ -370,9 +399,12 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       }
       applyFiles(target, value, background);
     } catch (error) {
-      if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
+      if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) {
+        if (!disposed) reportRead(error, 'files', key, { retired: true });
+        return;
+      }
       if (preserveReady && previousFiles !== undefined) {
-        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: reportRead(error, 'files', key, background), showingCachedView: background } });
+        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: reportRead(error, 'files', key, { cached: background }), showingCachedView: background } });
       } else {
         update({ ...state, files: { status: 'error', error: reportRead(error, 'files', key) }, selectedPath: undefined, diff: { status: 'idle' } });
       }
@@ -561,8 +593,10 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         branchesLoaded = true;
         update({ ...state, branches: { status: 'ready', value } });
       } catch (error) {
-        if (disposed) { reportRead(error, 'branches', undefined); return; }
-        if (request !== branchesRequest) return;
+        if (disposed || request !== branchesRequest) {
+          reportRead(error, 'branches', undefined, { retired: true });
+          return;
+        }
         branchesLoaded = false;
         const nextError = asError(error);
         if (previous.status === 'ready') {
@@ -617,8 +651,9 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     }
     const run = async (): Promise<void> => {
       if (input.manager === undefined) {
-        const error = new Error('Git manager unavailable');
-        if (!disposed && request === historyRequest) {
+        const retired = disposed || request !== historyRequest || state.baselineBranch !== baselineBranch;
+        const error = reportRead(new Error('Git manager unavailable'), 'history', baselineBranch, { retired });
+        if (!retired) {
           historyLoaded = true;
           update({ ...state, history: { status: 'error', error } });
         }
@@ -632,6 +667,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         });
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
         resolveRead('history', baselineBranch);
+        resolvePaginationForBaseline(baselineBranch);
         historyLoaded = true;
         const selectedCommits = state.view === 'summary'
           ? []
@@ -671,11 +707,13 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           void loadFiles(target, refresh && selectedCommitStillExists, backgroundHistory && selectedCommitStillExists);
         }
       } catch (error) {
-        if (disposed) { reportRead(error, 'history', baselineBranch); return; }
-        if (request !== historyRequest || state.baselineBranch !== baselineBranch) return;
+        if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) {
+          reportRead(error, 'history', baselineBranch, { retired: true });
+          return;
+        }
         historyLoaded = true;
         const hasCached = previous.status === 'ready' || (previous.status === 'error' && previous.previous !== undefined);
-        const nextError = reportRead(error, 'history', baselineBranch, backgroundHistory && hasCached);
+        const nextError = reportRead(error, 'history', baselineBranch, { cached: backgroundHistory && hasCached });
         if (previous.status === 'ready') {
           update({ ...state, history: { status: 'ready', value: previous.value, error: nextError, showingCachedView: backgroundHistory } });
         } else if (previous.status === 'error' && previous.previous !== undefined) {
@@ -720,9 +758,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           ...page, commits: [...previous.commits, ...page.commits.filter((commit) => !existing.has(commit.sha))],
         } } });
       } catch (error) {
-        if (disposed) { reportRead(error, 'pagination', pageKey); return; }
-        if (request !== historyRequest || baselineBranch !== state.baselineBranch) return;
-        update({ ...state, loadingMore: false, loadMoreError: reportRead(error, 'pagination', pageKey) });
+        if (disposed || request !== historyRequest || baselineBranch !== state.baselineBranch) {
+          reportRead(error, 'pagination', pageKey, { retired: true, baselineBranch });
+          return;
+        }
+        update({ ...state, loadingMore: false, loadMoreError: reportRead(error, 'pagination', pageKey, { baselineBranch }) });
       }
     };
     const promise = run().finally(() => {

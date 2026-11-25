@@ -460,3 +460,38 @@ test('a pending toast follows a language change even when the notice identity is
   }
   h.dispose();
 });
+
+test('Settings opens Errors tab for reported entries, distinguishes reported from resolved, and tracks clearHistory availability', async () => {
+  const store = createWorktreeDiagnostics();
+  const center = createNotificationCenter(store);
+  const source = await readFile(new URL('../src/client/settings/WorktreeSettings.tsx', import.meta.url), 'utf8');
+  const h = hookHarness(source, {
+    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'button', SegmentedTabs: 'tabs', Tag: 'tag' },
+    '../view/worktree-error-copy.js': { formatWorktreeViewError },
+    './diagnostics.js': { worktreeDiagnostics: store },
+    './ToolSettings.js': { ToolSettings: 'ToolSettings' },
+    '../PluginAttribution.js': { PluginAttribution: 'PluginAttribution' },
+    './settings.css': { default: {} },
+  });
+  const reportId = center.report({ key: 'reported-only', text: 'Reported failure' });
+  await Promise.resolve();
+  const input = { t: (key) => en[key], close() {} };
+  let node = h.render('WorktreeSettings', input);
+  const tabs = nodes(node).find((item) => item.type === 'tabs');
+  assert.equal(tabs.props.value, 'errors', 'reported entry or pending toast must open Errors tab');
+  assert.ok(nodes(node).some((item) => item.type === 'tag' && item.props.children === en['settings.reported']));
+  assert.ok(!nodes(node).some((item) => item.type === 'tag' && item.props.children === en['settings.resolved']));
+  const clearButton = (tree) => nodes(tree).find((item) => item.type === 'button' && item.props.children === en['settings.clearHistory']);
+  assert.equal(clearButton(node).props.disabled, true, 'Clear history must stay disabled while only pending-toast entries exist');
+  center.dismiss(center.getSnapshot().key);
+  await Promise.resolve();
+  node = h.render('WorktreeSettings', input);
+  assert.equal(clearButton(node).props.disabled, false, 'Clear history enables after toast dismissal');
+  center.resolve(reportId);
+  await Promise.resolve();
+  node = h.render('WorktreeSettings', { ...input, t: (key) => zh[key] });
+  assert.ok(nodes(node).some((item) => item.type === 'tag' && item.props.children === zh['settings.resolved']));
+  assert.ok(zh['settings.reported'] && en['settings.reported']);
+  h.dispose();
+  center.dispose();
+});

@@ -108,6 +108,54 @@ test('formats a confirmed-missing Workspace root with the localized path copy', 
     ),
     'error.workspaceRootMissing:rootPath=/private/tmp/ws1',
   );
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'WORKSPACE_ROOT_MISSING',
+        message: 'Workspace root directory is missing',
+        retryable: false,
+        details: { workspaceId: 'ws1' },
+      },
+      t,
+    ),
+    'error.workspaceRootMissingNoPath',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'SESSION_BINDING_FAILED',
+        message: '',
+        retryable: false,
+        details: { sessionId: 'session-1', causeCode: 'WORKSPACE_ROOT_MISSING', rootPath: '/private/tmp/ws1' },
+      },
+      t,
+    ),
+    'error.sessionBindingFailed:sessionId=session-1,reason=error.workspaceRootMissing:rootPath=/private/tmp/ws1',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'SESSION_BINDING_FAILED',
+        message: '',
+        retryable: false,
+        details: { sessionId: 'session-1', causeCode: 'WORKSPACE_ROOT_MISSING' },
+      },
+      t,
+    ),
+    'error.sessionBindingFailed:sessionId=session-1,reason=error.workspaceRootMissingNoPath',
+  );
+  assert.equal(
+    formatWorktreeViewError(
+      {
+        code: 'WORKTREE_SESSION_ENTRY_NOT_STARTED',
+        message: 'raw message',
+        retryable: false,
+        details: { sessionId: 'session-1', causeCode: 'WORKSPACE_ROOT_MISSING', rootPath: '/private/tmp/ws1' },
+      },
+      t,
+    ),
+    'error.worktreeEntryNotStarted:sessionId=session-1,reason=error.workspaceRootMissing:rootPath=/private/tmp/ws1',
+  );
 });
 
 test('localizes inaccessible Workspace causes without claiming the directory is missing', () => {

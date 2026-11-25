@@ -25,7 +25,8 @@ export async function dispatchWorktreeSession(input: {
   const requestId = `clutch-worktree:${sessionId}:${randomUUID()}`;
   if (!created.bound || created.error !== undefined) return { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
     sessionId, requestId, model, status: created.bound ? 'prompt-failed' : 'binding-failed', error: created.error,
-    ...(created.causeCode === undefined ? {} : { causeCode: created.causeCode }) };
+    ...(created.causeCode === undefined ? {} : { causeCode: created.causeCode }),
+    ...(created.rootPath === undefined ? {} : { rootPath: created.rootPath }) };
   let status: WorktreeSessionDispatchResult['status'] = 'model-failed';
   let failure: ReturnType<typeof sessionFailure> | undefined;
   try {

@@ -322,3 +322,53 @@ test('Registration preserves full-ref choices through list and Fetch and resolve
   render();
   assert.equal(render().dialog.selectedBranch, 'origin/main');
 });
+
+test('opening Create revalidates workspaceMissing, stale branch conflict retires quietly, and import retry resolves', async () => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  const reads = [];
+  const actionErrors = [];
+  const { render, workspace, props, projection } = await harness({
+    onActionError: (error) => actionErrors.push(error),
+    onModalRead: (id, options) => {
+      reads.push([id, options]);
+      return { ...projection };
+    },
+  });
+  projection.readiness = { status: 'workspaceMissing', error: { code: 'WORKSPACE_ROOT_MISSING', message: 'gone', retryable: false } };
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  assert.deepEqual(reads, [['ws', { revalidate: true }]]);
+
+  projection.readiness = { status: 'ready' };
+  let rejectCreate;
+  props.manager.createWorktree = () => new Promise((_, reject) => { rejectCreate = reject; });
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  const submitted = render().registration.submitWorktree();
+  render().registration.closeWorktreeCreator(true);
+  rejectCreate({ code: 'WORKTREE_BRANCH_CONFLICT', message: 'branch exists', retryable: false });
+  await submitted;
+  await Promise.resolve();
+  assert.deepEqual(actionErrors, [], 'stale WORKTREE_BRANCH_CONFLICT must not trigger reportActionError');
+  const conflictEntry = worktreeDiagnostics.getSnapshot().find((entry) => entry.error?.code === 'WORKTREE_BRANCH_CONFLICT');
+  assert.equal(conflictEntry.status, 'inactive');
+  assert.equal(notifications.worktreeNotifications.getSnapshot(), undefined);
+
+  let failImports = true;
+  props.manager.listImportCandidates = async () => {
+    if (failImports) throw { code: 'GIT_OPERATION_FAILED', message: 'import failed', retryable: true };
+    return [];
+  };
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  await render().registration.loadImportCandidates('ws');
+  await Promise.resolve();
+  const importEntry = worktreeDiagnostics.getSnapshot().find((entry) => entry.error?.code === 'GIT_OPERATION_FAILED');
+  assert.equal(importEntry.status, 'reported');
+  failImports = false;
+  await render().registration.loadImportCandidates('ws');
+  await Promise.resolve();
+  assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === importEntry.reportId).status, 'resolved');
+  notifications.worktreeNotifications.dispose();
+});

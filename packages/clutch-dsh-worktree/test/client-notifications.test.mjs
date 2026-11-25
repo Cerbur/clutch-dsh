@@ -112,3 +112,70 @@ test('a missing Workspace is history-only across actions, wrapped failures and b
   ];
   assert.deepEqual(notices.filter(shouldAnnounce).map(({ key }) => key), ['checkout', 'mixed batch']);
 });
+
+test('resolve removes pending toasts and unblocks clearHistory', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  const first = center.report(a);
+  const second = center.report(b);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().reportId, first);
+  assert.equal(diagnostics.hasPendingToast(), true);
+  assert.equal(diagnostics.canClearHistory(), false);
+  center.resolve(first);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().reportId, second, 'resolved head toast must leave the pending queue');
+  assert.equal(diagnostics.getSnapshot()[0].status, 'resolved');
+  assert.equal(diagnostics.canClearHistory(), true);
+  diagnostics.clearHistory();
+  assert.deepEqual(diagnostics.getSnapshot().map(item => item.reportId), [second]);
+  center.resolve(second);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot(), undefined);
+  assert.equal(diagnostics.hasPendingToast(), false);
+  diagnostics.clearHistory();
+  assert.deepEqual(diagnostics.getSnapshot(), []);
+});
+
+test('updateRecovery preserves dynamic toast messages, occurrence keys, and original metadata', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  const reported = center.reportError(
+    { code: 'WORKTREE_NOT_FOUND', message: 'missing', retryable: true },
+    { context: 'ws-1', describe: (t) => t('settings.read') },
+  );
+  await Promise.resolve();
+  const originalKey = center.getSnapshot().key;
+  center.updateRecovery('panel', [{
+    reportId: reported.reportId,
+    key: 'panel:override',
+    text: en['error.worktreeNotFound'],
+    error: reported,
+    context: undefined,
+    describe: undefined,
+    actions: [{ label: 'Retry', onClick() {} }],
+  }]);
+  await Promise.resolve();
+  const [entry] = diagnostics.getSnapshot();
+  assert.equal(entry.key, originalKey);
+  assert.equal(entry.context, 'ws-1');
+  assert.equal(entry.describe((k) => zh[k]), zh['settings.read']);
+  assert.equal(center.getSnapshot().message((k) => zh[k]), zh['error.worktreeNotFound']);
+  assert.equal(center.getSnapshot().message((k) => en[k]), en['error.worktreeNotFound']);
+  center.dispose();
+});
+
+test('report without explicit toastKey coalesces duplicate pending toasts by notice key', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  const first = center.report({ key: 'copy-path:/repo/wt', text: 'Copy failed' });
+  const second = center.report({ key: 'copy-path:/repo/wt', text: 'Copy failed' });
+  await Promise.resolve();
+  assert.equal(diagnostics.getSnapshot().length, 2);
+  assert.equal(center.getSnapshot().reportId, first);
+  center.dismiss(center.getSnapshot().key);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot(), undefined, 'duplicate pending notice with the same key must not queue a second toast');
+  assert.notEqual(first, second);
+  center.dispose();
+});

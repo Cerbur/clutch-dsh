@@ -19,6 +19,7 @@ export interface WorktreeSessionDispatchResult {
   readonly status: 'dispatched' | 'binding-failed' | 'model-failed' | 'title-failed' | 'reporting-failed' | 'prompt-failed';
   readonly error?: string;
   readonly causeCode?: string;
+  readonly rootPath?: string;
 }
 
 export interface WorktreeBaselineSyncManager {

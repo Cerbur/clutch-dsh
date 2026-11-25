@@ -68,7 +68,8 @@ function baselineSyncFailureNotice(
       code: 'WORKTREE_SYNC_PARTIAL', message: result.error ?? '', retryable: false,
       details: { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
         requestId, sessionId: result.sessionId, status,
-        ...(result.causeCode === undefined ? {} : { causeCode: result.causeCode }) },
+        ...(result.causeCode === undefined ? {} : { causeCode: result.causeCode }),
+        ...(result.rootPath === undefined ? {} : { rootPath: result.rootPath }) },
     },
     text: t(`dashboard.sync.${status}`) + ' ' + t('dashboard.sync.partial'),
     message: (translate) => translate(`dashboard.sync.${status}`) + ' ' + translate('dashboard.sync.partial'),
@@ -216,6 +217,8 @@ export function WorktreeBaselineEditor({
   const [draft, setDraft] = useState<string>();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<WorktreeViewError>();
+  const errorRef = useRef<WorktreeViewError>();
+  errorRef.current = error;
   const busy = useRef(false);
   const alive = useRef(true);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -257,6 +260,7 @@ export function WorktreeBaselineEditor({
     requestGeneration.current++;
     setReading(false);
     setDraft(undefined);
+    errorRef.current = undefined;
     setError(undefined);
   };
   const openEditor = () => {
@@ -266,6 +270,7 @@ export function WorktreeBaselineEditor({
     setReading(false);
     expected.current = saved;
     setDraft(saved ?? '');
+    errorRef.current = undefined;
     setError(undefined);
   };
   const lifetime = editorGeneration.current;
@@ -297,8 +302,10 @@ export function WorktreeBaselineEditor({
     setPending(true);
     try {
       const result = await onSave(draft, expected.current);
-      if (error?.reportId) worktreeNotifications.resolve(error.reportId);
+      if (errorRef.current?.reportId) worktreeNotifications.resolve(errorRef.current.reportId);
+      errorRef.current = undefined;
       if (alive.current) {
+        setError(undefined);
         setSaved(result);
         expected.current = result;
         editorOpen.current = false;
@@ -312,7 +319,10 @@ export function WorktreeBaselineEditor({
         origin: alive.current ? undefined : 'retired', message: translate =>
           translate('dashboard.baseSaveFailed') +
           (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)) });
-      if (alive.current) setError(reported);
+      if (alive.current) {
+        errorRef.current = reported;
+        setError(reported);
+      }
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);
@@ -616,9 +626,11 @@ export function WorktreeDashboard({
       }
     };
   }, [placement !== undefined]);
+  const copyReports = useRef<{ branch?: ReportId; path?: ReportId }>({});
   useEffect(() => {
     copyGeneration.current += 1;
     copyPending.current = false;
+    copyReports.current.path = undefined;
     setCopyState('idle');
     return () => {
       copyGeneration.current += 1;
@@ -627,17 +639,19 @@ export function WorktreeDashboard({
   useEffect(() => {
     branchCopyGeneration.current += 1;
     branchCopyPending.current = false;
+    copyReports.current.branch = undefined;
     setBranchCopyState('idle');
     return () => {
       branchCopyGeneration.current += 1;
     };
   }, [record.branch, record.currentBranch, record.currentHead?.name]);
-  const copyReports = useRef<{ branch?: ReportId; path?: ReportId }>({});
   const reportCopy = (kind: 'branch' | 'path', current: boolean) => {
     const label = kind === 'branch' ? 'dashboard.branchCopyFailed' : 'dashboard.copyFailed';
     const report = worktreeNotifications.report({ origin: current ? undefined : 'retired',
       key: 'copy-' + kind + ':' + record.absolutePath, text: t(label), message: translate => translate(label),
-      context: workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath,
+      context: kind === 'branch'
+        ? workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath
+        : workspaceTitle + ' · ' + record.absolutePath,
     });
     if (current) copyReports.current[kind] = report;
   };
@@ -651,7 +665,10 @@ export function WorktreeDashboard({
       const copied = await writeClipboard(record.absolutePath);
       const current = generation === copyGeneration.current;
       if (!copied) reportCopy('path', current);
-      else if (previous) worktreeNotifications.resolve(previous);
+      else if (previous) {
+        worktreeNotifications.resolve(previous);
+        if (copyReports.current.path === previous) copyReports.current.path = undefined;
+      }
       if (current) setCopyState(copied ? 'copied' : 'failed');
     } catch {
       const current = generation === copyGeneration.current;
@@ -676,7 +693,10 @@ export function WorktreeDashboard({
       const copied = await writeClipboard(refName);
       const current = generation === branchCopyGeneration.current;
       if (!copied) reportCopy('branch', current);
-      else if (previous) worktreeNotifications.resolve(previous);
+      else if (previous) {
+        worktreeNotifications.resolve(previous);
+        if (copyReports.current.branch === previous) copyReports.current.branch = undefined;
+      }
       if (current) setBranchCopyState(copied ? 'copied' : 'failed');
     } catch {
       const current = generation === branchCopyGeneration.current;

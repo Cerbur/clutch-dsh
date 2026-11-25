@@ -2,11 +2,19 @@ import type { WorktreeManager, WorktreeRecord, WorktreeSessionCreationResult } f
 import { WorktreeDirectoryEntryNotStarted, type WorktreeToolSessionPort } from './native-session.js';
 
 /** Preserve the structured cause across the partial-success RPC boundary. */
-export function sessionFailure(error: unknown): { error: string; causeCode?: string } {
+export function sessionFailure(error: unknown): { error: string; causeCode?: string; rootPath?: string } {
   const cause = error instanceof WorktreeDirectoryEntryNotStarted ? error.cause : error;
   const code = cause && typeof cause === 'object' && 'code' in cause ? cause.code : undefined;
+  const details = cause && typeof cause === 'object' && 'details' in cause &&
+    typeof cause.details === 'object' && cause.details !== null
+    ? cause.details as { readonly rootPath?: unknown } : undefined;
+  const rootPath = typeof details?.rootPath === 'string' && details.rootPath.length > 0 ? details.rootPath : undefined;
   const message = error && typeof error === 'object' && 'message' in error ? error.message : error;
-  return { error: String(message).slice(0, 700), ...(typeof code === 'string' ? { causeCode: code } : {}) };
+  return {
+    error: String(message).slice(0, 700),
+    ...(typeof code === 'string' ? { causeCode: code } : {}),
+    ...(rootPath === undefined ? {} : { rootPath }),
+  };
 }
 
 /** Native creation owns Workspace membership; native directory publication precedes binding and input. */

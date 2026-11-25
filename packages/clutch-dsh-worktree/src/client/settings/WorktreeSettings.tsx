@@ -22,7 +22,17 @@ export function WorktreeSettings({
     worktreeDiagnostics.getSnapshot,
     worktreeDiagnostics.getSnapshot,
   );
-  const [tab, setTab] = useState<'general' | 'errors'>(entries.some((entry) => entry.status === 'active') ? 'errors' : 'general');
+  const canClearHistory = useSyncExternalStore(
+    worktreeDiagnostics.subscribe,
+    worktreeDiagnostics.canClearHistory,
+    worktreeDiagnostics.canClearHistory,
+  );
+  const [tab, setTab] = useState<'general' | 'errors'>(
+    entries.some((entry) => entry.status === 'active' || entry.status === 'reported') ||
+      worktreeDiagnostics.hasPendingToast()
+      ? 'errors'
+      : 'general',
+  );
   const id = useId();
   return (
     <section className={styles.settings} data-worktree-settings>
@@ -66,7 +76,7 @@ export function WorktreeSettings({
                 className={styles.settingsAction}
                 size="sm"
                 variant="outline"
-                disabled={!entries.some((entry) => entry.status !== 'active')}
+                disabled={!canClearHistory}
                 onClick={() => worktreeDiagnostics.clearHistory()}
               >
                 {t('settings.clearHistory')}
@@ -93,9 +103,11 @@ export function WorktreeSettings({
                       {t(
                         entry.status === 'active'
                           ? 'settings.active'
-                          : entry.status === 'inactive'
-                            ? 'settings.inactive'
-                            : 'settings.resolved',
+                          : entry.status === 'reported'
+                            ? 'settings.reported'
+                            : entry.status === 'inactive'
+                              ? 'settings.inactive'
+                              : 'settings.resolved',
                       )}
                     </Tag>
                   </div>

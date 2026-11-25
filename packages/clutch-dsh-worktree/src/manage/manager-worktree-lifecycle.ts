@@ -13,7 +13,7 @@ import {
   forgetWorktreeSnapshot,
 } from '../provider/worktree-lifecycle.js';
 import type { WorktreeManagerContext } from './manager-context.js';
-import { asSidecarError, requireWorkspace, samePhysicalPath } from './manager-support.js';
+import { asSidecarError, requireWorkspace, requireWorkspaceRoot, samePhysicalPath } from './manager-support.js';
 
 function assertMutationToken(
   snapshot: Pick<SidecarSnapshot, 'schemaVersion' | 'workspaceId' | 'revision'>,
@@ -124,6 +124,7 @@ export async function unarchiveWorktree(
             : workspace.rootPath;
           gitWorktrees = await context.git.listWorktrees(gitRoot);
         } catch {
+          await requireWorkspaceRoot(workspace);
           gitWorktrees = undefined;
         }
 
@@ -150,6 +151,7 @@ export async function unarchiveWorktree(
         }
 
         if (!foundInGit) {
+          await requireWorkspaceRoot(workspace);
           throw providerError(
             'WORKTREE_STATE_CONFLICT',
             'Worktree directory or Git registration is missing; cannot unarchive',

@@ -37,7 +37,7 @@ type Input = {
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
     'actionPending' | 'setActionPending' | 'runMutation' | 'clearActionError' | 'reportActionError'
-  >;
+  > & Partial<Pick<ReturnType<typeof useSurfaceMutation>, 'actionError'>>;
 };
 
 export function useLifecycleActions({ read, lifecycleState, source, props, mutation }: Input) {
@@ -51,7 +51,7 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
   } = lifecycleState;
   const { workspaceIdsRef } = source;
   const { manager, t, viewReader } = props;
-  const { actionPending, setActionPending, runMutation, clearActionError, reportActionError } = mutation;
+  const { actionError, actionPending, setActionPending, runMutation, clearActionError, reportActionError } = mutation;
   const latestLifecycleTarget = (target: WorktreeRecord | undefined) =>
     target === undefined
       ? undefined
@@ -112,6 +112,7 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
   const refreshBranchAdoption = async (): Promise<void> => {
     const target = worktreeBranchAdoption;
     if (!manager || !target) return;
+    const previousReportId = typeof actionError === 'undefined' ? undefined : actionError?.reportId;
     const generation = branchAdoptionGuard.current.begin();
     const isCurrent = () => branchAdoptionGuard.current.isCurrent(generation);
     setActionPending(true);
@@ -124,6 +125,7 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       const view = await viewReader.read(target.workspaceId);
       if (!isCurrent()) return;
       if (!workspaceIdsRef.current.includes(target.workspaceId)) {
+        if (previousReportId) worktreeNotifications.resolve(previousReportId);
         setWorktreeBranchAdoption(undefined);
         clearActionError();
         return;
@@ -135,6 +137,7 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
           ? latest
           : undefined,
       );
+      if (previousReportId) worktreeNotifications.resolve(previousReportId);
       clearActionError();
     } catch (error) {
       if (isCurrent()) reportActionError(toWorktreeViewError(error));

@@ -31,6 +31,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<WorktreeViewError>();
   const [fetchError, setFetchError] = useState<WorktreeViewError>();
+  const readErrorRef = useRef<WorktreeViewError>();
+  const fetchErrorRef = useRef<WorktreeViewError>();
+  readErrorRef.current = readError;
+  fetchErrorRef.current = fetchError;
   const generation = useRef(0);
   const readRequest = useRef<{ source: readonly BranchRecord[]; generation: number; promise: Promise<void> }>();
   const latestSource = useRef(source);
@@ -60,7 +64,6 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     if (readRequest.current?.source === source && readRequest.current.generation === generation.current)
       return readRequest.current.promise;
     setReading(true);
-    setReadError(undefined);
     const token = generation.current;
     const request = { source, generation: token, promise: Promise.resolve() };
     readRequest.current = request;
@@ -68,7 +71,9 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       try {
         const next = await onLoad();
         if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
-          if (readError?.reportId) worktreeNotifications.resolve(readError.reportId);
+          if (readErrorRef.current?.reportId) worktreeNotifications.resolve(readErrorRef.current.reportId);
+          readErrorRef.current = undefined;
+          setReadError(undefined);
           setFetched({ source, branches: next });
         }
       } catch (error) {
@@ -76,7 +81,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
         const reported = worktreeNotifications.reportError(toWorktreeViewError(error), {
           origin: current ? 'inline' : 'retired', context: t('dashboard.searchBranches'),
         });
-        if (current) setReadError(reported);
+        if (current) {
+          readErrorRef.current = reported;
+          setReadError(reported);
+        }
       } finally {
         if (readRequest.current === request && generation.current === token) {
           readRequest.current = undefined;
@@ -97,8 +105,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       const next = await onFetch();
       if (alive.current && generation.current === token) {
         setFetched({ source, branches: next });
-        if (fetchError?.reportId) worktreeNotifications.resolve(fetchError.reportId);
-        if (readError?.reportId) worktreeNotifications.resolve(readError.reportId);
+        if (fetchErrorRef.current?.reportId) worktreeNotifications.resolve(fetchErrorRef.current.reportId);
+        if (readErrorRef.current?.reportId) worktreeNotifications.resolve(readErrorRef.current.reportId);
+        fetchErrorRef.current = undefined;
+        readErrorRef.current = undefined;
         setFetchError(undefined);
         setReadError(undefined);
         setStatus('success');
@@ -112,6 +122,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
         origin: current ? 'inline' : 'retired', context: t('branch.fetch'),
       });
       if (current) {
+        fetchErrorRef.current = reported;
         setFetchError(reported);
         setStatus('error');
       }

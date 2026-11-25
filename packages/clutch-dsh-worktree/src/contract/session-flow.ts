@@ -8,6 +8,7 @@ export interface WorktreeSessionCreationResult {
   readonly retryCreation?: boolean;
   readonly error?: string;
   readonly causeCode?: string;
+  readonly rootPath?: string;
   readonly state?: WorktreeSessionState;
 }
 export interface WorktreeSessionCreationRequest {

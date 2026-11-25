@@ -25,7 +25,7 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
   const report = (notice: WorktreeNotification): ReportId => {
     const reportId = { sequence: ++sequence };
     const key = keyOf(reportId);
-    const event = { ...notice, key, reportId, toastKey: notice.toastKey ?? key };
+    const event = { ...notice, key, reportId, toastKey: notice.toastKey ?? (notice.key || key) };
     post(() => {
       const announce = shouldAnnounce(event) && ![...pending.values()].some(item => item.toastKey === event.toastKey);
       diagnostics.record(key, [event], notice.origin === 'retired' ? 'inactive' : 'reported', announce);
@@ -56,7 +56,13 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
           if (reportId === undefined) return [];
           const key = keyOf(reportId);
           const queued = pending.get(key);
-          if (queued?.reportId === reportId) pending.set(key, { ...queued, text: notice.text, message: notice.message });
+          if (queued?.reportId === reportId) {
+            pending.set(key, {
+              ...queued,
+              text: notice.text || queued.text,
+              message: notice.message ?? queued.message,
+            });
+          }
           return { ...notice, reportId };
         });
         diagnostics.updateRecovery(source, records);
@@ -64,7 +70,11 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
       });
     },
     resolve(reportId: ReportId) {
-      post(() => diagnostics.resolve(reportId));
+      post(() => {
+        pending.delete(keyOf(reportId));
+        diagnostics.resolve(reportId);
+        updateHead();
+      });
     },
     deactivate(source: string) {
       post(() => diagnostics.deactivate(source));

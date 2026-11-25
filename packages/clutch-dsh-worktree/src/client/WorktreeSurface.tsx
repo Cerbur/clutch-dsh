@@ -196,7 +196,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     source.workspaceIds,
     targetView,
   ]);
-  const mutation = useSurfaceMutation({ read });
+  const mutation = useSurfaceMutation({ read, source });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
   const ordering = useSessionOrdering({ read, source, props });

@@ -618,6 +618,7 @@ for (const source of ['create', 'baseline-sync']) test(`${source} preserves a mi
     assert.equal(result.status, 'binding-failed');
     assert.equal(result.sessionId, 'child');
     assert.equal(result.causeCode, 'WORKSPACE_ROOT_MISSING');
+    assert.equal(result.rootPath, f.workspace);
   } else {
     const host = createWorktreeSessionCreation({ manager: f.manager, sessions, changed() {} });
     t.after(() => host.dispose());
@@ -632,6 +633,7 @@ for (const source of ['create', 'baseline-sync']) test(`${source} preserves a mi
       assert.equal(error.code, 'SESSION_BINDING_FAILED');
       assert.equal(error.details.sessionId, 'child');
       assert.equal(error.details.causeCode, 'WORKSPACE_ROOT_MISSING');
+      assert.equal(error.details.rootPath, f.workspace);
       assert.equal(shouldAnnounce({ key: 'binding', text: '', error }), false);
       return true;
     });

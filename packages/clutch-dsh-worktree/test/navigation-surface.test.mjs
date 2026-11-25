@@ -381,3 +381,168 @@ test('progressive surface, bounded reads, re-entry, additions and mutation race'
   assert.match(dom.window.document.body.textContent, /fast:replacement/);
   assert.doesNotMatch(dom.window.document.body.textContent, /fast:removed-owner/);
 });
+
+test('surface refresh, mutation, and native actions resolve retried failures and retire late failures quietly', async (t) => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  const compileHook = async (relativePath, extraModules) => {
+    const code = ts.transpileModule(await readFile(new URL(relativePath, import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    const out = {};
+    new Function('require', 'exports', code)((name) => {
+      assert.ok(extraModules[name], name);
+      return extraModules[name];
+    }, out);
+    return out;
+  };
+  const { useSurfaceMutation } = await compileHook('../src/client/surface/actions/useSurfaceMutation.tsx', {
+    react: React, '../../view/worktree-view.js': { ...readerModule, ...errors },
+    '../notification-center.js': notifications,
+  });
+  const { useNativeActions } = await compileHook('../src/client/surface/actions/useNativeActions.tsx', {
+    react: React, '../../view/worktree-view.js': { ...readerModule, ...errors },
+    '../notification-center.js': notifications,
+    '../shared.js': { toNativeWorktreeViewError: (error) => errors.toWorktreeViewError(error) },
+  });
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const before = { window: globalThis.window, document: globalThis.document, act: globalThis.IS_REACT_ACT_ENVIRONMENT };
+  globalThis.window = dom.window; globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const root = createRoot(dom.window.document.getElementById('root'));
+  let failRead = false;
+  let pendingRead;
+  const manager = {
+    readWorkspaceNavigation: () => {
+      if (pendingRead) return pendingRead.promise;
+      if (failRead) return Promise.reject({ code: 'GIT_OPERATION_FAILED', message: 'read failed', retryable: true });
+      return Promise.resolve(snapshot());
+    },
+  };
+  const reader = readerModule.createWorktreeViewReader(manager);
+  const modalLoader = readerModule.createWorktreeModalViewLoader(reader);
+  let mode = 'worktree';
+  let renameFail = true;
+  let pendingRename;
+  let modalError;
+  let refreshApi, mutationApi, nativeApi;
+  const workspaceIds = ['ws'];
+  const workspaceIdsRef = { current: workspaceIds };
+  const workspaces = { phase: 'ready', items: [{ workspaceId: 'ws', title: 'Alpha', path: '/alpha', sessionIds: [] }] };
+  const expandSnapshot = { collapsedWorkspaceIds: {} };
+  const forkRecoverySnapshot = { revision: 0 };
+  const sessionPresentations = {};
+  const registrationState = {
+    modalReadViewRef: { current: undefined },
+    setModalReadError: (value) => { modalError = value; },
+    setModalReadLoading() {},
+    setWorktreeModalWorkspaceId() {},
+    modalReadLoader: { current: modalLoader },
+  };
+  const props = { manager, viewReader: reader };
+  const nativeProps = {
+    renameWorkspace: () => {
+      if (pendingRename) return pendingRename.promise;
+      if (renameFail) return Promise.reject(new Error('rename failed'));
+      return Promise.resolve();
+    },
+  };
+  function Harness() {
+    const source = {
+      mode, workspaceIds, workspaceIdsRef, workspaces, expandSnapshot, forkRecoverySnapshot, sessionPresentations,
+    };
+    refreshApi = useSurfaceRefresh({ source, props, registrationState });
+    mutationApi = useSurfaceMutation({ read: refreshApi, source });
+    nativeApi = useNativeActions({ source, props: nativeProps, mutation: mutationApi });
+    return null;
+  }
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    reader.dispose();
+    notifications.worktreeNotifications.dispose();
+    dom.window.close();
+    globalThis.window = before.window; globalThis.document = before.document;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = before.act;
+  });
+
+  await React.act(async () => { root.render(React.createElement(Harness)); await tick(); });
+
+  // #11: resolveOnSuccess resolves actionError only on refresh success
+  let reportedAction;
+  await React.act(async () => {
+    reportedAction = mutationApi.reportActionError({ code: 'WORKTREE_STATE_CONFLICT', message: 'stale', retryable: true });
+    await tick();
+  });
+  failRead = true;
+  await React.act(async () => {
+    await refreshApi.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' }, resolveOnSuccess: reportedAction.reportId });
+    await tick();
+  });
+  assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === reportedAction.reportId).status, 'reported');
+  failRead = false;
+  await React.act(async () => {
+    await refreshApi.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' }, resolveOnSuccess: reportedAction.reportId });
+    await tick();
+  });
+  assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === reportedAction.reportId).status, 'resolved');
+
+  // #10: modal read failure resolves on retry, and invalidated modal read reports quietly as retired
+  failRead = true;
+  await React.act(async () => { refreshApi.loadModalWorktreeView('ws', { revalidate: true }); await tick(); });
+  const modalReportId = modalError.reportId;
+  assert.ok(modalReportId);
+  failRead = false;
+  await React.act(async () => { refreshApi.loadModalWorktreeView('ws', { revalidate: true }); await tick(); });
+  assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === modalReportId).status, 'resolved');
+  pendingRead = deferred();
+  await React.act(async () => { refreshApi.loadModalWorktreeView('ws', { revalidate: true }); await tick(); });
+  modalLoader.invalidate();
+  await React.act(async () => { pendingRead.reject(new Error('closed modal failure')); await tick(); });
+  pendingRead = undefined;
+  const retiredModal = worktreeDiagnostics.getSnapshot().find((entry) => entry.error?.message === 'closed modal failure');
+  assert.equal(retiredModal.status, 'inactive');
+
+  // #9: native rename failure resolves even after editing draft clears visible error
+  await React.act(async () => { nativeApi.openWorkspaceRename({ workspaceId: 'ws', title: 'Alpha', path: '/alpha', sessionIds: [], createdAt: '' }); });
+  await React.act(async () => { nativeApi.setWorkspaceRenameDraft('Beta'); });
+  await React.act(async () => { await nativeApi.confirmWorkspaceRename(); await tick(); });
+  const renameEntry = worktreeDiagnostics.getSnapshot().find((entry) => entry.error?.message === 'rename failed');
+  assert.equal(renameEntry.context, 'Alpha');
+  assert.equal(renameEntry.describe((key) => key), 'workspace.rename · Alpha');
+  await React.act(async () => { nativeApi.setWorkspaceRenameDraft('Gamma'); nativeApi.setWorkspaceRenameError(undefined); });
+  renameFail = false;
+  await React.act(async () => { await nativeApi.confirmWorkspaceRename(); await tick(); });
+  assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === renameEntry.reportId).status, 'resolved');
+
+  // #9, #10, #11: late failures after leaving Worktree mode report quietly as retired without toast
+  notifications.worktreeNotifications.dispose();
+  pendingRead = deferred();
+  pendingRename = deferred();
+  await React.act(async () => { nativeApi.openWorkspaceRename({ workspaceId: 'ws', title: 'Gamma', path: '/alpha', sessionIds: [], createdAt: '' }); });
+  await React.act(async () => { nativeApi.setWorkspaceRenameDraft('Delta'); });
+  let lateRefresh, lateMutation, lateRename;
+  let rejectMutation;
+  await React.act(async () => {
+    lateRefresh = refreshApi.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' } });
+    lateMutation = mutationApi.runMutation(() => new Promise((_, fail) => { rejectMutation = fail; }));
+    lateRename = nativeApi.confirmWorkspaceRename();
+    await tick();
+  });
+  mode = 'native';
+  await React.act(async () => { root.render(React.createElement(Harness)); await tick(); });
+  await React.act(async () => {
+    pendingRead.reject(new Error('late refresh fail'));
+    rejectMutation(new Error('late mutation fail'));
+    pendingRename.reject(new Error('late rename fail'));
+    await Promise.all([lateRefresh, lateMutation, lateRename]);
+    await tick();
+  });
+  const retiredMessages = worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.message, entry.status]);
+  assert.deepEqual(retiredMessages.sort(), [
+    ['late mutation fail', 'inactive'],
+    ['late refresh fail', 'inactive'],
+    ['late rename fail', 'inactive'],
+  ]);
+  assert.equal(notifications.worktreeNotifications.getSnapshot(), undefined);
+});

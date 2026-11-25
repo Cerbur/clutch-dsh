@@ -1524,6 +1524,65 @@ test('Git history retry resolves the original occurrence only after the target r
   worktreeNotifications.dispose();
 });
 
+test('Git controller reports retired target-switch failures, missing manager, and resolves pagination conflicts on refresh', async () => {
+  worktreeNotifications.dispose();
+  const unavailable = createWorktreeGitStateController({ manager: undefined, workspaceId: 'ws', worktreeId: 'main:ws' });
+  await unavailable.loadHistory();
+  await Promise.resolve();
+  assert.equal(worktreeDiagnostics.getSnapshot().length, 1);
+  assert.equal(worktreeDiagnostics.getSnapshot()[0].error.message, 'Git manager unavailable');
+  unavailable.dispose();
+
+  worktreeNotifications.dispose();
+  const commitA = 'a'.repeat(40);
+  const commitB = 'b'.repeat(40);
+  let rejectHistory;
+  let rejectPage;
+  let listCalls = 0;
+  const manager = {
+    listWorktreeCommits: (req) => {
+      listCalls += 1;
+      if (req.offset) return new Promise((_, fail) => { rejectPage = fail; });
+      if (listCalls === 1) return new Promise((_, fail) => { rejectHistory = fail; });
+      return Promise.resolve({
+        headCommit: commitA,
+        baseline: { commit: commitB, source: 'branch' },
+        commits: [{ sha: commitA, parents: [], subject: 'first', authorName: 'Test', authoredAt: '2026-09-14T00:00:00Z' }],
+        nextOffset: 50,
+        truncated: true,
+      });
+    },
+    listWorktreeCommitFiles: async () => ({ commit: commitA, files: [] }),
+  };
+  const controller = createWorktreeGitStateController({
+    manager, workspaceId: 'ws', worktreeId: 'wt', defaultBaselineBranch: 'main',
+  });
+  const switchedHistory = controller.loadHistory();
+  controller.selectBaselineBranch('release');
+  rejectHistory(new Error('old baseline failed'));
+  await switchedHistory;
+  await flush();
+  const retired = worktreeDiagnostics.getSnapshot().find((entry) => entry.error.message === 'old baseline failed');
+  assert.ok(retired, 'target-switch failure must be recorded in diagnostics');
+  assert.equal(retired.status, 'inactive');
+  assert.equal(worktreeNotifications.getSnapshot(), undefined, 'retired target-switch failure must not toast');
+
+  const pageTask = controller.loadMore();
+  rejectPage(Object.assign(new Error('HEAD moved'), { code: 'WORKTREE_STATE_CONFLICT' }));
+  await pageTask;
+  await flush();
+  const conflict = worktreeDiagnostics.getSnapshot().find((entry) => entry.error.code === 'WORKTREE_STATE_CONFLICT');
+  assert.ok(conflict);
+  assert.equal(conflict.status, 'reported');
+
+  await controller.refresh();
+  await flush();
+  assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === conflict.reportId).status, 'resolved',
+    'refreshing the same baseline must resolve its pagination conflict');
+  controller.dispose();
+  worktreeNotifications.dispose();
+});
+
 test('shares equivalent in-flight history, file, and diff reads', async () => {
   const commit = '3'.repeat(40);
   const parent = '2'.repeat(40);

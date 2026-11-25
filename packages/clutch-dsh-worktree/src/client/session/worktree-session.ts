@@ -334,11 +334,13 @@ export function createWorktreeSessionConnector(
           throw new WorktreeSessionActionError('WORKTREE_SESSION_ENTRY_NOT_STARTED', created.error ?? '', false, {
             workspaceId: input.workspaceId, sessionId: created.sessionId,
             ...(created.causeCode === undefined ? {} : { causeCode: created.causeCode }),
+            ...(created.rootPath === undefined ? {} : { rootPath: created.rootPath }),
           });
         }
         creationRequests.set(key, { requestId, sessionId: created.sessionId });
         if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, {
           message: created.error ?? '', code: created.causeCode,
+          ...(created.rootPath === undefined ? {} : { details: { rootPath: created.rootPath } }),
         });
         await prepareOpen(created.sessionId, created.state);
         if (!disposed) options.openSession(created.sessionId);

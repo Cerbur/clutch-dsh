@@ -17,7 +17,14 @@ import {
   type WorktreeGitHistoryRequest,
   type WorktreeRecord,
 } from '../contract/index.js';
-import type { GitBranchWorktreeInfo, GitChangedFileRead, GitCommitHistoryRead, GitWorktreeAdapter, GitWorktreeInfo } from '../provider/types.js';
+import type {
+  DshWorkspaceSummary,
+  GitBranchWorktreeInfo,
+  GitChangedFileRead,
+  GitCommitHistoryRead,
+  GitWorktreeAdapter,
+  GitWorktreeInfo,
+} from '../provider/types.js';
 import { providerError } from '../provider/types.js';
 import type { WorktreeManagerContext } from './manager-context.js';
 import { isDirectory, requireWorkspace, requireWorkspaceRoot, samePhysicalPath } from './manager-support.js';
@@ -82,11 +89,28 @@ function findChangedFile(
 }
 
 interface ResolvedWorktree {
+  readonly workspace: DshWorkspaceSummary;
   readonly workspaceRoot: string;
   /** Repository root resolved once per request and reused by baseline resolution. */
   readonly repositoryRoot: string;
   readonly record: WorktreeRecord;
   readonly live: GitWorktreeInfo;
+}
+
+async function rethrowWithWorkspaceRootCheck(
+  workspace: DshWorkspaceSummary,
+  error: unknown,
+): Promise<never> {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'WORKSPACE_ROOT_MISSING' || error.code === 'WORKSPACE_NOT_FOUND')
+  ) {
+    throw error;
+  }
+  await requireWorkspaceRoot(workspace);
+  throw error;
 }
 
 interface ResolvedBaseline {
@@ -141,34 +165,48 @@ async function resolveWorktree(
   context: WorktreeManagerContext,
   input: { readonly workspaceId: string; readonly worktreeId: string; readonly baseBranch?: string },
   compareMain = true,
-): Promise<{ readonly main: true; readonly workspaceRoot: string; readonly repositoryRoot: string; readonly headCommit?: string } | { readonly main: false; readonly value: ResolvedWorktree }> {
+): Promise<
+  | {
+      readonly main: true;
+      readonly workspace: DshWorkspaceSummary;
+      readonly workspaceRoot: string;
+      readonly repositoryRoot: string;
+      readonly headCommit?: string;
+    }
+  | { readonly main: false; readonly value: ResolvedWorktree }
+> {
   const workspace = await requireWorkspace(context, input.workspaceId);
   if (isMainWorktreeId(input.worktreeId, input.workspaceId)) {
-    // The imported Workspace can be nested, while committed Git paths are root-relative.
-    const repositoryRoot = context.git.resolveRepositoryRoot
-      ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
-      : workspace.rootPath;
-    if (compareMain && input.baseBranch !== undefined) {
-      // A request-local checkout context reuses comparison and path authorization.
-      // It is never read from or written to the sidecar.
-      const headCommit = await gitRead(context, 'resolveCommit', input.worktreeId)(
-        repositoryRoot, 'HEAD', { signal: context.signal },
-      );
-      return { main: false, value: {
-        workspaceRoot: workspace.rootPath,
-        repositoryRoot,
-        record: {
-          workspaceId: input.workspaceId, worktreeId: input.worktreeId,
-          absolutePath: workspace.rootPath, gitRootPath: repositoryRoot,
-          branch: 'HEAD', source: 'external', status: 'active',
-        },
-        live: { absolutePath: repositoryRoot, headCommit },
-      } };
+    try {
+      // The imported Workspace can be nested, while committed Git paths are root-relative.
+      const repositoryRoot = context.git.resolveRepositoryRoot
+        ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
+        : workspace.rootPath;
+      if (compareMain && input.baseBranch !== undefined) {
+        // A request-local checkout context reuses comparison and path authorization.
+        // It is never read from or written to the sidecar.
+        const headCommit = await gitRead(context, 'resolveCommit', input.worktreeId)(
+          repositoryRoot, 'HEAD', { signal: context.signal },
+        );
+        return { main: false, value: {
+          workspace,
+          workspaceRoot: workspace.rootPath,
+          repositoryRoot,
+          record: {
+            workspaceId: input.workspaceId, worktreeId: input.worktreeId,
+            absolutePath: workspace.rootPath, gitRootPath: repositoryRoot,
+            branch: 'HEAD', source: 'external', status: 'active',
+          },
+          live: { absolutePath: repositoryRoot, headCommit },
+        } };
+      }
+      const headCommit = compareMain && context.git.resolveCommit
+        ? await context.git.resolveCommit(repositoryRoot, 'HEAD', { signal: context.signal })
+        : undefined;
+      return { main: true, workspace, workspaceRoot: workspace.rootPath, repositoryRoot, headCommit };
+    } catch (error) {
+      return rethrowWithWorkspaceRootCheck(workspace, error);
     }
-    const headCommit = compareMain && context.git.resolveCommit
-      ? await context.git.resolveCommit(repositoryRoot, 'HEAD', { signal: context.signal })
-      : undefined;
-    return { main: true, workspaceRoot: workspace.rootPath, repositoryRoot, headCommit };
   }
 
   const snapshot = await context.sidecar.read(input.workspaceId);
@@ -205,31 +243,36 @@ async function resolveWorktree(
     });
   }
 
-  const repositoryRoot = context.git.resolveRepositoryRoot
-    ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
-    : workspace.rootPath;
-  const live = await findLiveWorktree(
-    await context.git.listWorktrees(repositoryRoot, { signal: context.signal }),
-    gitWorktreeRoot(record),
-  );
-  if (!live) {
-    throw providerError('WORKTREE_NOT_FOUND', `Git Worktree registration is unavailable: ${gitWorktreeRoot(record)}`, {
-      workspaceId: input.workspaceId,
-      worktreeId: input.worktreeId,
-      absolutePath: gitWorktreeRoot(record),
-    });
+  try {
+    const repositoryRoot = context.git.resolveRepositoryRoot
+      ? await context.git.resolveRepositoryRoot(workspace.rootPath, { signal: context.signal })
+      : workspace.rootPath;
+    const live = await findLiveWorktree(
+      await context.git.listWorktrees(repositoryRoot, { signal: context.signal }),
+      gitWorktreeRoot(record),
+    );
+    if (!live) {
+      throw providerError('WORKTREE_NOT_FOUND', `Git Worktree registration is unavailable: ${gitWorktreeRoot(record)}`, {
+        workspaceId: input.workspaceId,
+        worktreeId: input.worktreeId,
+        absolutePath: gitWorktreeRoot(record),
+      });
+    }
+    return {
+      main: false,
+      value: {
+        workspace,
+        workspaceRoot: workspace.rootPath,
+        repositoryRoot,
+        record,
+        live: live.headCommit === undefined && context.git.resolveCommit
+          ? { ...live, headCommit: await context.git.resolveCommit(gitWorktreeRoot(record), 'HEAD', { signal: context.signal }) }
+          : live,
+      },
+    };
+  } catch (error) {
+    return rethrowWithWorkspaceRootCheck(workspace, error);
   }
-  return {
-    main: false,
-    value: {
-      workspaceRoot: workspace.rootPath,
-      repositoryRoot,
-      record,
-      live: live.headCommit === undefined && context.git.resolveCommit
-        ? { ...live, headCommit: await context.git.resolveCommit(gitWorktreeRoot(record), 'HEAD', { signal: context.signal }) }
-        : live,
-    },
-  };
 }
 
 /**
@@ -742,58 +785,63 @@ export async function listWorktreeCommits(
     }
   };
   const resolved = await resolveWorktree(context, input);
-  if (resolved.main) {
-    const history = await listMainCommits(context, resolved.repositoryRoot, input.worktreeId, offset);
-    checkProjection(history.headCommit);
+  const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
+  try {
+    if (resolved.main) {
+      const history = await listMainCommits(context, resolved.repositoryRoot, input.worktreeId, offset);
+      checkProjection(history.headCommit);
+      return {
+        ...(history.nextOffset === undefined ? {} : { nextOffset: history.nextOffset }),
+        headCommit: history.headCommit,
+        commits: history.commits,
+        truncated: history.truncated,
+      };
+    }
+    const baseline = await resolveBaseline(context, resolved.value, input.baseBranch);
+    if (baseline === undefined) {
+      const selectedBranch = input.baseBranch ?? resolved.value.record.baseBranch;
+      return unavailableHistory(
+        selectedBranch === undefined || selectedBranch.trim().length === 0
+          ? 'baseline-unselected'
+          : 'baseline-unknown',
+      );
+    }
+    if (offset > 0 && input.expectedBaselineCommit === undefined) {
+      throw providerError('WORKTREE_STATE_CONFLICT', 'A comparison page requires its baseline commit', {
+        worktreeId: input.worktreeId,
+      });
+    }
+    const listCommits = gitRead(context, 'listCommits', input.worktreeId);
+    // The working-tree entry only needs the changed-path projection here; its file
+    // list and line counts are read on demand when the entry is selected.
+    const readWorkingTreePaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
+      ?? gitReadOptional(context, 'listWorkingTreeFiles');
+    const [history, workingTreeFiles] = await Promise.all([
+      listCommits(
+        gitWorktreeRoot(resolved.value.record),
+        baseline.baseHeadCommit,
+        { signal: context.signal, offset },
+      ),
+      offset > 0 || readWorkingTreePaths === undefined
+        ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
+        : readWorkingTreePaths(
+            gitWorktreeRoot(resolved.value.record),
+            { signal: context.signal },
+          ),
+    ]);
+    checkProjection(history.headCommit, baseline.baseline.commit);
+    const divergence = await readCommitDivergence(context, resolved.value, baseline, history.headCommit);
     return {
-      ...(history.nextOffset === undefined ? {} : { nextOffset: history.nextOffset }),
-      headCommit: history.headCommit,
-      commits: history.commits,
-      truncated: history.truncated,
+      ...history,
+      ...(divergence ?? {}),
+      commits: workingTreeFiles.files.length > 0
+        ? [workingTreeCommit(history.headCommit), ...history.commits]
+        : history.commits,
+      baseline: baseline.baseline,
     };
+  } catch (error) {
+    return rethrowWithWorkspaceRootCheck(workspace, error);
   }
-  const baseline = await resolveBaseline(context, resolved.value, input.baseBranch);
-  if (baseline === undefined) {
-    const selectedBranch = input.baseBranch ?? resolved.value.record.baseBranch;
-    return unavailableHistory(
-      selectedBranch === undefined || selectedBranch.trim().length === 0
-        ? 'baseline-unselected'
-        : 'baseline-unknown',
-    );
-  }
-  if (offset > 0 && input.expectedBaselineCommit === undefined) {
-    throw providerError('WORKTREE_STATE_CONFLICT', 'A comparison page requires its baseline commit', {
-      worktreeId: input.worktreeId,
-    });
-  }
-  const listCommits = gitRead(context, 'listCommits', input.worktreeId);
-  // The working-tree entry only needs the changed-path projection here; its file
-  // list and line counts are read on demand when the entry is selected.
-  const readWorkingTreePaths = gitReadOptional(context, 'listWorkingTreeChangedPaths')
-    ?? gitReadOptional(context, 'listWorkingTreeFiles');
-  const [history, workingTreeFiles] = await Promise.all([
-    listCommits(
-      gitWorktreeRoot(resolved.value.record),
-      baseline.baseHeadCommit,
-      { signal: context.signal, offset },
-    ),
-    offset > 0 || readWorkingTreePaths === undefined
-      ? Promise.resolve({ files: [] as readonly WorktreeGitChangedFile[], truncated: false })
-      : readWorkingTreePaths(
-          gitWorktreeRoot(resolved.value.record),
-          { signal: context.signal },
-        ),
-  ]);
-  checkProjection(history.headCommit, baseline.baseline.commit);
-  const divergence = await readCommitDivergence(context, resolved.value, baseline, history.headCommit);
-  return {
-    ...history,
-    ...(divergence ?? {}),
-    commits: workingTreeFiles.files.length > 0
-      ? [workingTreeCommit(history.headCommit), ...history.commits]
-      : history.commits,
-    baseline: baseline.baseline,
-  };
 }
 
 type RequestedDiff =
@@ -1405,10 +1453,15 @@ async function getCheckoutCommitFileDiff(
 }
 
 async function pathsFor(resolved: Awaited<ReturnType<typeof resolveWorktree>>) {
-  if (resolved.main) return workspaceGitPaths(resolved.repositoryRoot, resolved.workspaceRoot);
-  const { record, workspaceRoot, repositoryRoot } = resolved.value;
-  const projected = await projectWorktreePath(record, workspaceRoot, repositoryRoot);
-  return workspaceGitPaths(gitWorktreeRoot(projected), projected.absolutePath);
+  const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
+  try {
+    if (resolved.main) return await workspaceGitPaths(resolved.repositoryRoot, resolved.workspaceRoot);
+    const { record, workspaceRoot, repositoryRoot } = resolved.value;
+    const projected = await projectWorktreePath(record, workspaceRoot, repositoryRoot);
+    return await workspaceGitPaths(gitWorktreeRoot(projected), projected.absolutePath);
+  } catch (error) {
+    return rethrowWithWorkspaceRootCheck(workspace, error);
+  }
 }
 
 /** Reject a projection if checkout HEAD moved during authorization or file reads. */
@@ -1432,10 +1485,15 @@ export async function listWorktreeCommitFiles(
   input: WorktreeGitCommitFilesRequest,
 ): Promise<WorktreeGitCommitFiles> {
   const resolved = await resolveWorktree(context, input);
-  const paths = await pathsFor(resolved);
-  const read = await listCheckoutCommitFiles(context, input, resolved);
-  await assertCheckoutHead(context, resolved, input.worktreeId);
-  return paths.projectFiles(read);
+  const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
+  try {
+    const paths = await pathsFor(resolved);
+    const read = await listCheckoutCommitFiles(context, input, resolved);
+    await assertCheckoutHead(context, resolved, input.worktreeId);
+    return paths.projectFiles(read);
+  } catch (error) {
+    return rethrowWithWorkspaceRootCheck(workspace, error);
+  }
 }
 
 /** Translate exactly once, then keep the existing changed-file authorization in checkout coordinates. */
@@ -1444,8 +1502,13 @@ export async function getWorktreeCommitFileDiff(
   input: WorktreeGitFileDiffRequest,
 ): Promise<WorktreeGitFileDiff> {
   const resolved = await resolveWorktree(context, input);
-  const paths = await pathsFor(resolved);
-  const diff = await getCheckoutCommitFileDiff(context, { ...input, path: paths.toCheckout(input.path) }, resolved);
-  await assertCheckoutHead(context, resolved, input.worktreeId);
-  return { ...diff, path: input.path };
+  const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
+  try {
+    const paths = await pathsFor(resolved);
+    const diff = await getCheckoutCommitFileDiff(context, { ...input, path: paths.toCheckout(input.path) }, resolved);
+    await assertCheckoutHead(context, resolved, input.worktreeId);
+    return { ...diff, path: input.path };
+  } catch (error) {
+    return rethrowWithWorkspaceRootCheck(workspace, error);
+  }
 }

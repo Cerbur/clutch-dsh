@@ -790,3 +790,42 @@ test('empty results and disabled selection cannot commit, Escape calls the owner
   search(node).props.onKeyDown(key('Escape'));
   assert.equal(closed, 1);
 });
+
+test('branch read retry keeps the original diagnostic active while loading and resolves it on success', async () => {
+  const h = harness();
+  let settle;
+  let calls = 0;
+  const props = {
+    t: (name) => en[name],
+    value: 'main',
+    branches: [],
+    onChange() {},
+    onLoad: () => {
+      calls++;
+      return new Promise((resolve, reject) => { settle = { resolve, reject }; });
+    },
+  };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  render();
+  assert.equal(calls, 1);
+  settle.reject(Object.assign(new Error('branch read failed'), { code: 'GIT_OPERATION_FAILED' }));
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot().length, 1);
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'active');
+  const retry = h.diagnostics.getSnapshot()[0].actions[0].onClick;
+  retry();
+  render();
+  await Promise.resolve();
+  assert.equal(calls, 2);
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'active', 'starting retry must keep diagnostic active');
+  assert.equal(h.diagnostics.getSnapshot()[0].actions[0].disabled, true);
+  settle.resolve([{ name: 'main', isCurrent: true }]);
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'resolved');
+  assert.deepEqual(h.diagnostics.getSnapshot()[0].actions, []);
+  h.dispose();
+});

@@ -80,8 +80,14 @@ export function ErrorRecovery({
     <NotificationRecovery
       notices={
         text === undefined ? [] : [{
-          key: JSON.stringify([scope, error?.code, error?.details]), text, error, context, actions, describe,
-          origin, toastKey: failureToastKey(error!),
+          key: JSON.stringify([scope, error?.code, error?.details]),
+          text,
+          error,
+          toastKey: failureToastKey(error!),
+          ...(context !== undefined ? { context } : {}),
+          ...(actions !== undefined ? { actions } : {}),
+          ...(describe !== undefined ? { describe } : {}),
+          ...(origin !== undefined ? { origin } : {}),
         }]
       }
     />

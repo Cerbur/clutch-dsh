@@ -608,6 +608,7 @@ for (const causeCode of ['WORKSPACE_ROOT_MISSING', 'WORKTREE_NOT_FOUND']) {
     const harness = renderHarness(async () => true, { diagnostics });
     let node = harness.render({ record: { ...record, baseBranch: 'main' }, onSyncBaseline: async () => ({
       sessionId: 'kept', status: 'binding-failed', error: 'same failure', causeCode,
+      ...(causeCode === 'WORKSPACE_ROOT_MISSING' ? { rootPath: '/missing/root' } : {}),
     }) });
     findAll(node, item => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
     node = harness.render();
@@ -617,6 +618,7 @@ for (const causeCode of ['WORKSPACE_ROOT_MISSING', 'WORKTREE_NOT_FOUND']) {
     await tick();
     const [entry] = diagnostics.getSnapshot();
     assert.equal(entry.error.details.causeCode, causeCode);
+    if (causeCode === 'WORKSPACE_ROOT_MISSING') assert.equal(entry.error.details.rootPath, '/missing/root');
     assert.equal(entry.error.details.sessionId, 'kept');
     assert.equal(entry.actions.length, 1);
     assert.equal(Boolean(harness.center.getSnapshot()), causeCode === 'WORKTREE_NOT_FOUND');
@@ -2480,5 +2482,29 @@ test('compact Dashboard gates sync on fresh behind evidence and expands the requ
   assert.equal(calls[0][0], 'rebase');
   assert.equal(calls[0][1], 'main');
   assert.deepEqual(calls.at(-1), ['open', 'task']);
+  harness.dispose();
+});
+
+test('copy failure state resets across record changes and uses consistent path context', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  let clipboardOk = false;
+  const harness = renderHarness(async () => clipboardOk, { diagnostics });
+  const firstRecord = { ...record, worktreeId: 'wt-1', branch: 'feat/one', absolutePath: '/repo/one' };
+  const secondRecord = { ...record, worktreeId: 'wt-2', branch: 'feat/two', absolutePath: '/repo/two' };
+  let node = harness.render({ record: firstRecord, workspaceTitle: 'Repo' });
+  findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+  await tick();
+  harness.render({ record: firstRecord, workspaceTitle: 'Repo' });
+  await tick();
+  const [firstEntry] = diagnostics.getSnapshot();
+  assert.equal(firstEntry.context, 'Repo · /repo/one');
+  assert.equal(firstEntry.status, 'active');
+
+  clipboardOk = true;
+  node = harness.render({ record: secondRecord, workspaceTitle: 'Repo' });
+  findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+  await tick();
+  assert.notEqual(diagnostics.getSnapshot()[0].status, 'resolved',
+    'copying a different Worktree path must not resolve the previous Worktree copy failure');
   harness.dispose();
 });

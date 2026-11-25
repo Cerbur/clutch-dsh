@@ -161,6 +161,9 @@ test('replacing a failed save preserves its history and resolves only the succes
   await settle();
   await render();
   assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['reported', 'resolved']);
+  button(await render(), 'Edit').onClick();
+  const reopened = await render();
+  assert.deepEqual(nodes(reopened).find(item => item.type === 'toasts')?.props.notices ?? [], []);
   h.dispose();
 });
 

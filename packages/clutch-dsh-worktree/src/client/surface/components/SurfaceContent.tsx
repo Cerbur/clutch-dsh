@@ -208,6 +208,7 @@ export function SurfaceContent({
               userRequested: true, scope: typeof workspaceId === 'string'
                 ? { kind: 'workspace', workspaceId } : { kind: 'global' },
               preserveCurrent: true,
+              ...(error.reportId ? { resolveOnSuccess: error.reportId } : {}),
             });
           },
         }] : []),
@@ -247,6 +248,7 @@ export function SurfaceContent({
     notices.push({
       key: 'workspace-root:' + workspaceId, error, text: formatWorktreeViewError(error, t),
       context: t('settings.read') + ' · ' + workspaceLabel(workspaceId),
+      actions: [retryRead([workspaceId])],
     });
   }
   for (const [workspaceId, error] of Object.entries(readState.targetErrors ?? {})) {

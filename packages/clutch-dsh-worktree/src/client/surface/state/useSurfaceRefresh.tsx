@@ -2,6 +2,7 @@ import { worktreeNotifications } from '../notification-center.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { WorktreeSessionActionError } from '../../session/worktree-session.js';
+import type { ReportId } from '../../view/worktree-view-errors.js';
 import {
   createWorktreeRefreshGuard,
   mergeWorktreeView,
@@ -95,6 +96,21 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     userRequested: boolean;
   }>());
   const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
+  const alive = useRef(true);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const modalReadReportRef = useRef<{ readonly workspaceId: string; readonly reportId: ReportId }>();
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      refreshGuard.current.invalidate();
+      for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
+      targetReads.current.clear();
+      modalReadLoader.current.invalidate();
+      modalReadReportRef.current = undefined;
+    };
+  }, [modalReadLoader]);
   const guardFor = (workspaceId: string) => {
     const current = targetRefreshGuards.current.get(workspaceId);
     if (current !== undefined) return current;
@@ -127,13 +143,13 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         refreshGuard.current.invalidate();
         for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
         targetReads.current.clear();
-        setReadState(EMPTY_READ_STATE);
+        if (alive.current) setReadState(EMPTY_READ_STATE);
         return;
       }
       const scope = options.scope ?? { kind: 'global' as const };
       const currentWorkspaceIds = workspaceIdsRef.current;
       // Publish each completed Workspace; the shared reader bounds RPC fan-out.
-      if (scope.kind === 'global') setReadState((current) => ({ ...current, status: 'ready' }));
+      if (scope.kind === 'global' && alive.current) setReadState((current) => ({ ...current, status: 'ready' }));
       const requestedWorkspaceIds = scope.kind === 'global' ? priorityIdsRef.current
         : scope.kind === 'workspace' ? [scope.workspaceId] : scope.workspaceIds;
       const selectedWorkspaceIds = [...new Set(requestedWorkspaceIds)].filter((workspaceId) =>
@@ -145,7 +161,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       }
 
       const results = await Promise.allSettled(
-        selectedWorkspaceIds.map(async (workspaceId) => {
+        selectedWorkspaceIds.map(async (workspaceId): Promise<boolean> => {
           const guard = guardFor(workspaceId);
           if (!options.alreadyInvalidated && !options.ensureLoaded) {
             const reuseFresh = options.reuseCachedWithinMs !== undefined &&
@@ -195,9 +211,10 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
                 binding.worktreeId === opening.worktreeId && binding.status === 'active'))) {
               throw new WorktreeSessionActionError('WORKTREE_SESSION_REPAIR_REQUIRED', 'binding projection not ready', true);
             }
-            if (!guard.isCurrent(request.generation)) return;
-            if (targetRefreshGuards.current.get(workspaceId) !== guard) return;
-            if (!workspaceIdsRef.current.includes(workspaceId)) return;
+            if (!alive.current || modeRef.current !== 'worktree') return false;
+            if (!guard.isCurrent(request.generation)) return false;
+            if (targetRefreshGuards.current.get(workspaceId) !== guard) return false;
+            if (!workspaceIdsRef.current.includes(workspaceId)) return false;
             // flushSync may run membership effects before this request's finally.
             // The authoritative result is settled before publishing its ready view.
             request.pending = false;
@@ -214,11 +231,22 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
             // destination first so that the newly current blank row cannot enter Local.
             if (options.openingSession) flushSync(publish);
             else publish();
+            return true;
           } catch (error) {
             if (options.openingSession) throw error;
-            if (!guard.isCurrent(request.generation)) return;
-            if (targetRefreshGuards.current.get(workspaceId) !== guard) return;
-            if (!workspaceIdsRef.current.includes(workspaceId)) return;
+            const active =
+              alive.current &&
+              modeRef.current === 'worktree' &&
+              guard.isCurrent(request.generation) &&
+              targetRefreshGuards.current.get(workspaceId) === guard &&
+              workspaceIdsRef.current.includes(workspaceId);
+            if (!active) {
+              worktreeNotifications.reportError(toWorktreeViewError(error), {
+                origin: 'retired',
+                context: workspaceId,
+              });
+              return false;
+            }
             const showingCachedView = !request.userRequested && readStateRef.current.views.some(view => view.workspaceId === workspaceId);
             const failure = worktreeNotifications.reportError(toWorktreeViewError(error), {
               origin: showingCachedView ? 'cached-refresh' : undefined, context: workspaceId,
@@ -234,6 +262,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
                 },
               };
             });
+            return false;
           } finally {
             request.pending = false;
             // Context follows its own identity and generation. Never hold a ready
@@ -245,6 +274,13 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       if (options.openingSession) {
         const failed = results.find((result) => result.status === 'rejected');
         if (failed?.status === 'rejected') throw failed.reason;
+      }
+      if (
+        options.resolveOnSuccess &&
+        results.length > 0 &&
+        results.every((result) => result.status === 'fulfilled' && result.value === true)
+      ) {
+        worktreeNotifications.resolve(options.resolveOnSuccess);
       }
     },
     [invalidateWorktreeContext, manager, viewReader],
@@ -265,15 +301,23 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       setModalReadLoading(true);
       if (manager === undefined) {
         setModalReadLoading(false);
-        setModalReadError(worktreeNotifications.reportError({
+        const failure = worktreeNotifications.reportError({
           code: 'WORKTREE_VIEW_UNAVAILABLE', message: '', retryable: true,
-        }, { context: workspaceId }));
+        }, { context: workspaceId });
+        modalReadReportRef.current = { workspaceId, reportId: failure.reportId };
+        setModalReadError(failure);
         return;
       }
       const sessionIds = workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [];
       void modalReadLoader.current.load(
         workspaceId,
         (data) => {
+          if (!alive.current || modeRef.current !== 'worktree') return;
+          const previousReport = modalReadReportRef.current;
+          if (previousReport?.workspaceId === workspaceId) {
+            worktreeNotifications.resolve(previousReport.reportId);
+            modalReadReportRef.current = undefined;
+          }
           const view = data.knownSessionIds === undefined ? { ...data, knownSessionIds: sessionIds } : data;
           modalReadViewRef.current = view;
           setModalReadLoading(false);
@@ -283,8 +327,21 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           }));
         },
         (error) => {
+          const active = alive.current && modeRef.current === 'worktree';
+          const failure = worktreeNotifications.reportError(toWorktreeViewError(error), {
+            ...(active ? {} : { origin: 'retired' }),
+            context: workspaceId,
+          });
+          if (!active) return;
+          modalReadReportRef.current = { workspaceId, reportId: failure.reportId };
           setModalReadLoading(false);
-          setModalReadError(worktreeNotifications.reportError(toWorktreeViewError(error), { context: workspaceId }));
+          setModalReadError(failure);
+        },
+        (error) => {
+          worktreeNotifications.reportError(toWorktreeViewError(error), {
+            origin: 'retired',
+            context: workspaceId,
+          });
         },
       );
     },
@@ -341,6 +398,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
       targetReads.current.clear();
       modalReadLoader.current.invalidate();
+      modalReadReportRef.current = undefined;
       modalReadViewRef.current = undefined;
       setWorktreeModalWorkspaceId(undefined);
       setModalReadError(undefined);

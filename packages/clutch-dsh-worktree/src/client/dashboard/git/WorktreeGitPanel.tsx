@@ -202,7 +202,7 @@ export function WorktreeGitPanel({
               origin: showingCachedView ? 'cached-refresh' : undefined,
               context: context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · '),
               describe: (translate) => translate('settings.git', {
-                operation: translate(scope === 'history' ? 'dashboard.git.commits'
+                operation: translate(scope === 'history' || scope === 'pagination' ? 'dashboard.git.commits'
                   : scope === 'files' ? 'dashboard.git.changedFiles' : 'dashboard.git.diff'),
               }) + ' · ' + (context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · ')),
               text,

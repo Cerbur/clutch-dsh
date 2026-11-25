@@ -39,11 +39,22 @@ export function createWorktreeDiagnostics() {
     const latestOwners = [...owners].reverse();
     snapshot = snapshot.map(entry => {
       if (!originals.has(entry.reportId) || !affected.has(entry.reportId)) return entry;
+      const base = originals.get(entry.reportId) ?? entry;
       // The sidebar and a dialog can both offer recovery for the same occurrence.
       for (const [owner, records] of latestOwners) {
         const notice = records.get(entry.reportId);
         if (!notice) continue;
-        return { ...entry, ...notice, error: entry.error, source: owner, status: 'active',
+        return {
+          ...base,
+          text: notice.text || base.text,
+          ...(notice.toastKey !== undefined ? { toastKey: notice.toastKey } : {}),
+          ...(notice.origin !== undefined ? { origin: notice.origin } : {}),
+          ...(notice.failures !== undefined ? { failures: notice.failures } : {}),
+          ...(notice.context !== undefined ? { context: notice.context } : {}),
+          ...(notice.describe !== undefined ? { describe: notice.describe } : {}),
+          ...(notice.message !== undefined ? { message: notice.message } : {}),
+          source: owner,
+          status: 'active',
           actions: (notice.actions ?? []).map(action => ({
             ...action, onClick: () => {
               const live = owners.get(owner)?.get(entry.reportId)?.actions?.find(item => item.label === action.label);
@@ -58,6 +69,8 @@ export function createWorktreeDiagnostics() {
   };
   return {
     getSnapshot: () => snapshot,
+    canClearHistory: () => snapshot.some(entry => entry.status !== 'active' && !announced.has(entry.reportId)),
+    hasPendingToast: () => announced.size > 0,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
@@ -83,6 +96,7 @@ export function createWorktreeDiagnostics() {
       setRecovery(source, [], 'inactive');
     },
     resolve(reportId: ReportId) {
+      announced.delete(reportId);
       if (!originals.delete(reportId)) return;
       for (const records of owners.values()) records.delete(reportId);
       snapshot = snapshot.map(entry => entry.reportId === reportId ? { ...entry, status: 'resolved', actions: [] } : entry);

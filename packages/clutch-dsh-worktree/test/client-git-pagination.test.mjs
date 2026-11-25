@@ -18,7 +18,7 @@ import * as queue from '../lib/client/surface/notification-queue.js';
 import * as center from '../lib/client/surface/notification-center.js';
 import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
-import { createWorktreeViewReader } from '../lib/client/view/worktree-view-read.js';
+import { createWorktreeViewReader, loadWorktreeView } from '../lib/client/view/worktree-view-read.js';
 import { readWorkspaceNavigation } from '../lib/manage/manager-navigation.js';
 import { listWorktreeCommits, listWorktreeCommitFiles } from '../lib/manage/manager-git-history.js';
 import { LocalGitAdapter } from '../lib/provider/git/adapter.js';
@@ -112,11 +112,14 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
   for (const refresh of [false, true]) {
     const view = await renderNotices(refresh);
     assert.equal(view.readiness.status, 'workspaceMissing');
+    assert.equal(reader.isFresh(workspaceId, 30_000), false, 'workspaceMissing must never be treated as fresh cache');
     assert.deepEqual(view.worktrees.map((item) => item.worktreeId), [worktreeId]);
     assert.equal(dom.window.document.querySelector('output')?.textContent, undefined, 'missing Workspace must stay silent');
     const entries = diagnostics.worktreeDiagnostics.getSnapshot().filter((entry) => entry.status === 'active');
-    assert.ok(entries.some((entry) => entry.error?.code === 'WORKSPACE_ROOT_MISSING' &&
-      entry.error.details.rootPath === rootPath && entry.context.includes(rootPath)));
+    const missingEntry = entries.find((entry) => entry.error?.code === 'WORKSPACE_ROOT_MISSING' &&
+      entry.error.details.rootPath === rootPath && entry.context.includes(rootPath));
+    assert.ok(missingEntry);
+    assert.equal(missingEntry.actions[0]?.label, en['action.retry']);
   }
   await mkdir(rootPath);
   const git = (args) => execFileSync('git', args, { cwd: rootPath, timeout: 10_000, maxBuffer: 1024 * 1024 });
@@ -147,7 +150,39 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
   assert.equal(controller.getSnapshot().history.error.code, 'WORKTREE_NOT_FOUND');
   assert.equal(dom.window.document.querySelector('output')?.textContent, en['error.worktreeNotFound'] + ' ' + en['settings.toastHint']);
   assert.ok(!diagnostics.worktreeDiagnostics.getSnapshot().some((entry) =>
-    entry.status === 'active' && entry.error?.code === 'WORKSPACE_ROOT_MISSING'));
+    entry.status !== 'resolved' && entry.error?.code === 'WORKSPACE_ROOT_MISSING'),
+    'recovery must resolve every prior WORKSPACE_ROOT_MISSING occurrence');
+});
+
+test('loadWorktreeView is pure and stale reader workspaceMissing reports quietly as retired', async () => {
+  center.worktreeNotifications.dispose();
+  let resolveNav;
+  const missingError = { code: 'WORKSPACE_ROOT_MISSING', message: 'missing', retryable: false, details: { rootPath: '/gone' } };
+  const manager = {
+    readWorkspaceNavigation: async () => ({
+      worktrees: [], bindings: [], mainInstructions: '',
+      gitState: { ok: false, error: missingError },
+    }),
+  };
+  const pure = await loadWorktreeView(manager, 'ws-pure');
+  await Promise.resolve();
+  assert.equal(pure.readiness.status, 'workspaceMissing');
+  assert.equal(pure.readiness.error.reportId, undefined);
+  assert.deepEqual(diagnostics.worktreeDiagnostics.getSnapshot(), []);
+
+  const reader = createWorktreeViewReader({
+    readWorkspaceNavigation: () => new Promise((resolve) => { resolveNav = resolve; }),
+  });
+  const pending = reader.read('ws-stale');
+  reader.dispose();
+  resolveNav({ worktrees: [], bindings: [], mainInstructions: '', gitState: { ok: false, error: missingError } });
+  await pending;
+  await Promise.resolve();
+  const [entry] = diagnostics.worktreeDiagnostics.getSnapshot();
+  assert.equal(entry.status, 'inactive');
+  assert.equal(entry.error.code, 'WORKSPACE_ROOT_MISSING');
+  assert.equal(center.worktreeNotifications.getSnapshot(), undefined);
+  center.worktreeNotifications.dispose();
 });
 
 test('native Changes entry stays available without Git history and explains the independent baseline', async () => {
@@ -261,6 +296,10 @@ test('pagination conflicts turn the load-more button into a refresh action', asy
   button.props.onClick();
   assert.equal(refreshes, 1);
   assert.equal(pages, 0);
+  const recoveryNotices = nodes(Panel({ workspaceId: 'ws', worktreeId: 'main:ws', t }))
+    .find((node) => node.props?.notices !== undefined).props.notices;
+  assert.ok(recoveryNotices[0].describe(t).includes(en['dashboard.git.commits']),
+    'pagination diagnostics must describe the Commits operation, not Diff');
 });
 
 test('Local hides totals with None and both comparison views display the complete diff count', async () => {

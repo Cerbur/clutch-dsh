@@ -1,5 +1,5 @@
 import { worktreeNotifications } from '../notification-center.js';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { openWorktreeSession } from '../../view/navigation.js';
 import { retryWorktreeSessionBinding } from '../../session/worktree-session.js';
 import {
@@ -38,6 +38,11 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
   } = props;
   const { clearActionError, reportActionError, setActionPending } = mutation;
   const { refresh } = read;
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
   const [pendingSessionBinding, setPendingSessionBinding] = useState<PendingSessionBinding>();
   const [forkRetryKey, setForkRetryKey] = useState<string>();
   const pendingSessionArchived =
@@ -64,11 +69,11 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
       }));
     } catch (error) {
       const failure = reportActionError(toWorktreeViewError(error));
-      if (error instanceof WorktreeSessionBindingError) {
+      if (error instanceof WorktreeSessionBindingError && alive.current) {
         setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: failure });
       }
     } finally {
-      setActionPending(false);
+      if (alive.current) setActionPending(false);
     }
   };
   const retrySessionBinding = async (): Promise<void> => {
@@ -94,12 +99,12 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
         }),
       });
       if (pending.error?.reportId) worktreeNotifications.resolve(pending.error.reportId);
-      setPendingSessionBinding(undefined);
+      if (alive.current) setPendingSessionBinding(undefined);
     } catch (error) {
       const failure = reportActionError(toWorktreeViewError(error));
-      setPendingSessionBinding({ ...pending, error: failure });
+      if (alive.current) setPendingSessionBinding({ ...pending, error: failure });
     } finally {
-      setActionPending(false);
+      if (alive.current) setActionPending(false);
     }
   };
   const retryForkBinding = async (key: string): Promise<void> => {
@@ -110,7 +115,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     } catch (error) {
       reportActionError(toNativeWorktreeViewError(error));
     } finally {
-      setForkRetryKey(undefined);
+      if (alive.current) setForkRetryKey(undefined);
     }
   };
   const openWorkspaceSession = (workspaceId: string, sessionId: string): void => {

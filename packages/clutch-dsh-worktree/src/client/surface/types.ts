@@ -35,6 +35,7 @@ import type { WorktreeViewReader } from '../view/worktree-view-read.js';
 import type { WorkspaceSeat } from '../view/sidebar-workspace-slot.js';
 import type { NativeChangesResult } from '../dashboard/git/native-changes-navigation.js';
 import type { ConfirmNativeForge } from '../dashboard/git/native-forge-activation.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 import type {
   CreateSessionForWorktreeInput,
   WorktreeGitReadiness,
@@ -180,6 +181,8 @@ export interface RefreshOptions {
   readonly reuseCachedWithinMs?: number;
   readonly invalidateContext?: boolean;
   readonly scope?: WorktreeRefreshScope;
+  /** Resolve an earlier action failure once every selected Workspace refresh succeeds. */
+  readonly resolveOnSuccess?: ReportId;
 }
 
 export interface PendingSessionBinding extends CreateSessionForWorktreeInput {

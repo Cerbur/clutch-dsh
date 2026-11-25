@@ -4,7 +4,7 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../../contract/index.js';
 import type { WorktreeNotification } from '../surface/notification-queue.js';
 import type { WorktreeTranslate } from '../surface/types.js';
-import type { WorktreeViewError } from '../view/worktree-view-errors.js';
+import type { ReportId, WorktreeViewError } from '../view/worktree-view-errors.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
 import { IconBranchOutline16 } from '../dsh-icons.js';
@@ -29,9 +29,11 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
   const [stopped, setStopped] = useState(false);
   const busy = useRef(false);
   const generation = useRef(0);
+  const previousReports = useRef<{ summary?: ReportId; byWorktreeId: Map<string, ReportId> }>({ byWorktreeId: new Map() });
   useEffect(() => {
     generation.current++;
     busy.current = false;
+    previousReports.current = { byWorktreeId: new Map() };
     setPending(false);
     setConfirmation(undefined);
     setSelected(new Set());
@@ -47,6 +49,7 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
   const submit = async () => {
     if (busy.current || actionPending || !confirmation || !onManage ||
       (confirmation.action === 'clean' && !stopped)) return;
+    const action = confirmation.action;
     busy.current = true;
     setPending(true);
     setResults([]);
@@ -56,14 +59,21 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
     const failures: WorktreeViewError[] = [];
     let total = 0;
     try {
-      await runWorktreeBatch(confirmation.action, confirmation.records, onManage, isCurrent, (result) => {
+      await runWorktreeBatch(action, confirmation.records, onManage, isCurrent, (result) => {
         total++;
         if (result.error) {
           const error = worktreeNotifications.reportError(result.error, {
             origin: 'batch-item', context: result.record.branch + ' · ' + result.record.absolutePath,
           });
+          previousReports.current.byWorktreeId.set(result.record.worktreeId, error.reportId);
           failures.push(error);
           result = { ...result, error };
+        } else {
+          const prior = previousReports.current.byWorktreeId.get(result.record.worktreeId);
+          if (prior) {
+            worktreeNotifications.resolve(prior);
+            previousReports.current.byWorktreeId.delete(result.record.worktreeId);
+          }
         }
         setResults((current) => [...current, result]);
         if (!result.error) setSelected((current) => {
@@ -74,10 +84,18 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
       }, (record, error) => {
         worktreeNotifications.reportError(error, { origin: 'retired', context: record.branch + ' · ' + record.absolutePath });
       });
-      if (isCurrent() && failures.length) {
-        const message = (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed: failures.length, total });
-        const notice = { key: 'batch-summary:' + workspaceId + ':' + lifetime, failures, text: message(t), message };
-        setSummary({ ...notice, reportId: worktreeNotifications.report(notice) });
+      if (isCurrent()) {
+        if (failures.length) {
+          const message = (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed: failures.length, total });
+          const describe = (translate: WorktreeTranslate) => translate('dashboard.tab.manage') + ' · ' + translate(`dashboard.manage.${action}`);
+          const notice = { key: 'batch-summary:' + workspaceId + ':' + lifetime, failures, context: workspaceId, describe, text: message(t), message };
+          const reportId = worktreeNotifications.report(notice);
+          previousReports.current.summary = reportId;
+          setSummary({ ...notice, reportId });
+        } else if (previousReports.current.summary && previousReports.current.byWorktreeId.size === 0) {
+          worktreeNotifications.resolve(previousReports.current.summary);
+          previousReports.current.summary = undefined;
+        }
       }
     } finally {
       if (isCurrent()) { busy.current = false; setPending(false); setConfirmation(undefined); }
