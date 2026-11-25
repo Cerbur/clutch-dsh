@@ -546,3 +546,177 @@ test('surface refresh, mutation, and native actions resolve retried failures and
   ]);
   assert.equal(notifications.worktreeNotifications.getSnapshot(), undefined);
 });
+
+test('overlapping shared reads report once, multi-retry recovery resolves all prior reports, and mode exit bumps modal generation', async (t) => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  const compileHook = async (relativePath, extraModules) => {
+    const code = ts.transpileModule(await readFile(new URL(relativePath, import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    const out = {};
+    new Function('require', 'exports', code)((name) => {
+      assert.ok(extraModules[name], name);
+      return extraModules[name];
+    }, out);
+    return out;
+  };
+  const { useSurfaceMutation } = await compileHook('../src/client/surface/actions/useSurfaceMutation.tsx', {
+    react: React, '../../view/worktree-view.js': { ...readerModule, ...errors },
+    '../notification-center.js': notifications,
+  });
+  const { useNativeActions } = await compileHook('../src/client/surface/actions/useNativeActions.tsx', {
+    react: React, '../../view/worktree-view.js': { ...readerModule, ...errors },
+    '../notification-center.js': notifications,
+    '../shared.js': { toNativeWorktreeViewError: (error) => errors.toWorktreeViewError(error) },
+  });
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const before = { window: globalThis.window, document: globalThis.document, act: globalThis.IS_REACT_ACT_ENVIRONMENT };
+  globalThis.window = dom.window; globalThis.document = dom.window.document;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const root = createRoot(dom.window.document.getElementById('root'));
+  let pendingRead;
+  let readFailRemaining = 0;
+  let renameFailRemaining = 0;
+  let mode = 'worktree';
+  let refreshApi, mutationApi, nativeApi;
+  const manager = {
+    readWorkspaceNavigation: () => {
+      if (pendingRead) return pendingRead.promise;
+      if (readFailRemaining > 0) {
+        readFailRemaining -= 1;
+        return Promise.reject({ code: 'GIT_OPERATION_FAILED', message: 'read failed', retryable: true });
+      }
+      return Promise.resolve(snapshot());
+    },
+  };
+  const reader = readerModule.createWorktreeViewReader(manager);
+  const modalLoader = readerModule.createWorktreeModalViewLoader(reader);
+  const workspaceIds = ['ws'];
+  const workspaceIdsRef = { current: workspaceIds };
+  const workspaces = { phase: 'ready', items: [{ workspaceId: 'ws', title: 'Alpha', path: '/alpha', sessionIds: [] }] };
+  const expandSnapshot = { collapsedWorkspaceIds: {} };
+  const forkRecoverySnapshot = { revision: 0 };
+  const sessionPresentations = {};
+  const modalGenerationRef = { current: 0 };
+  const registrationState = {
+    modalReadViewRef: { current: undefined },
+    setModalReadError() {},
+    setModalReadLoading() {},
+    setWorktreeModalWorkspaceId() {},
+    modalReadLoader: { current: modalLoader },
+    modalGenerationRef,
+  };
+  const props = { manager, viewReader: reader };
+  const nativeProps = {
+    renameWorkspace: () => {
+      if (renameFailRemaining > 0) {
+        renameFailRemaining -= 1;
+        return Promise.reject(new Error('rename failed'));
+      }
+      return Promise.resolve();
+    },
+  };
+  function Harness() {
+    const source = {
+      mode, workspaceIds, workspaceIdsRef, workspaces, expandSnapshot, forkRecoverySnapshot, sessionPresentations,
+    };
+    refreshApi = useSurfaceRefresh({ source, props, registrationState });
+    mutationApi = useSurfaceMutation({ read: refreshApi, source });
+    nativeApi = useNativeActions({ source, props: nativeProps, mutation: mutationApi });
+    return null;
+  }
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    reader.dispose();
+    notifications.worktreeNotifications.dispose();
+    dom.window.close();
+    globalThis.window = before.window; globalThis.document = before.document;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = before.act;
+  });
+
+  await React.act(async () => { root.render(React.createElement(Harness)); await tick(); });
+
+  // Overlapping refresh calls sharing one failed RPC must report only once (no duplicate retired entry).
+  notifications.worktreeNotifications.dispose();
+  pendingRead = deferred();
+  await React.act(async () => {
+    const scope = { kind: 'workspace', workspaceId: 'ws' };
+    const first = refreshApi.refresh({ scope, userRequested: true });
+    const second = refreshApi.refresh({ scope, reuseInFlight: true });
+    await tick();
+    pendingRead.reject({ code: 'GIT_OPERATION_FAILED', message: 'shared refresh failed', retryable: true });
+    await Promise.all([first, second]);
+    await tick();
+  });
+  pendingRead = undefined;
+  assert.deepEqual(
+    worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.message, entry.status]),
+    [['shared refresh failed', 'reported']],
+  );
+
+  // Overlapping loadModalWorktreeView calls sharing one failed RPC must also report only once.
+  notifications.worktreeNotifications.dispose();
+  pendingRead = deferred();
+  await React.act(async () => {
+    refreshApi.loadModalWorktreeView('ws', { revalidate: true });
+    refreshApi.loadModalWorktreeView('ws');
+    await tick();
+    pendingRead.reject({ code: 'GIT_OPERATION_FAILED', message: 'shared modal failed', retryable: true });
+    await tick();
+  });
+  pendingRead = undefined;
+  assert.deepEqual(
+    worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.message, entry.status]),
+    [['shared modal failed', 'reported']],
+  );
+
+  // Repeated refresh failures must all resolve once a later refresh succeeds.
+  notifications.worktreeNotifications.dispose();
+  readFailRemaining = 2;
+  await React.act(async () => {
+    await refreshApi.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' } });
+    await refreshApi.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' }, userRequested: true });
+    await tick();
+  });
+  assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+  await React.act(async () => {
+    await refreshApi.refresh({ scope: { kind: 'workspace', workspaceId: 'ws' }, userRequested: true });
+    await tick();
+  });
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+
+  // Repeated modal read failures must all resolve once a later modal read succeeds.
+  notifications.worktreeNotifications.dispose();
+  readFailRemaining = 2;
+  await React.act(async () => {
+    refreshApi.loadModalWorktreeView('ws', { revalidate: true });
+    await tick();
+    refreshApi.loadModalWorktreeView('ws', { revalidate: true });
+    await tick();
+  });
+  assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+  await React.act(async () => {
+    refreshApi.loadModalWorktreeView('ws', { revalidate: true });
+    await tick();
+  });
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+
+  // Repeated native rename failures must all resolve once retry succeeds.
+  notifications.worktreeNotifications.dispose();
+  renameFailRemaining = 2;
+  await React.act(async () => { nativeApi.openWorkspaceRename({ workspaceId: 'ws', title: 'Alpha', path: '/alpha', sessionIds: [], createdAt: '' }); });
+  await React.act(async () => { nativeApi.setWorkspaceRenameDraft('Beta'); });
+  await React.act(async () => { await nativeApi.confirmWorkspaceRename(); await tick(); });
+  await React.act(async () => { await nativeApi.confirmWorkspaceRename(); await tick(); });
+  assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+  await React.act(async () => { await nativeApi.confirmWorkspaceRename(); await tick(); });
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+
+  // Leaving Worktree mode increments registrationState.modalGenerationRef to retire in-flight modal submissions.
+  const generationBeforeExit = modalGenerationRef.current;
+  mode = 'native';
+  await React.act(async () => { root.render(React.createElement(Harness)); await tick(); });
+  assert.ok(modalGenerationRef.current > generationBeforeExit);
+});

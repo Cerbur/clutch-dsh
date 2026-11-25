@@ -2572,4 +2572,101 @@ test('loads Main history lazily without branch or baseline reads', async () => {
   controller.dispose();
 });
 
+test('re-selecting an in-flight commit or file shares one failure diagnostic without duplicate retired entries', async () => {
+  worktreeNotifications.dispose();
+  const commitA = 'a'.repeat(40);
+  const commitB = 'b'.repeat(40);
+  const commitC = 'c'.repeat(40);
+  const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; });
+    return { promise, resolve, reject };
+  };
+  const filesByCommit = new Map();
+  const diffByPath = new Map();
+  let filesCalls = 0;
+  let diffCalls = 0;
+  const manager = {
+    listWorktreeCommits: async () => ({
+      headCommit: commitA,
+      commits: [
+        { sha: commitA, subject: 'commit A' },
+        { sha: commitB, subject: 'commit B' },
+        { sha: commitC, subject: 'commit C' },
+      ],
+      truncated: false,
+    }),
+    listWorktreeCommitFiles: ({ commit }) => {
+      filesCalls += 1;
+      const gate = deferred();
+      filesByCommit.set(commit, gate);
+      return gate.promise;
+    },
+    getWorktreeCommitFileDiff: ({ path: filePath }) => {
+      diffCalls += 1;
+      const gate = deferred();
+      diffByPath.set(filePath, gate);
+      return gate.promise;
+    },
+  };
+  const controller = createWorktreeGitStateController({
+    manager,
+    workspaceId: 'ws_shared',
+    worktreeId: 'main:ws_shared',
+    defaultBaselineBranch: 'main',
+  });
+  try {
+    await controller.loadHistory();
+    // 1. Files read for commitA is shared across A -> B -> A and rejects once.
+    assert.equal(filesCalls, 1);
+    controller.selectCommit(commitB);
+    controller.selectCommit(commitA);
+    assert.equal(filesCalls, 2, 'returning to commitA must share the in-flight files promise');
+    filesByCommit.get(commitA).reject(new Error('shared files error'));
+    filesByCommit.get(commitB).resolve({ commit: commitB, files: [] });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.message, entry.status]),
+      [['shared files error', 'reported']],
+    );
+
+    // 2. Load commitC files so we can test shared diff reads for a.ts across a.ts -> b.ts -> a.ts.
+    worktreeNotifications.dispose();
+    controller.selectCommit(commitC);
+    filesByCommit.get(commitC).resolve({
+      commit: commitC,
+      files: [{ path: 'a.ts', status: 'modified' }, { path: 'b.ts', status: 'modified' }, { path: 'c.ts', status: 'modified' }],
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(diffCalls, 1);
+    controller.selectPath('b.ts');
+    controller.selectPath('a.ts');
+    assert.equal(diffCalls, 2, 'returning to a.ts must share the in-flight diff promise');
+    diffByPath.get('a.ts').reject(new Error('shared diff error'));
+    diffByPath.get('b.ts').resolve({ commit: commitC, path: 'b.ts', patch: '', binary: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.message, entry.status]),
+      [['shared diff error', 'reported']],
+    );
+
+    // 3. When all observers of a shared in-flight diff move away, rejection records exactly one retired diagnostic.
+    worktreeNotifications.dispose();
+    controller.selectPath('a.ts');
+    controller.selectPath('c.ts');
+    controller.selectPath('a.ts');
+    controller.selectPath('c.ts');
+    diffByPath.get('a.ts').reject(new Error('abandoned shared diff'));
+    diffByPath.get('c.ts').resolve({ commit: commitC, path: 'c.ts', patch: '', binary: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.message, entry.status]),
+      [['abandoned shared diff', 'inactive']],
+    );
+  } finally {
+    controller.dispose();
+    worktreeNotifications.dispose();
+  }
+});
+
 

@@ -100,12 +100,15 @@ interface ResolvedWorktree {
 async function rethrowWithWorkspaceRootCheck(
   workspace: DshWorkspaceSummary,
   error: unknown,
+  signal?: AbortSignal,
 ): Promise<never> {
   if (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error.code === 'WORKSPACE_ROOT_MISSING' || error.code === 'WORKSPACE_NOT_FOUND')
+    signal?.aborted ||
+    (error instanceof Error && error.name === 'AbortError') ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error.code === 'WORKSPACE_ROOT_MISSING' || error.code === 'WORKSPACE_NOT_FOUND'))
   ) {
     throw error;
   }
@@ -205,7 +208,7 @@ async function resolveWorktree(
         : undefined;
       return { main: true, workspace, workspaceRoot: workspace.rootPath, repositoryRoot, headCommit };
     } catch (error) {
-      return rethrowWithWorkspaceRootCheck(workspace, error);
+      return rethrowWithWorkspaceRootCheck(workspace, error, context.signal);
     }
   }
 
@@ -271,7 +274,7 @@ async function resolveWorktree(
       },
     };
   } catch (error) {
-    return rethrowWithWorkspaceRootCheck(workspace, error);
+    return rethrowWithWorkspaceRootCheck(workspace, error, context.signal);
   }
 }
 
@@ -840,7 +843,7 @@ export async function listWorktreeCommits(
       baseline: baseline.baseline,
     };
   } catch (error) {
-    return rethrowWithWorkspaceRootCheck(workspace, error);
+    return rethrowWithWorkspaceRootCheck(workspace, error, context.signal);
   }
 }
 
@@ -1452,7 +1455,10 @@ async function getCheckoutCommitFileDiff(
   };
 }
 
-async function pathsFor(resolved: Awaited<ReturnType<typeof resolveWorktree>>) {
+async function pathsFor(
+  resolved: Awaited<ReturnType<typeof resolveWorktree>>,
+  signal?: AbortSignal,
+) {
   const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
   try {
     if (resolved.main) return await workspaceGitPaths(resolved.repositoryRoot, resolved.workspaceRoot);
@@ -1460,7 +1466,7 @@ async function pathsFor(resolved: Awaited<ReturnType<typeof resolveWorktree>>) {
     const projected = await projectWorktreePath(record, workspaceRoot, repositoryRoot);
     return await workspaceGitPaths(gitWorktreeRoot(projected), projected.absolutePath);
   } catch (error) {
-    return rethrowWithWorkspaceRootCheck(workspace, error);
+    return rethrowWithWorkspaceRootCheck(workspace, error, signal);
   }
 }
 
@@ -1487,12 +1493,12 @@ export async function listWorktreeCommitFiles(
   const resolved = await resolveWorktree(context, input);
   const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
   try {
-    const paths = await pathsFor(resolved);
+    const paths = await pathsFor(resolved, context.signal);
     const read = await listCheckoutCommitFiles(context, input, resolved);
     await assertCheckoutHead(context, resolved, input.worktreeId);
     return paths.projectFiles(read);
   } catch (error) {
-    return rethrowWithWorkspaceRootCheck(workspace, error);
+    return rethrowWithWorkspaceRootCheck(workspace, error, context.signal);
   }
 }
 
@@ -1504,11 +1510,11 @@ export async function getWorktreeCommitFileDiff(
   const resolved = await resolveWorktree(context, input);
   const workspace = resolved.main ? resolved.workspace : resolved.value.workspace;
   try {
-    const paths = await pathsFor(resolved);
+    const paths = await pathsFor(resolved, context.signal);
     const diff = await getCheckoutCommitFileDiff(context, { ...input, path: paths.toCheckout(input.path) }, resolved);
     await assertCheckoutHead(context, resolved, input.worktreeId);
     return { ...diff, path: input.path };
   } catch (error) {
-    return rethrowWithWorkspaceRootCheck(workspace, error);
+    return rethrowWithWorkspaceRootCheck(workspace, error, context.signal);
   }
 }

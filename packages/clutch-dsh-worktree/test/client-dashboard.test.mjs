@@ -2508,3 +2508,112 @@ test('copy failure state resets across record changes and uses consistent path c
     'copying a different Worktree path must not resolve the previous Worktree copy failure');
   harness.dispose();
 });
+
+test('baseline save diagnostics carry localized describe metadata and multi-retry resolves all prior occurrences', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const child = { ...record, worktreeId: 'child', branch: 'child', currentBranch: 'child', baseBranch: record.branch };
+  let failSaves = 2;
+  const harness = renderHarness(async () => true, { stubBranchPicker: true, diagnostics });
+  let node = harness.render({
+    record: child,
+    workspaceTitle: 'Repo',
+    branches: [{ name: 'main' }, { name: record.branch }],
+    onSaveBaseline: async (value) => {
+      if (failSaves > 0) {
+        failSaves -= 1;
+        throw Object.assign(new Error('save busy'), { code: 'WORKTREE_STATE_CONFLICT' });
+      }
+      return value;
+    },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'baseline-picker')[0].props.onChange('main');
+  node = harness.render();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+    await tick();
+    node = harness.render();
+  }
+  const expectedContext = `Repo · ${child.branch} · ${child.absolutePath}`;
+  const failedEntries = diagnostics.getSnapshot();
+  assert.equal(failedEntries.length, 2);
+  for (const entry of failedEntries) {
+    assert.equal(entry.context, expectedContext);
+    assert.equal(entry.describe((key) => en[key]), `${en['dashboard.base']} · ${expectedContext}`);
+    assert.equal(entry.describe((key) => zh[key]), `${zh['dashboard.base']} · ${expectedContext}`);
+  }
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  harness.render();
+  await tick();
+  assert.deepEqual(diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+  harness.dispose();
+
+  // Retired save failure after unmount also preserves describe metadata.
+  const retiredDiagnostics = createWorktreeDiagnostics();
+  let rejectLate;
+  const lateHarness = renderHarness(async () => true, { stubBranchPicker: true, diagnostics: retiredDiagnostics });
+  let lateNode = lateHarness.render({
+    record: child,
+    workspaceTitle: 'Repo',
+    branches: [{ name: 'main' }, { name: record.branch }],
+    onSaveBaseline: () => new Promise((_, reject) => { rejectLate = reject; }),
+  });
+  findAll(lateNode, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  lateNode = lateHarness.render();
+  findAll(lateNode, (item) => item.type === 'baseline-picker')[0].props.onChange('main');
+  lateNode = lateHarness.render();
+  findAll(lateNode, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  lateHarness.dispose();
+  rejectLate(Object.assign(new Error('late baseline failure'), { code: 'WORKTREE_STATE_CONFLICT' }));
+  await tick();
+  const [retiredEntry] = retiredDiagnostics.getSnapshot();
+  assert.equal(retiredEntry.status, 'inactive');
+  assert.equal(retiredEntry.describe((key) => en[key]), `${en['dashboard.base']} · ${expectedContext}`);
+});
+
+test('repeated copy and baseline sync failures resolve every prior occurrence on recovery', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  let clipboardOk = false;
+  let failSyncs = 2;
+  const harness = renderHarness(async () => clipboardOk, { diagnostics });
+  let node = harness.render({
+    record: { ...record, baseBranch: 'main' },
+    workspaceTitle: 'Repo',
+    onSyncBaseline: async () => {
+      if (failSyncs > 0) {
+        failSyncs -= 1;
+        throw new Error('sync temporary error');
+      }
+      return { sessionId: 'sync-ok', status: 'dispatched' };
+    },
+  });
+
+  // Two copy failures followed by one success resolve both copy diagnostics.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+    await tick();
+    node = harness.render();
+  }
+  assert.equal(diagnostics.getSnapshot().length, 2);
+  clipboardOk = true;
+  findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+  await tick();
+  assert.deepEqual(diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+
+  // Two baseline sync failures followed by dispatched success resolve both sync diagnostics.
+  harness.center.dispose();
+  findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+  node = harness.render();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    findAll(node, (item) => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+    await tick();
+    node = harness.render();
+  }
+  assert.equal(diagnostics.getSnapshot().length, 2);
+  findAll(node, (item) => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+  await tick();
+  assert.deepEqual(diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+  harness.dispose();
+});

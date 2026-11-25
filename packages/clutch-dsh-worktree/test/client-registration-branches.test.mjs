@@ -7,7 +7,7 @@ import * as notifications from '../lib/client/surface/notification-center.js';
 import * as viewHelpers from '../lib/client/view/worktree-view.js';
 import { createWorktreeSessionConnector } from '../lib/client/session/worktree-session.js';
 
-async function harness({ onRefresh, onActionError, onModalRead } = {}) {
+async function harness({ onRefresh, onActionError, onModalRead, getMode } = {}) {
   const branchHelpersSource = await readFile(new URL('../src/client/view/worktree-view-read.ts', import.meta.url), 'utf8');
   const branchHelpers = {};
   new Function('require', 'exports', ts.transpileModule(branchHelpersSource, {
@@ -75,8 +75,13 @@ async function harness({ onRefresh, onActionError, onModalRead } = {}) {
     const read = { viewByWorkspace: new Map([['ws', projection]]), refresh: async (options) => { refreshes++; await onRefresh?.(options); },
       loadModalWorktreeView: (id, options) => { registrationState.modalReadViewRef.current = onModalRead?.(id, options) ?? projection; } };
     const mutation = { actionPending: false, clearActionError() {}, reportActionError: error => { onActionError?.(error); return error; }, setActionPending() {} };
-    const registration = modules.useWorktreeRegistration({ source: { workspaces: { items: [workspace] } },
-      registrationState, read, props, mutation, session: { setPendingSessionBinding() {} } });
+    const registration = modules.useWorktreeRegistration({
+      source: {
+        ...(getMode ? { mode: getMode() } : {}),
+        workspaces: { items: [workspace] },
+      },
+      registrationState, read, props, mutation, session: { setPendingSessionBinding() {} },
+    });
     const dialog = modules.RegistrationDialog({ props, registration, registrationState, read, mutation });
     effects.splice(0).forEach((fn) => fn());
     return { registration, registrationState, dialog: dialog.props.children.props,
@@ -370,5 +375,102 @@ test('opening Create revalidates workspaceMissing, stale branch conflict retires
   await render().registration.loadImportCandidates('ws');
   await Promise.resolve();
   assert.equal(worktreeDiagnostics.getSnapshot().find((entry) => entry.reportId === importEntry.reportId).status, 'resolved');
+  notifications.worktreeNotifications.dispose();
+});
+
+test('leaving Worktree mode retires in-flight submitWorktree errors and repeated retries resolve all prior reports', async () => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  let mode = 'worktree';
+  const modalReads = [];
+  const actionErrors = [];
+  const { render, workspace, props, projection } = await harness({
+    getMode: () => mode,
+    onActionError: (error) => actionErrors.push(error),
+    onModalRead: (id, options) => {
+      modalReads.push([id, options]);
+      return { ...projection };
+    },
+  });
+
+  // 1. Mode switch to Native while WORKSPACE_ROOT_MISSING is in-flight must not revalidate modal or report active error.
+  let rejectCreate;
+  props.manager.createWorktree = () => new Promise((_, reject) => { rejectCreate = reject; });
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  modalReads.length = 0;
+  const missingSubmit = render().registration.submitWorktree();
+  mode = 'native';
+  render();
+  rejectCreate({ code: 'WORKSPACE_ROOT_MISSING', message: 'gone', details: { rootPath: '/repo' }, retryable: false });
+  await missingSubmit;
+  await Promise.resolve();
+  assert.deepEqual(modalReads, [], 'stale modal after mode switch must not trigger loadModalWorktreeView');
+  assert.deepEqual(actionErrors, []);
+  assert.deepEqual(
+    worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.code, entry.status]),
+    [['WORKSPACE_ROOT_MISSING', 'inactive']],
+  );
+  assert.equal(notifications.worktreeNotifications.getSnapshot(), undefined);
+
+  // 2. Mode switch to Native while WORKTREE_BRANCH_CONFLICT is in-flight must retire quietly without setting branchConflict.
+  notifications.worktreeNotifications.dispose();
+  mode = 'worktree';
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  const conflictSubmit = render().registration.submitWorktree();
+  mode = 'native';
+  render();
+  rejectCreate({ code: 'WORKTREE_BRANCH_CONFLICT', message: 'exists', retryable: false });
+  await conflictSubmit;
+  await Promise.resolve();
+  assert.equal(render().registrationState.branchConflict, undefined);
+  assert.deepEqual(actionErrors, []);
+  assert.deepEqual(
+    worktreeDiagnostics.getSnapshot().map((entry) => [entry.error?.code, entry.status]),
+    [['WORKTREE_BRANCH_CONFLICT', 'inactive']],
+  );
+  assert.equal(notifications.worktreeNotifications.getSnapshot(), undefined);
+
+  // 3. Repeated WORKTREE_BRANCH_CONFLICT failures all resolve once createWorktree succeeds.
+  notifications.worktreeNotifications.dispose();
+  mode = 'worktree';
+  let conflictFailures = 2;
+  props.manager.createWorktree = async () => {
+    if (conflictFailures > 0) {
+      conflictFailures -= 1;
+      throw { code: 'WORKTREE_BRANCH_CONFLICT', message: 'branch exists', retryable: false };
+    }
+    return { workspaceId: 'ws', worktreeId: 'created', absolutePath: '/created', branch: 'feat', status: 'active' };
+  };
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  await render().registration.submitWorktree();
+  await render().registration.submitWorktree();
+  await Promise.resolve();
+  assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+  await render().registration.submitWorktree();
+  await Promise.resolve();
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+
+  // 4. Repeated listImportCandidates failures all resolve once a later read succeeds.
+  notifications.worktreeNotifications.dispose();
+  let importFailures = 2;
+  props.manager.listImportCandidates = async () => {
+    if (importFailures > 0) {
+      importFailures -= 1;
+      throw { code: 'GIT_OPERATION_FAILED', message: 'import failed', retryable: true };
+    }
+    return [];
+  };
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  await render().registration.loadImportCandidates('ws');
+  await render().registration.loadImportCandidates('ws');
+  await Promise.resolve();
+  assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+  await render().registration.loadImportCandidates('ws');
+  await Promise.resolve();
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
   notifications.worktreeNotifications.dispose();
 });

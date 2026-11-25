@@ -36,9 +36,9 @@ export function useNativeActions({ source, props, mutation }: Input) {
     return () => { alive.current = false; };
   }, []);
   const isActive = () => alive.current && (modeRef.current === undefined || modeRef.current === 'worktree');
-  const workspaceRenameReportRef = useRef<ReportId>();
-  const workspaceDeleteReportRef = useRef<ReportId>();
-  const sessionRenameReportRef = useRef<ReportId>();
+  const workspaceRenameReportRef = useRef<ReportId[]>([]);
+  const workspaceDeleteReportRef = useRef<ReportId[]>([]);
+  const sessionRenameReportRef = useRef<ReportId[]>([]);
   const [sessionRenameTarget, setSessionRenameTarget] = useState<SessionRenameTarget>();
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   const [sessionRenamePending, setSessionRenamePending] = useState(false);
@@ -66,7 +66,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
     workspaceRenameTrimmed === workspaceRenameTarget?.currentTitle ||
     workspaceRenameDuplicate;
   const openWorkspaceRename = (workspace: WorkspaceLike): void => {
-    workspaceRenameReportRef.current = undefined;
+    workspaceRenameReportRef.current = [];
     setWorkspaceRenameTarget({
       workspaceId: workspace.workspaceId,
       currentTitle: workspace.title,
@@ -76,7 +76,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
   };
   const closeWorkspaceRename = (): void => {
     if (workspaceRenamePending) return;
-    workspaceRenameReportRef.current = undefined;
+    workspaceRenameReportRef.current = [];
     setWorkspaceRenameTarget(undefined);
     setWorkspaceRenameError(undefined);
   };
@@ -93,17 +93,20 @@ export function useNativeActions({ source, props, mutation }: Input) {
         message: '',
         retryable: true,
       }, meta);
-      workspaceRenameReportRef.current = reported.reportId;
+      workspaceRenameReportRef.current.push(reported.reportId);
       setWorkspaceRenameError(reported);
       return;
+    }
+    const priorReports = [...workspaceRenameReportRef.current];
+    if (workspaceRenameError?.reportId && !priorReports.includes(workspaceRenameError.reportId)) {
+      priorReports.push(workspaceRenameError.reportId);
     }
     setWorkspaceRenamePending(true);
     setWorkspaceRenameError(undefined);
     try {
       await renameWorkspace(target.workspaceId, workspaceRenameTrimmed);
-      const previousReport = workspaceRenameReportRef.current ?? workspaceRenameError?.reportId;
-      if (previousReport) worktreeNotifications.resolve(previousReport);
-      workspaceRenameReportRef.current = undefined;
+      for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+      workspaceRenameReportRef.current = workspaceRenameReportRef.current.filter((id) => !priorReports.includes(id));
       if (alive.current) setWorkspaceRenameTarget(undefined);
     } catch (error) {
       const active = isActive();
@@ -112,7 +115,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
         ...(active ? {} : { origin: 'retired' }),
       });
       if (active) {
-        workspaceRenameReportRef.current = reported.reportId;
+        workspaceRenameReportRef.current.push(reported.reportId);
         setWorkspaceRenameError(reported);
       }
     } finally {
@@ -120,13 +123,13 @@ export function useNativeActions({ source, props, mutation }: Input) {
     }
   };
   const openWorkspaceDelete = (workspace: WorkspaceLike): void => {
-    workspaceDeleteReportRef.current = undefined;
+    workspaceDeleteReportRef.current = [];
     setWorkspaceDeleteTarget({ workspaceId: workspace.workspaceId, title: workspace.title });
     setWorkspaceDeleteError(undefined);
   };
   const closeWorkspaceDelete = (): void => {
     if (workspaceDeletePending) return;
-    workspaceDeleteReportRef.current = undefined;
+    workspaceDeleteReportRef.current = [];
     setWorkspaceDeleteTarget(undefined);
     setWorkspaceDeleteError(undefined);
   };
@@ -143,17 +146,20 @@ export function useNativeActions({ source, props, mutation }: Input) {
         message: '',
         retryable: true,
       }, meta);
-      workspaceDeleteReportRef.current = reported.reportId;
+      workspaceDeleteReportRef.current.push(reported.reportId);
       setWorkspaceDeleteError(reported);
       return;
+    }
+    const priorReports = [...workspaceDeleteReportRef.current];
+    if (workspaceDeleteError?.reportId && !priorReports.includes(workspaceDeleteError.reportId)) {
+      priorReports.push(workspaceDeleteError.reportId);
     }
     setWorkspaceDeletePending(true);
     setWorkspaceDeleteError(undefined);
     try {
       await deleteWorkspace(target.workspaceId);
-      const previousReport = workspaceDeleteReportRef.current ?? workspaceDeleteError?.reportId;
-      if (previousReport) worktreeNotifications.resolve(previousReport);
-      workspaceDeleteReportRef.current = undefined;
+      for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+      workspaceDeleteReportRef.current = workspaceDeleteReportRef.current.filter((id) => !priorReports.includes(id));
       if (alive.current) setWorkspaceDeleteTarget(undefined);
     } catch (error) {
       const active = isActive();
@@ -162,7 +168,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
         ...(active ? {} : { origin: 'retired' }),
       });
       if (active) {
-        workspaceDeleteReportRef.current = reported.reportId;
+        workspaceDeleteReportRef.current.push(reported.reportId);
         setWorkspaceDeleteError(reported);
       }
     } finally {
@@ -170,14 +176,14 @@ export function useNativeActions({ source, props, mutation }: Input) {
     }
   };
   const openSessionRename = (sessionId: string, currentTitle: string): void => {
-    sessionRenameReportRef.current = undefined;
+    sessionRenameReportRef.current = [];
     setSessionRenameTarget({ sessionId, currentTitle });
     setSessionRenameDraft(currentTitle);
     setSessionRenameError(undefined);
   };
   const closeSessionRename = (): void => {
     if (sessionRenamePending) return;
-    sessionRenameReportRef.current = undefined;
+    sessionRenameReportRef.current = [];
     setSessionRenameTarget(undefined);
     setSessionRenameError(undefined);
   };
@@ -195,17 +201,20 @@ export function useNativeActions({ source, props, mutation }: Input) {
         message: '',
         retryable: true,
       }, meta);
-      sessionRenameReportRef.current = reported.reportId;
+      sessionRenameReportRef.current.push(reported.reportId);
       setSessionRenameError(reported);
       return;
+    }
+    const priorReports = [...sessionRenameReportRef.current];
+    if (sessionRenameError?.reportId && !priorReports.includes(sessionRenameError.reportId)) {
+      priorReports.push(sessionRenameError.reportId);
     }
     setSessionRenamePending(true);
     setSessionRenameError(undefined);
     try {
       await renameSession(target.sessionId, title);
-      const previousReport = sessionRenameReportRef.current ?? sessionRenameError?.reportId;
-      if (previousReport) worktreeNotifications.resolve(previousReport);
-      sessionRenameReportRef.current = undefined;
+      for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+      sessionRenameReportRef.current = sessionRenameReportRef.current.filter((id) => !priorReports.includes(id));
       if (alive.current) setSessionRenameTarget(undefined);
     } catch (error) {
       const active = isActive();
@@ -214,7 +223,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
         ...(active ? {} : { origin: 'retired' }),
       });
       if (active) {
-        sessionRenameReportRef.current = reported.reportId;
+        sessionRenameReportRef.current.push(reported.reportId);
         setSessionRenameError(reported);
       }
     } finally {

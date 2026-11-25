@@ -738,3 +738,37 @@ test('late fork bind failure after dispose is recorded quietly as retired withou
   assert.equal(worktreeNotifications.getSnapshot(), undefined);
   worktreeNotifications.dispose();
 });
+
+test('fork binding retry resolves every prior failed attempt once binding succeeds', async () => {
+  worktreeNotifications.dispose();
+  let failAttempts = 2;
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'retry-child',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: async () => {
+      if (failAttempts > 0) {
+        failAttempts -= 1;
+        throw Object.assign(new Error('temporary bind error'), { code: 'WORKTREE_NOT_FOUND' });
+      }
+    },
+  });
+  try {
+    await coordinator.fork({ sessionId: 'parent-session' });
+    await Promise.resolve();
+    const key = coordinator.recovery.getSnapshot().pending[0].key;
+    assert.equal(await coordinator.retry(key), false);
+    await Promise.resolve();
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+
+    assert.equal(await coordinator.retry(key), true);
+    await Promise.resolve();
+    assert.equal(coordinator.recovery.getSnapshot().pending.length, 0);
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => entry.status),
+      ['resolved', 'resolved'],
+    );
+  } finally {
+    coordinator.dispose();
+    worktreeNotifications.dispose();
+  }
+});

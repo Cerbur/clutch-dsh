@@ -5,8 +5,9 @@ import { failureToastKey, shouldAnnounce, type WorktreeNotification } from './no
 
 /** All mounted client roots report to one FIFO. Only the shell subscribes to its toast head. */
 export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics) {
-  // Occurrences survive batched renders. Only eligible, undismissed events live here.
-  const pending = new Map<string, WorktreeNotification>();
+  // Occurrences survive batched renders. Eligible, undismissed events coalesce by toastKey in FIFO order.
+  const pending = new Map<string, WorktreeNotification[]>();
+  const toastKeyByKey = new Map<string, string>();
   let sequence = 0;
   const keyOf = (id: ReportId) => 'occurrence:' + id.sequence;
   const listeners = new Set<() => void>();
@@ -17,7 +18,7 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
     queueMicrotask(() => { if (generation === owner) apply(); });
   };
   const updateHead = () => {
-    const next = pending.values().next().value;
+    const next = pending.values().next().value?.[0];
     if (next === head) return;
     head = next;
     listeners.forEach(listener => listener());
@@ -25,12 +26,16 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
   const report = (notice: WorktreeNotification): ReportId => {
     const reportId = { sequence: ++sequence };
     const key = keyOf(reportId);
-    const event = { ...notice, key, reportId, toastKey: notice.toastKey ?? (notice.key || key) };
+    const toastKey = notice.toastKey ?? (notice.key || key);
+    const event = { ...notice, key, reportId, toastKey };
     post(() => {
-      const announce = shouldAnnounce(event) && ![...pending.values()].some(item => item.toastKey === event.toastKey);
+      const announce = shouldAnnounce(event);
       diagnostics.record(key, [event], notice.origin === 'retired' ? 'inactive' : 'reported', announce);
       if (announce) {
-        pending.set(key, event);
+        const group = pending.get(toastKey);
+        if (group) group.push(event);
+        else pending.set(toastKey, [event]);
+        toastKeyByKey.set(key, toastKey);
         updateHead();
       }
     });
@@ -55,13 +60,18 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
           const reportId = notice.reportId ?? notice.error?.reportId;
           if (reportId === undefined) return [];
           const key = keyOf(reportId);
-          const queued = pending.get(key);
-          if (queued?.reportId === reportId) {
-            pending.set(key, {
-              ...queued,
-              text: notice.text || queued.text,
-              message: notice.message ?? queued.message,
-            });
+          const toastKey = toastKeyByKey.get(key);
+          const group = toastKey === undefined ? undefined : pending.get(toastKey);
+          if (group) {
+            const index = group.findIndex(item => item.reportId === reportId);
+            if (index !== -1) {
+              const queued = group[index]!;
+              group[index] = {
+                ...queued,
+                text: notice.text || queued.text,
+                message: notice.message ?? queued.message,
+              };
+            }
           }
           return { ...notice, reportId };
         });
@@ -71,7 +81,17 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
     },
     resolve(reportId: ReportId) {
       post(() => {
-        pending.delete(keyOf(reportId));
+        const key = keyOf(reportId);
+        const toastKey = toastKeyByKey.get(key);
+        if (toastKey !== undefined) {
+          toastKeyByKey.delete(key);
+          const group = pending.get(toastKey);
+          if (group) {
+            const index = group.findIndex(item => item.reportId === reportId);
+            if (index !== -1) group.splice(index, 1);
+            if (group.length === 0) pending.delete(toastKey);
+          }
+        }
         diagnostics.resolve(reportId);
         updateHead();
       });
@@ -82,14 +102,22 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
     dismiss(key: string) {
       post(() => {
         if (head?.key !== key) return;
-        diagnostics.dismiss(head.reportId!);
-        pending.delete(key);
+        const toastKey = toastKeyByKey.get(key);
+        const group = toastKey === undefined ? undefined : pending.get(toastKey);
+        if (toastKey !== undefined) pending.delete(toastKey);
+        const dismissed: ReportId[] = [];
+        for (const member of group ?? [head]) {
+          toastKeyByKey.delete(member.key);
+          if (member.reportId) dismissed.push(member.reportId);
+        }
+        if (dismissed.length) diagnostics.dismiss(dismissed);
         updateHead();
       });
     },
     dispose() {
       generation++;
       pending.clear();
+      toastKeyByKey.clear();
       updateHead();
       diagnostics.dispose();
     },

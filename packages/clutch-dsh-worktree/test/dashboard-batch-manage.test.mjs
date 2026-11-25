@@ -472,3 +472,64 @@ test('batch UI labels summary diagnostics and resolves prior failures once retri
     }
   }
 });
+
+test('batch UI resolves every prior failed attempt and summary once repeated retries succeed', async () => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  const module = await compile('../src/client/dashboard/BatchManageWorktrees.tsx', {
+    react: React, 'react/jsx-runtime': jsx,
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Button: ({ variant, ...props }) => { void variant; return React.createElement('button', props); },
+      Modal: ({ open, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog' }, title, description, children, footer) : null,
+    },
+    '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
+    '../surface/notification-center.js': notifications,
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: () => null },
+    '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
+    './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
+  });
+  const dom = new JSDOM('<div id="app"></div>');
+  const previous = new Map();
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const root = createRoot(dom.window.document.getElementById('app'));
+  let remainingFailures = 2;
+  const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replace('{' + name + '}', value), en[key]);
+  try {
+    await React.act(async () => root.render(React.createElement(module.BatchManageWorktrees, {
+      workspaceId: 'repo', worktrees: [record], t, actionPending: false,
+      onManage: async () => {
+        if (remainingFailures > 0) {
+          remainingFailures -= 1;
+          throw { code: 'WORKTREE_STATE_CONFLICT', message: 'busy' };
+        }
+      },
+    })));
+    const doc = dom.window.document;
+    const click = async (selector) => React.act(async () => doc.querySelector(selector).click());
+    await click('input[aria-label="Select all"]');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await click('[data-batch-action="archive"]');
+      await click('[data-batch-confirm]');
+      await Promise.resolve();
+    }
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 4);
+
+    await click('[data-batch-action="archive"]');
+    await click('[data-batch-confirm]');
+    await Promise.resolve();
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => entry.status),
+      ['resolved', 'resolved', 'resolved', 'resolved'],
+    );
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    notifications.worktreeNotifications.dispose();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+    }
+  }
+});

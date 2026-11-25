@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import type { WorktreeRecord } from '../../../contract/index.js';
+import type { ReportId } from '../../view/worktree-view-errors.js';
 import {
   mergeWorktreeView,
   toWorktreeViewError,
@@ -52,6 +54,11 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
   const { workspaceIdsRef } = source;
   const { manager, t, viewReader } = props;
   const { actionError, actionPending, setActionPending, runMutation, clearActionError, reportActionError } = mutation;
+  const branchAdoptionReportsRef = useRef<ReportId[]>([]);
+  useEffect(() => {
+    if (worktreeBranchAdoption === undefined) branchAdoptionReportsRef.current = [];
+  }, [worktreeBranchAdoption?.worktreeId]);
+  useEffect(() => () => { branchAdoptionReportsRef.current = []; }, []);
   const latestLifecycleTarget = (target: WorktreeRecord | undefined) =>
     target === undefined
       ? undefined
@@ -112,7 +119,10 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
   const refreshBranchAdoption = async (): Promise<void> => {
     const target = worktreeBranchAdoption;
     if (!manager || !target) return;
+    const reports = typeof branchAdoptionReportsRef === 'undefined' ? undefined : branchAdoptionReportsRef;
+    const priorReports = [...(reports?.current ?? [])];
     const previousReportId = typeof actionError === 'undefined' ? undefined : actionError?.reportId;
+    if (previousReportId && !priorReports.includes(previousReportId)) priorReports.push(previousReportId);
     const generation = branchAdoptionGuard.current.begin();
     const isCurrent = () => branchAdoptionGuard.current.isCurrent(generation);
     setActionPending(true);
@@ -125,7 +135,8 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       const view = await viewReader.read(target.workspaceId);
       if (!isCurrent()) return;
       if (!workspaceIdsRef.current.includes(target.workspaceId)) {
-        if (previousReportId) worktreeNotifications.resolve(previousReportId);
+        for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+        if (reports) reports.current = [];
         setWorktreeBranchAdoption(undefined);
         clearActionError();
         return;
@@ -137,11 +148,16 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
           ? latest
           : undefined,
       );
-      if (previousReportId) worktreeNotifications.resolve(previousReportId);
+      for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+      if (reports) reports.current = [];
       clearActionError();
     } catch (error) {
-      if (isCurrent()) reportActionError(toWorktreeViewError(error));
-      else worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'retired', context: target.absolutePath });
+      if (isCurrent()) {
+        const reported = reportActionError(toWorktreeViewError(error)) as WorktreeViewError | undefined;
+        if (reported?.reportId && reports) reports.current.push(reported.reportId);
+      } else {
+        worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'retired', context: target.absolutePath });
+      }
     } finally {
       if (isCurrent()) setActionPending(false);
     }

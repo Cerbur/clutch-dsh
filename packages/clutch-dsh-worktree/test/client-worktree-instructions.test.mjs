@@ -133,7 +133,7 @@ test('instruction editor retains failed drafts, retries with its original witnes
   h.dispose();
 });
 
-test('replacing a failed save preserves its history and resolves only the successful retry', async () => {
+test('replacing a failed save preserves its history and resolves all prior attempts once retry succeeds', async () => {
   const center = notifications.worktreeNotifications;
   center.dispose();
   let settleSave;
@@ -160,10 +160,18 @@ test('replacing a failed save preserves its history and resolves only the succes
   settleSave.ok('updated');
   await settle();
   await render();
-  assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['reported', 'resolved']);
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['resolved', 'resolved']);
   button(await render(), 'Edit').onClick();
   const reopened = await render();
   assert.deepEqual(nodes(reopened).find(item => item.type === 'toasts')?.props.notices ?? [], []);
+  // Canceling a failed save abandons it without marking the failed occurrence resolved.
+  nodes(reopened).find((item) => item.type === 'textarea').props.onChange({ target: { value: 'abandoned' } });
+  button(await render(), 'Save').onClick();
+  settleSave.fail(new Error('canceled attempt'));
+  await settle();
+  button(await render(), 'Cancel').onClick();
+  await render();
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['resolved', 'resolved', 'reported']);
   h.dispose();
 });
 

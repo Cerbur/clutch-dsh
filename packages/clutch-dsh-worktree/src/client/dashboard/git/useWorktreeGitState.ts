@@ -183,8 +183,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   let historyInFlight: Promise<void> | undefined;
   let backgroundHistory = false;
   let moreInFlight: Promise<void> | undefined;
-  const filesInFlight = new Map<string, Promise<WorktreeGitCommitFiles>>();
-  const diffInFlight = new Map<string, Promise<WorktreeGitFileDiff>>();
+  const filesInFlight = new Map<string, { promise: Promise<WorktreeGitCommitFiles>; ownerRequest: number }>();
+  const diffInFlight = new Map<string, { promise: Promise<WorktreeGitFileDiff>; ownerRequest: number }>();
   const listeners = new Set<() => void>();
   const filesCache = new Map<string, WorktreeGitCommitFiles>();
   const diffCache = new Map<string, WorktreeGitFileDiff>();
@@ -256,11 +256,21 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     return selectedPath === undefined || state.selectedPath === selectedPath;
   };
 
-  const requestFiles = (baseBranch: string | undefined, history: GitLoadable<WorktreeGitHistory>, target: GitTarget): Promise<WorktreeGitCommitFiles> => {
+  const requestFiles = (
+    baseBranch: string | undefined,
+    history: GitLoadable<WorktreeGitHistory>,
+    target: GitTarget,
+    ownerRequest: number,
+  ): { promise: Promise<WorktreeGitCommitFiles>; ownerRequest: number } => {
     const key = gitCacheKey(baseBranch, history, target);
     const existing = filesInFlight.get(key);
-    if (existing !== undefined) return existing;
-    if (input.manager === undefined) return Promise.reject(new Error('Git manager unavailable'));
+    if (existing !== undefined) {
+      existing.ownerRequest = ownerRequest;
+      return existing;
+    }
+    if (input.manager === undefined) {
+      return { promise: Promise.reject(new Error('Git manager unavailable')), ownerRequest };
+    }
 
     const request = target.kind === 'commit'
       ? { commit: target.commit }
@@ -276,24 +286,36 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } catch (error) {
       promise = Promise.reject(error);
     }
-    filesInFlight.set(key, promise);
+    const entry = { promise, ownerRequest };
+    filesInFlight.set(key, entry);
     void promise.then(
       () => {
-        if (filesInFlight.get(key) === promise) filesInFlight.delete(key);
+        if (filesInFlight.get(key) === entry) filesInFlight.delete(key);
       },
       (cause) => {
         if (disposed) reportRead(cause, 'files', key, { retired: true });
-        if (filesInFlight.get(key) === promise) filesInFlight.delete(key);
+        if (filesInFlight.get(key) === entry) filesInFlight.delete(key);
       },
     );
-    return promise;
+    return entry;
   };
 
-  const requestDiff = (baseBranch: string | undefined, history: GitLoadable<WorktreeGitHistory>, target: GitTarget, diffPath: string): Promise<WorktreeGitFileDiff> => {
+  const requestDiff = (
+    baseBranch: string | undefined,
+    history: GitLoadable<WorktreeGitHistory>,
+    target: GitTarget,
+    diffPath: string,
+    ownerRequest: number,
+  ): { promise: Promise<WorktreeGitFileDiff>; ownerRequest: number } => {
     const key = diffCacheKey(baseBranch, history, target, diffPath);
     const existing = diffInFlight.get(key);
-    if (existing !== undefined) return existing;
-    if (input.manager === undefined) return Promise.reject(new Error('Git manager unavailable'));
+    if (existing !== undefined) {
+      existing.ownerRequest = ownerRequest;
+      return existing;
+    }
+    if (input.manager === undefined) {
+      return { promise: Promise.reject(new Error('Git manager unavailable')), ownerRequest };
+    }
 
     const request = target.kind === 'commit'
       ? { commit: target.commit }
@@ -310,17 +332,18 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } catch (error) {
       promise = Promise.reject(error);
     }
-    diffInFlight.set(key, promise);
+    const entry = { promise, ownerRequest };
+    diffInFlight.set(key, entry);
     void promise.then(
       () => {
-        if (diffInFlight.get(key) === promise) diffInFlight.delete(key);
+        if (diffInFlight.get(key) === entry) diffInFlight.delete(key);
       },
       (cause) => {
         if (disposed) reportRead(cause, 'diff', key, { retired: true });
-        if (diffInFlight.get(key) === promise) diffInFlight.delete(key);
+        if (diffInFlight.get(key) === entry) diffInFlight.delete(key);
       },
     );
-    return promise;
+    return entry;
   };
 
   const loadDiff = async (
@@ -339,8 +362,9 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       return;
     }
     update({ ...state, selectedPath, diff: previous ? { status: 'ready', value: previous, refreshing: true } : { status: 'loading' } });
+    const inFlight = requestDiff(baselineBranch, state.history, target, diffPath, request);
     try {
-      const value = await requestDiff(baselineBranch, state.history, target, diffPath);
+      const value = await inFlight.promise;
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       resolveRead('diff', key);
       if (!isLiveTarget(target)) {
@@ -350,7 +374,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       update({ ...state, diff: { status: 'ready', value } });
     } catch (error) {
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) {
-        if (!disposed) reportRead(error, 'diff', key, { retired: true });
+        if (!disposed && inFlight.ownerRequest === request) reportRead(error, 'diff', key, { retired: true });
         return;
       }
       update({ ...state, diff: previous
@@ -389,8 +413,9 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } else {
       update({ ...state, files: { ...previousFiles, refreshing: true } });
     }
+    const inFlight = requestFiles(baselineBranch, state.history, target, request);
     try {
-      const value = await requestFiles(baselineBranch, state.history, target);
+      const value = await inFlight.promise;
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       resolveRead('files', key);
       if (!isLiveTarget(target)) {
@@ -400,7 +425,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       applyFiles(target, value, background);
     } catch (error) {
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) {
-        if (!disposed) reportRead(error, 'files', key, { retired: true });
+        if (!disposed && inFlight.ownerRequest === request) reportRead(error, 'files', key, { retired: true });
         return;
       }
       if (preserveReady && previousFiles !== undefined) {

@@ -41,7 +41,7 @@ type Input = {
     | 'setModalReadLoading'
     | 'modalReadLoader'
     | 'setWorktreeModalWorkspaceId'
-  >;
+  > & Partial<Pick<ReturnType<typeof useRegistrationState>, 'modalGenerationRef'>>;
 };
 
 export function useSurfaceRefresh({ source, props, registrationState }: Input) {
@@ -60,6 +60,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     setModalReadLoading,
     modalReadLoader,
     setWorktreeModalWorkspaceId,
+    modalGenerationRef,
   } = registrationState;
   // A remount keeps the shared reader's last projections; paint them before the
   // first effect runs so mode re-entry never flashes an empty tree.
@@ -94,12 +95,15 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     sessionIds: readonly string[];
     pending: boolean;
     userRequested: boolean;
+    superseded: boolean;
   }>());
+  const targetErrorReportsRef = useRef(new Map<string, ReportId[]>());
   const forkRecoveryRevisionRef = useRef(forkRecoverySnapshot.revision);
   const alive = useRef(true);
   const modeRef = useRef(mode);
   modeRef.current = mode;
-  const modalReadReportRef = useRef<{ readonly workspaceId: string; readonly reportId: ReportId }>();
+  const modalReadReportRef = useRef<{ readonly workspaceId: string; readonly reportIds: ReportId[] }>();
+  const activeModalLoads = useRef(new Map<string, { superseded: boolean }>());
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -107,6 +111,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       refreshGuard.current.invalidate();
       for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
       targetReads.current.clear();
+      targetErrorReportsRef.current.clear();
       modalReadLoader.current.invalidate();
       modalReadReportRef.current = undefined;
     };
@@ -143,6 +148,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         refreshGuard.current.invalidate();
         for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
         targetReads.current.clear();
+        targetErrorReportsRef.current.clear();
         if (alive.current) setReadState(EMPTY_READ_STATE);
         return;
       }
@@ -180,9 +186,11 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           // Current reads follow invalidations. A later observer must carry the
           // pending explicit retry through to the generation that actually publishes.
           const previous = targetReads.current.get(workspaceId);
+          if (previous) previous.superseded = true;
           let request = { generation: guard.begin(), promise: viewReader.read(workspaceId, { current: true }),
             userRequested: options.userRequested === true || (previous?.pending === true && previous.userRequested),
             pending: true,
+            superseded: false,
             sessionIds: workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [] };
           targetReads.current.set(workspaceId, request);
           try {
@@ -218,8 +226,11 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
             // flushSync may run membership effects before this request's finally.
             // The authoritative result is settled before publishing its ready view.
             request.pending = false;
-            const recovered = readStateRef.current.targetErrors?.[workspaceId]?.reportId;
-            if (recovered) worktreeNotifications.resolve(recovered);
+            const recovered = [...(targetErrorReportsRef.current.get(workspaceId) ?? [])];
+            const currentErrorReport = readStateRef.current.targetErrors?.[workspaceId]?.reportId;
+            if (currentErrorReport && !recovered.includes(currentErrorReport)) recovered.push(currentErrorReport);
+            targetErrorReportsRef.current.delete(workspaceId);
+            for (const reportId of recovered) worktreeNotifications.resolve(reportId);
             const publish = () => setReadState((current) => {
               const targetErrors = { ...current.targetErrors };
               delete targetErrors[workspaceId];
@@ -241,16 +252,22 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
               targetRefreshGuards.current.get(workspaceId) === guard &&
               workspaceIdsRef.current.includes(workspaceId);
             if (!active) {
-              worktreeNotifications.reportError(toWorktreeViewError(error), {
-                origin: 'retired',
-                context: workspaceId,
-              });
+              // A superseded refresh follows the newer reader promise; let the latest observer report it once.
+              if (!request.superseded) {
+                worktreeNotifications.reportError(toWorktreeViewError(error), {
+                  origin: 'retired',
+                  context: workspaceId,
+                });
+              }
               return false;
             }
             const showingCachedView = !request.userRequested && readStateRef.current.views.some(view => view.workspaceId === workspaceId);
             const failure = worktreeNotifications.reportError(toWorktreeViewError(error), {
               origin: showingCachedView ? 'cached-refresh' : undefined, context: workspaceId,
             });
+            const priorReports = targetErrorReportsRef.current.get(workspaceId) ?? [];
+            priorReports.push(failure.reportId);
+            targetErrorReportsRef.current.set(workspaceId, priorReports);
             setReadState((current) => {
               return {
                 ...current,
@@ -296,6 +313,11 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
   }), [props.subscribeToolChanges, mode, refresh]);
   const loadModalWorktreeView = useCallback(
     (workspaceId: string, options?: { revalidate: boolean }): void => {
+      const recordModalReport = (reportId: ReportId): void => {
+        const previous = modalReadReportRef.current;
+        if (previous?.workspaceId === workspaceId) previous.reportIds.push(reportId);
+        else modalReadReportRef.current = { workspaceId, reportIds: [reportId] };
+      };
       if (options?.revalidate) viewReader.invalidate(workspaceId);
       setModalReadError(undefined);
       setModalReadLoading(true);
@@ -304,18 +326,28 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         const failure = worktreeNotifications.reportError({
           code: 'WORKTREE_VIEW_UNAVAILABLE', message: '', retryable: true,
         }, { context: workspaceId });
-        modalReadReportRef.current = { workspaceId, reportId: failure.reportId };
+        recordModalReport(failure.reportId);
         setModalReadError(failure);
         return;
       }
+      const previousLoad = activeModalLoads.current.get(workspaceId);
+      if (previousLoad) previousLoad.superseded = true;
+      const loadToken = { superseded: false };
+      activeModalLoads.current.set(workspaceId, loadToken);
+      const releaseLoad = () => {
+        if (activeModalLoads.current.get(workspaceId) === loadToken) {
+          activeModalLoads.current.delete(workspaceId);
+        }
+      };
       const sessionIds = workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [];
       void modalReadLoader.current.load(
         workspaceId,
         (data) => {
+          releaseLoad();
           if (!alive.current || modeRef.current !== 'worktree') return;
           const previousReport = modalReadReportRef.current;
           if (previousReport?.workspaceId === workspaceId) {
-            worktreeNotifications.resolve(previousReport.reportId);
+            for (const reportId of previousReport.reportIds) worktreeNotifications.resolve(reportId);
             modalReadReportRef.current = undefined;
           }
           const view = data.knownSessionIds === undefined ? { ...data, knownSessionIds: sessionIds } : data;
@@ -327,17 +359,20 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
           }));
         },
         (error) => {
+          releaseLoad();
           const active = alive.current && modeRef.current === 'worktree';
           const failure = worktreeNotifications.reportError(toWorktreeViewError(error), {
             ...(active ? {} : { origin: 'retired' }),
             context: workspaceId,
           });
           if (!active) return;
-          modalReadReportRef.current = { workspaceId, reportId: failure.reportId };
+          recordModalReport(failure.reportId);
           setModalReadLoading(false);
           setModalReadError(failure);
         },
         (error) => {
+          releaseLoad();
+          if (loadToken.superseded) return;
           worktreeNotifications.reportError(toWorktreeViewError(error), {
             origin: 'retired',
             context: workspaceId,
@@ -398,6 +433,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       for (const guard of targetRefreshGuards.current.values()) guard.invalidate();
       targetReads.current.clear();
       modalReadLoader.current.invalidate();
+      if (modalGenerationRef) modalGenerationRef.current++;
       modalReadReportRef.current = undefined;
       modalReadViewRef.current = undefined;
       setWorktreeModalWorkspaceId(undefined);
@@ -405,7 +441,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       setModalReadLoading(false);
       // Keep ready content for immediate reuse on re-entry.
     }
-  }, [mode, refresh, seedCachedViews]);
+  }, [mode, modalGenerationRef, refresh, seedCachedViews]);
   const previousWorkspaceIdsRef = useRef<readonly string[]>(workspaceIds);
   useEffect(() => {
     if (isPendingListPhase(source.workspaces.phase)) return;
@@ -422,6 +458,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       targetRefreshGuards.current.get(workspaceId)?.invalidate();
       targetRefreshGuards.current.delete(workspaceId);
       targetReads.current.delete(workspaceId);
+      targetErrorReportsRef.current.delete(workspaceId);
       viewReader.invalidate(workspaceId);
       syncedMembershipViews.current.delete(workspaceId);
       props.syncWorkspaceSessions?.(workspaceId, []);

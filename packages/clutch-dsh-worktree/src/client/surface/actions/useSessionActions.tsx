@@ -2,6 +2,7 @@ import { worktreeNotifications } from '../notification-center.js';
 import { useEffect, useRef, useState } from 'react';
 import { openWorktreeSession } from '../../view/navigation.js';
 import { retryWorktreeSessionBinding } from '../../session/worktree-session.js';
+import type { ReportId } from '../../view/worktree-view-errors.js';
 import {
   toWorktreeViewError,
   WorktreeSessionBindingError,
@@ -44,6 +45,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     return () => { alive.current = false; };
   }, []);
   const [pendingSessionBinding, setPendingSessionBinding] = useState<PendingSessionBinding>();
+  const pendingBindingReportsRef = useRef<{ readonly sessionId: string; readonly reportIds: ReportId[] }>();
   const [forkRetryKey, setForkRetryKey] = useState<string>();
   const pendingSessionArchived =
     pendingSessionBinding !== undefined &&
@@ -59,6 +61,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     }
     setActionPending(true);
     clearActionError();
+    pendingBindingReportsRef.current = undefined;
     setPendingSessionBinding(undefined);
     try {
       await createSessionCallback(input, (sessionId, projectionReady) => refresh({
@@ -70,6 +73,10 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     } catch (error) {
       const failure = reportActionError(toWorktreeViewError(error));
       if (error instanceof WorktreeSessionBindingError && alive.current) {
+        pendingBindingReportsRef.current = {
+          sessionId: error.sessionId,
+          reportIds: failure?.reportId ? [failure.reportId] : [],
+        };
         setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: failure });
       }
     } finally {
@@ -98,11 +105,26 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
           openingSession: { sessionId, worktreeId: pending.worktreeId },
         }),
       });
-      if (pending.error?.reportId) worktreeNotifications.resolve(pending.error.reportId);
+      const resolved = pendingBindingReportsRef.current?.sessionId === pending.sessionId
+        ? [...pendingBindingReportsRef.current.reportIds]
+        : [];
+      if (pending.error?.reportId && !resolved.includes(pending.error.reportId)) resolved.push(pending.error.reportId);
+      for (const reportId of resolved) worktreeNotifications.resolve(reportId);
+      if (pendingBindingReportsRef.current?.sessionId === pending.sessionId) {
+        pendingBindingReportsRef.current = undefined;
+      }
       if (alive.current) setPendingSessionBinding(undefined);
     } catch (error) {
       const failure = reportActionError(toWorktreeViewError(error));
-      if (alive.current) setPendingSessionBinding({ ...pending, error: failure });
+      if (alive.current) {
+        const previous = pendingBindingReportsRef.current;
+        const reportIds = previous?.sessionId === pending.sessionId
+          ? previous.reportIds
+          : pending.error?.reportId ? [pending.error.reportId] : [];
+        if (failure?.reportId && !reportIds.includes(failure.reportId)) reportIds.push(failure.reportId);
+        pendingBindingReportsRef.current = { sessionId: pending.sessionId, reportIds };
+        setPendingSessionBinding({ ...pending, error: failure });
+      }
     } finally {
       if (alive.current) setActionPending(false);
     }

@@ -829,3 +829,36 @@ test('branch read retry keeps the original diagnostic active while loading and r
   assert.deepEqual(h.diagnostics.getSnapshot()[0].actions, []);
   h.dispose();
 });
+
+test('branch read multi-retry resolves every prior failed diagnostic once loading succeeds', async () => {
+  const h = harness();
+  let settle;
+  const props = {
+    t: (name) => en[name],
+    value: 'main',
+    branches: [],
+    onChange() {},
+    onLoad: () => new Promise((resolve, reject) => { settle = { resolve, reject }; }),
+  };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  render();
+  settle.reject(Object.assign(new Error('first branch read failed'), { code: 'GIT_OPERATION_FAILED' }));
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  h.diagnostics.getSnapshot()[0].actions[0].onClick();
+  render();
+  settle.reject(Object.assign(new Error('second branch read failed'), { code: 'GIT_OPERATION_FAILED' }));
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot().length, 2);
+  h.diagnostics.getSnapshot()[1].actions[0].onClick();
+  render();
+  settle.resolve([{ name: 'main', isCurrent: true }]);
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.deepEqual(h.diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+  h.dispose();
+});

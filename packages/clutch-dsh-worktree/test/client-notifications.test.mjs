@@ -179,3 +179,35 @@ test('report without explicit toastKey coalesces duplicate pending toasts by not
   assert.notEqual(first, second);
   center.dispose();
 });
+
+test('resolving a coalesced head toast promotes the remaining unresolved member at the same FIFO position', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  const first = center.report({ key: 'git:history', toastKey: 'shared-cause', text: 'History failed' });
+  const second = center.report({ key: 'git:files', toastKey: 'shared-cause', text: 'Files failed' });
+  const unrelated = center.report({ key: 'other:error', toastKey: 'other-cause', text: 'Other failed' });
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().reportId, first);
+  assert.equal(diagnostics.hasPendingToast(), true);
+  assert.equal(diagnostics.canClearHistory(), false);
+
+  // Resolving the first member must keep the second unresolved member visible at the head of the queue.
+  center.resolve(first);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().reportId, second);
+  assert.equal(center.getSnapshot().text, 'Files failed');
+  assert.equal(diagnostics.hasPendingToast(), true);
+  assert.equal(diagnostics.canClearHistory(), true, 'resolved first member is now clearable');
+
+  // Dismissing the promoted toast clears the whole group and advances to the unrelated toast.
+  center.dismiss(center.getSnapshot().key);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().reportId, unrelated);
+  center.dismiss(center.getSnapshot().key);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot(), undefined);
+  assert.equal(diagnostics.hasPendingToast(), false);
+  diagnostics.clearHistory();
+  assert.deepEqual(diagnostics.getSnapshot(), []);
+  center.dispose();
+});

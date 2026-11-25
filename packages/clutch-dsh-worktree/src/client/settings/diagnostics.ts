@@ -85,8 +85,12 @@ export function createWorktreeDiagnostics() {
       snapshot = [...snapshot, ...rows];
       emit();
     },
-    dismiss(reportId: ReportId) {
-      announced.delete(reportId);
+    dismiss(reportId: ReportId | readonly ReportId[]) {
+      if (Array.isArray(reportId)) {
+        for (const id of reportId) announced.delete(id);
+      } else {
+        announced.delete(reportId as ReportId);
+      }
       emit();
     },
     updateRecovery(source: string, notices: readonly ReportedNotification[]) {

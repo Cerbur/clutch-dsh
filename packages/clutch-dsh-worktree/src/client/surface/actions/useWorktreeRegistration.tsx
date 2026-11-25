@@ -26,7 +26,8 @@ import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
 import type { useSurfaceSources } from '../state/useSurfaceSources.js';
 
 type Input = {
-  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces'>;
+  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces'> &
+    Partial<Pick<ReturnType<typeof useSurfaceSources>, 'mode'>>;
   registrationState: Pick<
     ReturnType<typeof useRegistrationState>,
     | 'worktreeModalWorkspaceId'
@@ -75,12 +76,14 @@ export function useWorktreeRegistration({
 }: Input) {
   const { workspaces } = source;
   const alive = useRef(true);
+  const modeRef = useRef(source.mode);
+  modeRef.current = source.mode;
   useEffect(() => {
     alive.current = true;
     return () => { alive.current = false; };
   }, []);
-  const importCandidatesReportRef = useRef<{ readonly workspaceId: string; readonly reportId: ReportId }>();
-  const branchConflictReportRef = useRef<ReportId>();
+  const importCandidatesReportRef = useRef<{ readonly workspaceId: string; readonly reportIds: ReportId[] }>();
+  const branchConflictReportRef = useRef<ReportId[]>([]);
   const [branchConflict, setBranchConflict] = useState<WorktreeViewError>();
   const {
     worktreeModalWorkspaceId,
@@ -164,7 +167,7 @@ export function useWorktreeRegistration({
         if (isCurrent()) {
           const previous = importCandidatesReportRef.current;
           if (previous?.workspaceId === workspaceId) {
-            worktreeNotifications.resolve(previous.reportId);
+            for (const reportId of previous.reportIds) worktreeNotifications.resolve(reportId);
             importCandidatesReportRef.current = undefined;
           }
           setImportCandidates({ status: 'ready', candidates });
@@ -173,7 +176,9 @@ export function useWorktreeRegistration({
         const active = isCurrent();
         const failure = worktreeNotifications.reportError(toWorktreeViewError(error), { origin: active ? 'inline' : 'retired', context: workspaceId });
         if (active) {
-          importCandidatesReportRef.current = { workspaceId, reportId: failure.reportId };
+          const previous = importCandidatesReportRef.current;
+          if (previous?.workspaceId === workspaceId) previous.reportIds.push(failure.reportId);
+          else importCandidatesReportRef.current = { workspaceId, reportIds: [failure.reportId] };
           setImportCandidates((current) => ({
             status: 'error', candidates: current.candidates, error: failure,
           }));
@@ -191,7 +196,7 @@ export function useWorktreeRegistration({
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
     importCandidatesReportRef.current = undefined;
-    branchConflictReportRef.current = undefined;
+    branchConflictReportRef.current = [];
     setWorktreeModalWorkspaceId(undefined);
     setModalReadError(undefined);
     setModalReadLoading(false);
@@ -209,7 +214,7 @@ export function useWorktreeRegistration({
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
     importCandidatesReportRef.current = undefined;
-    branchConflictReportRef.current = undefined;
+    branchConflictReportRef.current = [];
     setWorktreeModalWorkspaceId(workspace.workspaceId);
     setBranchConflict(undefined);
     setModalBranches(undefined);
@@ -335,21 +340,25 @@ export function useWorktreeRegistration({
           retryable: true,
         };
       }
-      const previousConflict = branchConflictReportRef.current;
-      if (previousConflict) {
-        worktreeNotifications.resolve(previousConflict);
-        branchConflictReportRef.current = undefined;
+      const previousConflicts = branchConflictReportRef.current;
+      if (previousConflicts.length) {
+        for (const reportId of previousConflicts) worktreeNotifications.resolve(reportId);
+        branchConflictReportRef.current = [];
       }
       await continueWorktreeRegistration(registeredWorktree);
     } catch (error) {
       const failure = toWorktreeViewError(error);
-      const staleModal = !alive.current || generation !== modalGenerationRef.current;
+      const staleModal =
+        !alive.current ||
+        (modeRef.current !== undefined && modeRef.current !== 'worktree') ||
+        generation !== modalGenerationRef.current ||
+        modalWorkspaceIdRef.current !== modalWorkspace.workspaceId;
       if (worktreeModalMode === 'create' && failure.code === 'WORKTREE_BRANCH_CONFLICT') {
         if (staleModal) {
           worktreeNotifications.reportError(failure, { origin: 'retired', context: modalWorkspace.path });
         } else {
           const reported = worktreeNotifications.reportError(failure, { origin: 'inline', context: modalWorkspace.path });
-          branchConflictReportRef.current = reported.reportId;
+          branchConflictReportRef.current.push(reported.reportId);
           setBranchConflict(reported);
         }
       } else if (staleModal) {

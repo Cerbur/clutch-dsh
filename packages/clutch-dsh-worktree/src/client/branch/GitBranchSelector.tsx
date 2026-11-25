@@ -6,6 +6,7 @@ import { IconBranchOutline16, IconDownloadOutline16, IconLoadingOutline16 } from
 import { SearchableSingleSelect, SingleSelectPicker } from '../select/SearchableSingleSelect.js';
 import styles from './git-branch.css';
 import { ErrorRecovery } from '../surface/components/NotificationRecovery.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 
 interface BranchPickerProps {
@@ -31,10 +32,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<WorktreeViewError>();
   const [fetchError, setFetchError] = useState<WorktreeViewError>();
-  const readErrorRef = useRef<WorktreeViewError>();
-  const fetchErrorRef = useRef<WorktreeViewError>();
-  readErrorRef.current = readError;
-  fetchErrorRef.current = fetchError;
+  const readReportIdsRef = useRef<ReportId[]>([]);
+  const fetchReportIdsRef = useRef<ReportId[]>([]);
   const generation = useRef(0);
   const readRequest = useRef<{ source: readonly BranchRecord[]; generation: number; promise: Promise<void> }>();
   const latestSource = useRef(source);
@@ -51,6 +50,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       alive.current = false;
       generation.current++;
       pending.current = false;
+      readReportIdsRef.current = [];
+      fetchReportIdsRef.current = [];
       clearTimeout(resetTimer.current);
     };
   }, []);
@@ -71,8 +72,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       try {
         const next = await onLoad();
         if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
-          if (readErrorRef.current?.reportId) worktreeNotifications.resolve(readErrorRef.current.reportId);
-          readErrorRef.current = undefined;
+          for (const reportId of readReportIdsRef.current) worktreeNotifications.resolve(reportId);
+          readReportIdsRef.current = [];
           setReadError(undefined);
           setFetched({ source, branches: next });
         }
@@ -82,7 +83,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
           origin: current ? 'inline' : 'retired', context: t('dashboard.searchBranches'),
         });
         if (current) {
-          readErrorRef.current = reported;
+          readReportIdsRef.current.push(reported.reportId);
           setReadError(reported);
         }
       } finally {
@@ -105,10 +106,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       const next = await onFetch();
       if (alive.current && generation.current === token) {
         setFetched({ source, branches: next });
-        if (fetchErrorRef.current?.reportId) worktreeNotifications.resolve(fetchErrorRef.current.reportId);
-        if (readErrorRef.current?.reportId) worktreeNotifications.resolve(readErrorRef.current.reportId);
-        fetchErrorRef.current = undefined;
-        readErrorRef.current = undefined;
+        for (const reportId of fetchReportIdsRef.current) worktreeNotifications.resolve(reportId);
+        for (const reportId of readReportIdsRef.current) worktreeNotifications.resolve(reportId);
+        fetchReportIdsRef.current = [];
+        readReportIdsRef.current = [];
         setFetchError(undefined);
         setReadError(undefined);
         setStatus('success');
@@ -122,7 +123,7 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
         origin: current ? 'inline' : 'retired', context: t('branch.fetch'),
       });
       if (current) {
-        fetchErrorRef.current = reported;
+        fetchReportIdsRef.current.push(reported.reportId);
         setFetchError(reported);
         setStatus('error');
       }

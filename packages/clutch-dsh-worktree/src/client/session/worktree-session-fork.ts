@@ -192,6 +192,7 @@ export function createWorktreeSessionForkCoordinator(
   let disposed = false;
   let revision = 0;
   let pending = new Map<string, WorktreeForkRecovery>();
+  const pendingReportIds = new Map<string, ReportId[]>();
   let recoverySnapshot: WorktreeForkRecoverySnapshot = {
     revision: 0,
     pending: [],
@@ -253,6 +254,9 @@ export function createWorktreeSessionForkCoordinator(
     const reported = worktreeNotifications.reportError(forkRecoveryError({ error, childSessionId }), {
       origin: historical ? 'restored-fork' : undefined, context: childSessionId,
     });
+    const reportIds = pendingReportIds.get(key) ?? [];
+    reportIds.push(reported.reportId);
+    pendingReportIds.set(key, reportIds);
     pending = new Map(pending).set(key, {
       reportId: reported.reportId,
       key,
@@ -270,6 +274,7 @@ export function createWorktreeSessionForkCoordinator(
     childSessionId: string,
   ): { cleared: boolean; workspaceId?: string } => {
     const key = recoveryKey(sourceSessionId, childSessionId);
+    pendingReportIds.delete(key);
     const current = pending.get(key);
     if (current === undefined) return { cleared: false };
     const next = new Map(pending);
@@ -343,8 +348,11 @@ export function createWorktreeSessionForkCoordinator(
         status: 'active',
       };
       boundChildren.add(childSessionId);
-      const recovered = pending.get(recoveryKey(sourceSessionId, childSessionId));
-      if (recovered) worktreeNotifications.resolve(recovered.reportId);
+      const key = recoveryKey(sourceSessionId, childSessionId);
+      const recovered = [...(pendingReportIds.get(key) ?? [])];
+      const pendingEntry = pending.get(key);
+      if (pendingEntry && !recovered.includes(pendingEntry.reportId)) recovered.push(pendingEntry.reportId);
+      for (const reportId of recovered) worktreeNotifications.resolve(reportId);
       const { workspaceId: previousWorkspaceId } = clearRecovery(sourceSessionId, childSessionId);
       options.onBound?.(childBinding);
       publish([target.workspaceId, ...(previousWorkspaceId === undefined ? [] : [previousWorkspaceId])]);
@@ -500,6 +508,7 @@ export function createWorktreeSessionForkCoordinator(
         const matchSession = input.sessionIds.includes(item.sourceSessionId);
         if (matchWorktree || matchSession) {
           next.delete(key);
+          pendingReportIds.delete(key);
           changed = true;
         }
       }
@@ -511,6 +520,7 @@ export function createWorktreeSessionForkCoordinator(
     dispose() {
       disposed = true;
       bindingInFlight.clear();
+      pendingReportIds.clear();
       subscribers.clear();
     },
   };

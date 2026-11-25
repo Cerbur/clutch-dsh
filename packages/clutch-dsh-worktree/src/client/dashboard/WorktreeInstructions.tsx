@@ -2,6 +2,7 @@ import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useRef, useState } from 'react';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import styles from './dashboard.css';
@@ -22,8 +23,7 @@ export function WorktreeInstructions({
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
   const [error, setError] = useState<WorktreeViewError>();
-  const errorRef = useRef<WorktreeViewError>();
-  errorRef.current = error;
+  const reportIdsRef = useRef<ReportId[]>([]);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const alive = useRef(true);
@@ -31,6 +31,7 @@ export function WorktreeInstructions({
     alive.current = true;
     return () => {
       alive.current = false;
+      reportIdsRef.current = [];
     };
   }, []);
   useEffect(() => {
@@ -41,10 +42,11 @@ export function WorktreeInstructions({
     if (busy.current || draft === undefined || !onSave) return;
     busy.current = true;
     setPending(true);
+    const priorReports = [...reportIdsRef.current];
     try {
       const result = await onSave(draft, expected.current);
-      if (errorRef.current?.reportId) worktreeNotifications.resolve(errorRef.current.reportId);
-      errorRef.current = undefined;
+      for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+      reportIdsRef.current = reportIdsRef.current.filter((id) => !priorReports.includes(id));
       if (alive.current) {
         setError(undefined);
         setSaved(result);
@@ -61,7 +63,7 @@ export function WorktreeInstructions({
           (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)),
       });
       if (alive.current) {
-        errorRef.current = reported;
+        reportIdsRef.current.push(reported.reportId);
         setError(reported);
       }
     } finally {
@@ -84,7 +86,7 @@ export function WorktreeInstructions({
             onClick={() => {
               expected.current = saved;
               setDraft(saved);
-              errorRef.current = undefined;
+              reportIdsRef.current = [];
               setError(undefined);
             }}
           >
@@ -117,7 +119,7 @@ export function WorktreeInstructions({
               disabled={pending}
               onClick={() => {
                 setDraft(undefined);
-                errorRef.current = undefined;
+                reportIdsRef.current = [];
                 setError(undefined);
               }}
             >

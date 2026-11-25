@@ -29,11 +29,14 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
   const [stopped, setStopped] = useState(false);
   const busy = useRef(false);
   const generation = useRef(0);
-  const previousReports = useRef<{ summary?: ReportId; byWorktreeId: Map<string, ReportId> }>({ byWorktreeId: new Map() });
+  const previousReports = useRef<{ summaries: ReportId[]; byWorktreeId: Map<string, ReportId[]> }>({
+    summaries: [],
+    byWorktreeId: new Map(),
+  });
   useEffect(() => {
     generation.current++;
     busy.current = false;
-    previousReports.current = { byWorktreeId: new Map() };
+    previousReports.current = { summaries: [], byWorktreeId: new Map() };
     setPending(false);
     setConfirmation(undefined);
     setSelected(new Set());
@@ -65,13 +68,15 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           const error = worktreeNotifications.reportError(result.error, {
             origin: 'batch-item', context: result.record.branch + ' · ' + result.record.absolutePath,
           });
-          previousReports.current.byWorktreeId.set(result.record.worktreeId, error.reportId);
+          const prior = previousReports.current.byWorktreeId.get(result.record.worktreeId) ?? [];
+          prior.push(error.reportId);
+          previousReports.current.byWorktreeId.set(result.record.worktreeId, prior);
           failures.push(error);
           result = { ...result, error };
         } else {
           const prior = previousReports.current.byWorktreeId.get(result.record.worktreeId);
           if (prior) {
-            worktreeNotifications.resolve(prior);
+            for (const reportId of prior) worktreeNotifications.resolve(reportId);
             previousReports.current.byWorktreeId.delete(result.record.worktreeId);
           }
         }
@@ -90,11 +95,11 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           const describe = (translate: WorktreeTranslate) => translate('dashboard.tab.manage') + ' · ' + translate(`dashboard.manage.${action}`);
           const notice = { key: 'batch-summary:' + workspaceId + ':' + lifetime, failures, context: workspaceId, describe, text: message(t), message };
           const reportId = worktreeNotifications.report(notice);
-          previousReports.current.summary = reportId;
+          previousReports.current.summaries.push(reportId);
           setSummary({ ...notice, reportId });
-        } else if (previousReports.current.summary && previousReports.current.byWorktreeId.size === 0) {
-          worktreeNotifications.resolve(previousReports.current.summary);
-          previousReports.current.summary = undefined;
+        } else if (previousReports.current.summaries.length && previousReports.current.byWorktreeId.size === 0) {
+          for (const reportId of previousReports.current.summaries) worktreeNotifications.resolve(reportId);
+          previousReports.current.summaries = [];
         }
       }
     } finally {
