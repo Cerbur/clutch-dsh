@@ -247,6 +247,8 @@ or a Session at the repository root; already-bound Git-root Sessions keep their 
 
 ### Enable Agent Worktree tools
 
+If the Agent module cannot load or register its command, tool settings show the failing stage and diagnostic alongside your saved switches. You can still change these preferences, open existing Sessions and use the sidebar and Dashboard. Reload the Worktree plugin after correcting the cause to apply the saved selections.
+
 Open **Settings → Worktree → General** and turn on **Worktree tools**, then select the
 capabilities you want. Both tool switches start off. Run `/cluworktree` in a Session belonging to a
 Workspace or an active managed Worktree to enable your selected capabilities. Turning the general

@@ -102,6 +102,8 @@ DSH 仍登记但根目录已消失的 Workspace 同样只降级读取：Worktree
 
 ### Agent Worktree 工具接缝
 
+核心 Host 在独立的 Cordis 注入作用域中装配原生 Session 目录端口，以及需要 llm 的 Dashboard 基线派发端口。Agent 工具在所需服务就绪后通过动态 import 加载，由单独的子作用域拥有命令、监听器、偏好订阅及已有 Agent 上的注册。导入或注册失败时回收该作用域，设置读取会同时返回内存中的诊断和磁盘偏好。卸载期间结束的导入不能重新注册。
+
 **2026-11-06 当前 DSH 接缝：** 以 `tools.resolve` 检测逐步工具准入能力。
 新图在 `agent/created` 注册 Agent-scoped 条件工具，插件重载时也覆盖已存在的 Agent；
 注册阶段不依赖尚未建立的 Workspace 归属或 Worktree binding。每轮 `when` 通过

@@ -5,6 +5,7 @@ import {
   type WorktreeToolSelection,
   type WorktreeToolSettingsManager,
   type WorktreeToolSettingsScope,
+  type WorktreeToolSettingsView,
 } from '../../contract/tool-settings.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import styles from './settings.css';
@@ -21,7 +22,7 @@ export function ToolSettings({
   scope: WorktreeToolSettingsScope;
   t: WorktreeTranslate;
 }) {
-  const [value, setValue] = useState<WorktreeToolSelection>();
+  const [value, setValue] = useState<WorktreeToolSettingsView>();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -53,6 +54,14 @@ export function ToolSettings({
     // Serialized scope identity prevents a new inline object from restarting the read.
   }, [manager, identity, revision]);
 
+  useEffect(() => {
+    if (failed || pending || (value?.runtime !== 'loading' && value?.runtime !== 'waiting')) return;
+    const timer = window.setTimeout(() => {
+      if (!busy.current) setRevision((current) => current + 1);
+    }, value.runtime === 'loading' ? 500 : 3000);
+    return () => window.clearTimeout(timer);
+  }, [value, failed, pending]);
+
   const save = async (selection: WorktreeToolSelection) => {
     if (!value || !manager?.updateToolSettings || busy.current) return;
     busy.current = true;
@@ -60,7 +69,7 @@ export function ToolSettings({
     setPending(true);
     setFailed(false);
     try {
-      const result = await manager.updateToolSettings({ scope, selection, expected: value });
+      const result = await manager.updateToolSettings({ scope, selection, expected: { enabled: value.enabled, tools: value.tools } });
       if (alive.current && current === generation.current) setValue(result);
     } catch {
       if (alive.current && current === generation.current) setFailed(true);
@@ -97,6 +106,8 @@ export function ToolSettings({
         />
       </div>
       {!value && !failed && <p role="status">{t('tools.loading')}</p>}
+      {value?.runtime === 'failed' && <p role="alert">{t('tools.loadFailed')} {value.loadError}</p>}
+      {value?.runtime === 'waiting' && <p role="status">{t('tools.waiting')}</p>}
       {value?.enabled && (
         <div className={styles.toolOptions} data-worktree-tool-options>
           <div className={styles.toolOptionsHeading}>

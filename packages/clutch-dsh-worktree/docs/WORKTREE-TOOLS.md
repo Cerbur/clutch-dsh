@@ -272,6 +272,8 @@ uses this setting for Magpie Responses. Invalid empty/invented request ids still
 
 ## Tool preferences (2026-10-10 amendment)
 
+The Host reports the Agent registration state separately from the saved selection. A failed import or registration tears down the tool scope, including definitions attached to existing Agents. Reloading mounts a fresh scope and reads the existing preferences. Dashboard Session creation and baseline dispatch own separate native ports.
+
 General, per-Workspace Local/Main and per-Worktree switches default to off. Each selection normalizes the final
 deselection to disabled. Settings show localized capability names and descriptions, without
 internal tool names. General controls command discovery and activation; Worktree selection

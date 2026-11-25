@@ -415,6 +415,31 @@ test('tool preferences expose capabilities, persist selected switches and disabl
   }
 });
 
+test('Agent load errors show the cause alongside editable saved preferences', async () => {
+  const source = await readFile(new URL('../src/client/settings/ToolSettings.tsx', import.meta.url), 'utf8');
+  for (const enabled of [true, false]) {
+    const h = hookHarness(source, {
+      '@deepseek-ai/dsh-client-ui-primitives': { Switch: 'switch', Button: 'button', Tag: 'tag' },
+      '../../contract/tool-settings.js': { WORKTREE_TOOL_IDS },
+      './settings.css': { default: {} },
+    });
+    const manager = { getToolSettings: async () => ({
+      enabled, tools: WORKTREE_TOOL_IDS, runtime: 'failed', loadError: 'import: missing dependency',
+    }) };
+    const input = { scope: { kind: 'general' }, manager, t: (key) => en[key] };
+    h.render('ToolSettings', input);
+    await Promise.resolve();
+    const elements = nodes(h.render('ToolSettings', input));
+    const toggle = elements.find((item) => item.type === 'switch');
+    assert.equal(toggle.props.checked, enabled);
+    assert.equal(toggle.props.disabled, false);
+    const alert = elements.find((item) => item.props?.role === 'alert');
+    assert.ok(alert.props.children.includes(en['tools.loadFailed']));
+    assert.ok(alert.props.children.includes('import: missing dependency'));
+    h.dispose();
+  }
+});
+
 test('tool settings preserve ready content after a failed save and retry reads the latest value', async () => {
   const source = await readFile(new URL('../src/client/settings/ToolSettings.tsx', import.meta.url), 'utf8');
   let reads = 0;

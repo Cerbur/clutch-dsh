@@ -4,7 +4,7 @@ import { link, mkdir, open, readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createWorktreeError } from '../contract/index.js';
-import { NativeSessionCreationPreflightError, type ForgeSessionGate } from '../tool/native-session.js';
+import { NativeSessionCreationPreflightError, type ForgeSessionGate } from './native-session.js';
 
 export const FORGE_BUNDLE = '@deepseek-ai/dsh-experimental-forge-bundle';
 

@@ -12,15 +12,19 @@ export interface WorktreeToolSelection {
   readonly enabled: boolean;
   readonly tools: readonly WorktreeToolId[];
 }
+export interface WorktreeToolSettingsView extends WorktreeToolSelection {
+  readonly runtime?: 'waiting' | 'loading' | 'ready' | 'failed';
+  readonly loadError?: string;
+}
 export type WorktreeToolSettingsScope =
   | { readonly kind: 'general' }
   | { readonly kind: 'local'; readonly workspaceId: string }
   | { readonly kind: 'worktree'; readonly workspaceId: string; readonly worktreeId: string };
 export interface WorktreeToolSettingsManager {
-  getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeToolSelection>;
+  getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeToolSettingsView>;
   updateToolSettings(input: {
     scope: WorktreeToolSettingsScope;
     selection: WorktreeToolSelection;
     expected: WorktreeToolSelection;
-  }): Promise<WorktreeToolSelection>;
+  }): Promise<WorktreeToolSettingsView>;
 }

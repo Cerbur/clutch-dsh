@@ -203,6 +203,8 @@ Git-root Session 保留原有预览范围。
 
 ### 启用 Agent Worktree 工具
 
+如果 Agent 模块无法导入或命令注册失败，工具设置会在已保存的开关旁显示失败阶段和原因。此时仍可修改偏好、打开已有 Session，并使用侧栏和 Dashboard。排除故障后重新加载 Worktree 插件，即可按保存的偏好恢复工具。
+
 打开 **设置 → Worktree → 通用**，开启 **Worktree 工具**并选择需要的能力。两处工具开关默认关闭。
 在属于 Workspace 或已绑定受管 Worktree 的 Session 中执行 `/cluworktree`，即可启用所选能力。
 关闭通用开关后不再提供该指令；取消全部能力时会自动关闭总开关。

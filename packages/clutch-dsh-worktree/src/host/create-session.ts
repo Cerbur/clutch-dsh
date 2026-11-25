@@ -1,5 +1,5 @@
 import type { WorktreeManager, WorktreeRecord, WorktreeSessionCreationResult } from '../contract/index.js';
-import { WorktreeDirectoryEntryNotStarted, type WorktreeToolSessionPort } from './native-session.js';
+import { WorktreeDirectoryEntryNotStarted, type NativeTaskSessionPort } from './native-session.js';
 
 /** Preserve the structured cause across the partial-success RPC boundary. */
 export function sessionFailure(error: unknown): { error: string; causeCode?: string; rootPath?: string } {
@@ -21,7 +21,7 @@ export function sessionFailure(error: unknown): { error: string; causeCode?: str
 export async function createBoundWorktreeSession(input: {
   record: WorktreeRecord;
   manager: Pick<WorktreeManager, 'bindSession'>;
-  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
+  sessions: Pick<NativeTaskSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
   signal: AbortSignal;
   check(): void;
 }): Promise<WorktreeSessionCreationResult> {

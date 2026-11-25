@@ -13,6 +13,8 @@ test('the Worktree Host loads without the retired commands/brand export', async 
   try {
     const { default: Host } = await import('../lib/index.js');
     assert.equal(typeof Host, 'function');
+    const tools = await import('../lib/tool/index.js');
+    assert.equal(typeof tools.registerWorktreeTools, 'function');
   } finally {
     hook.deregister();
   }

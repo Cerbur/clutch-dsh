@@ -1,4 +1,5 @@
-import type { CallingAgent, Options, ToolContext, WorktreeRecord } from './types.js';
+import type { CallingAgent, Options, ToolContext } from './types.js';
+import { available } from '../contract/worktree-availability.js';
 import { boundSessionCwdMatchesWorktree } from '../provider/worktree-path.js';
 export type { ToolContext } from './types.js';
 export const errorText = (error: unknown) =>
@@ -20,13 +21,7 @@ export async function toolWorkspace(sessionId: string, options: Options): Promis
     throw new Error('The calling Session must belong to one Workspace or active Worktree binding');
   return owners[0];
 }
-export function available(record: WorktreeRecord): boolean {
-  return (
-    record.status === 'active' &&
-    record.diskCleanup !== 'completed' &&
-    (record.health === undefined || record.health === 'ready')
-  );
-}
+export { available } from '../contract/worktree-availability.js';
 export async function defaultBase(
   sessionId: string,
   workspaceId: string,
