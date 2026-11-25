@@ -31,6 +31,7 @@ export interface SingleSelectPickerProps {
   readonly onChange: (value: string) => void;
   readonly searchLabel: string;
   readonly noMatchesLabel: string;
+  readonly readFailure?: ReactNode;
   readonly disabled?: boolean;
   readonly loading?: boolean;
   readonly loadingLabel?: string;
@@ -43,7 +44,7 @@ export interface SingleSelectPickerProps {
 
 /** Domain-neutral single selection. Arrow navigation never commits a value. */
 export function SingleSelectPicker({ options, groups = NO_GROUPS, allLabel, value, onChange,
-  searchLabel, noMatchesLabel, disabled, loading = false, loadingLabel = 'Loading…', onClose,
+  searchLabel, noMatchesLabel, readFailure, disabled, loading = false, loadingLabel = 'Loading…', onClose,
   preparing = false, onRefresh }: SingleSelectPickerProps) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string | undefined>(undefined);
@@ -164,7 +165,8 @@ export function SingleSelectPicker({ options, groups = NO_GROUPS, allLabel, valu
             {section.rows.filter((row) => renderedIndexes.has(row.index)).map((item) => row(item, section.top))}
           </div>)}
       </div> : null}
-      {!busy && visible.length === 0 && <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
+      {!busy && readFailure}
+      {!busy && !readFailure && visible.length === 0 && <div className={styles.singleSelectEmpty} data-single-select-empty role="status">{noMatchesLabel}</div>}
     </div>
   </div>;
 }

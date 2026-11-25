@@ -33,7 +33,8 @@ import {
 } from '../lib/client/session/session-view.js';
 import { sessionStatusLabel, sessionTimeLabel } from '../lib/client/session/session-labels.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
-import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
+import { failureToastKey } from '../lib/client/surface/notification-queue.js';
 
 const record = {
   workspaceId: 'repo',
@@ -228,7 +229,7 @@ const singleSelectSource = await readFile(
   new URL('../src/client/select/SearchableSingleSelect.tsx', import.meta.url), 'utf8',
 );
 const notificationSource = await readFile(
-  new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url), 'utf8',
+  new URL('../src/client/surface/components/NotificationRecovery.tsx', import.meta.url), 'utf8',
 );
 
 function renderHarness(writeClipboard, { stubBranchPicker = false, overview = () => ({ status: 'unavailable' }), diagnostics, browserCrypto = globalThis.crypto } = {}) {
@@ -269,6 +270,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
   const notificationExports = {};
+  const center = createNotificationCenter(diagnostics ?? createWorktreeDiagnostics());
   if (diagnostics !== undefined) {
     const compiled = ts.transpileModule(notificationSource, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -276,9 +278,9 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
     new Function('require', 'exports', compiled)((name) => ({
       react, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@deepseek-ai/dsh-client-ui-primitives': { Toast: 'toast' },
-      '../notification-queue.js': { reconcileNotifications, failureToastKey },
+      '../notification-queue.js': { failureToastKey },
       '../../view/worktree-error-copy.js': { formatWorktreeViewError },
-      '../../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
+      '../notification-center.js': { worktreeNotifications: center },
     })[name] ?? {}, notificationExports);
   }
   const selectOutput = ts.transpileModule(singleSelectSource, {
@@ -306,7 +308,8 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
       IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
       IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
     }, './git-branch.css': { default: {} }, '../select/SearchableSingleSelect.js': selectExports,
-    '../surface/components/NotificationToasts.js': { ErrorToast: (props) => jsx('branch-error-toast', props) },
+    '../surface/notification-center.js': { worktreeNotifications: center },
+    '../surface/components/NotificationRecovery.js': { ErrorRecovery: (props) => jsx('branch-error-toast', props) },
     '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ message: error.message, retryable: true }) },
   })[name] ?? {}, branchExports);
   const exports = {};
@@ -336,10 +339,10 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
           Tooltip: ({ children }) => children,
           writeClipboard,
         },
-        '../surface/components/NotificationToasts.js': {
-          NotificationToasts: notificationExports.NotificationToasts ?? (({ notices }) => jsx('toasts', { notices })),
+        '../surface/components/NotificationRecovery.js': {
+          NotificationRecovery: notificationExports.NotificationRecovery ?? (({ notices }) => jsx('toasts', { notices })),
         },
-        '../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
+        '../surface/notification-center.js': { worktreeNotifications: center },
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
         './dashboard-overlay.js': {},
@@ -401,6 +404,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
     onOpenSession() {},
   };
   return {
+    center,
     render(next = {}) {
       props = { ...props, ...next };
       cursor = 0;
@@ -558,8 +562,9 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
       findAll(node, (item) => item.props?.children === locale['dashboard.sync.create'])[0].props.onClick();
       await tick();
       node = harness.render();
+      await Promise.resolve();
       const entry = diagnostics.getSnapshot().find((item) => item.error?.details?.sessionId === 'retained-session');
-      assert.ok(entry, 'the real NotificationToasts component must publish this result');
+      assert.ok(entry, 'the result must be recorded and receive recovery controls');
       assert.equal(entry.status, 'active');
       assert.equal(entry.error.details.status, status);
       assert.equal(entry.error.details.workspaceId, record.workspaceId);
@@ -585,6 +590,7 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
       assert.equal(diagnostics.getSnapshot().find((item) => item.key === entry.key).status, 'active',
         'closing the sync dialog must retain its recovery');
       harness.dispose();
+      await Promise.resolve();
       const historical = diagnostics.getSnapshot().find((item) => item.key === entry.key);
       assert.equal(historical.status, 'inactive');
       assert.equal(historical.error.details.sessionId, 'retained-session');
@@ -595,6 +601,49 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
     }
   });
 }
+
+for (const causeCode of ['WORKSPACE_ROOT_MISSING', 'WORKTREE_NOT_FOUND']) {
+  test(`partial sync retains Session recovery and applies toast policy for ${causeCode}`, async () => {
+    const diagnostics = createWorktreeDiagnostics();
+    const harness = renderHarness(async () => true, { diagnostics });
+    let node = harness.render({ record: { ...record, baseBranch: 'main' }, onSyncBaseline: async () => ({
+      sessionId: 'kept', status: 'binding-failed', error: 'same failure', causeCode,
+      ...(causeCode === 'WORKSPACE_ROOT_MISSING' ? { rootPath: '/missing/root' } : {}),
+    }) });
+    findAll(node, item => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+    node = harness.render();
+    findAll(node, item => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+    await tick();
+    harness.render();
+    await tick();
+    const [entry] = diagnostics.getSnapshot();
+    assert.equal(entry.error.details.causeCode, causeCode);
+    if (causeCode === 'WORKSPACE_ROOT_MISSING') assert.equal(entry.error.details.rootPath, '/missing/root');
+    assert.equal(entry.error.details.sessionId, 'kept');
+    assert.equal(entry.actions.length, 1);
+    assert.equal(Boolean(harness.center.getSnapshot()), causeCode === 'WORKTREE_NOT_FOUND');
+    harness.dispose();
+  });
+}
+
+test('a rejected sync after Dashboard unmount is recorded quietly with its original context', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const harness = renderHarness(async () => true, { diagnostics });
+  let reject;
+  let node = harness.render({ record: { ...record, baseBranch: 'main' },
+    onSyncBaseline: () => new Promise((_, fail) => { reject = fail; }) });
+  findAll(node, item => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+  node = harness.render();
+  findAll(node, item => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+  harness.dispose();
+  reject(new Error('rejected after navigation'));
+  await tick();
+  const [entry] = diagnostics.getSnapshot();
+  assert.equal(entry.error.message, 'rejected after navigation');
+  assert.equal(entry.context, record.absolutePath);
+  assert.equal(entry.status, 'inactive');
+  assert.equal(harness.center.getSnapshot(), undefined);
+});
 
 for (const change of ['baseline', 'worktree', 'manager', 'unmount']) {
   for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporting-failed', 'prompt-failed']) {
@@ -1634,7 +1683,8 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   };
   const mutation = {
     actionPending: false,
-    setActionError: (value) => calls.push(['error', value]),
+    clearActionError: () => calls.push(['error', undefined]),
+    reportActionError: (value) => calls.push(['error', value]),
   };
   const jsx = (type, props) => ({ type, props });
   const exports = {};
@@ -2432,5 +2482,138 @@ test('compact Dashboard gates sync on fresh behind evidence and expands the requ
   assert.equal(calls[0][0], 'rebase');
   assert.equal(calls[0][1], 'main');
   assert.deepEqual(calls.at(-1), ['open', 'task']);
+  harness.dispose();
+});
+
+test('copy failure state resets across record changes and uses consistent path context', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  let clipboardOk = false;
+  const harness = renderHarness(async () => clipboardOk, { diagnostics });
+  const firstRecord = { ...record, worktreeId: 'wt-1', branch: 'feat/one', absolutePath: '/repo/one' };
+  const secondRecord = { ...record, worktreeId: 'wt-2', branch: 'feat/two', absolutePath: '/repo/two' };
+  let node = harness.render({ record: firstRecord, workspaceTitle: 'Repo' });
+  findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+  await tick();
+  harness.render({ record: firstRecord, workspaceTitle: 'Repo' });
+  await tick();
+  const [firstEntry] = diagnostics.getSnapshot();
+  assert.equal(firstEntry.context, 'Repo · /repo/one');
+  assert.equal(firstEntry.status, 'active');
+
+  clipboardOk = true;
+  node = harness.render({ record: secondRecord, workspaceTitle: 'Repo' });
+  findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+  await tick();
+  assert.notEqual(diagnostics.getSnapshot()[0].status, 'resolved',
+    'copying a different Worktree path must not resolve the previous Worktree copy failure');
+  harness.dispose();
+});
+
+test('baseline save diagnostics carry localized describe metadata and multi-retry resolves all prior occurrences', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const child = { ...record, worktreeId: 'child', branch: 'child', currentBranch: 'child', baseBranch: record.branch };
+  let failSaves = 2;
+  const harness = renderHarness(async () => true, { stubBranchPicker: true, diagnostics });
+  let node = harness.render({
+    record: child,
+    workspaceTitle: 'Repo',
+    branches: [{ name: 'main' }, { name: record.branch }],
+    onSaveBaseline: async (value) => {
+      if (failSaves > 0) {
+        failSaves -= 1;
+        throw Object.assign(new Error('save busy'), { code: 'WORKTREE_STATE_CONFLICT' });
+      }
+      return value;
+    },
+  });
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  node = harness.render();
+  findAll(node, (item) => item.type === 'baseline-picker')[0].props.onChange('main');
+  node = harness.render();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+    await tick();
+    node = harness.render();
+  }
+  const expectedContext = `Repo · ${child.branch} · ${child.absolutePath}`;
+  const failedEntries = diagnostics.getSnapshot();
+  assert.equal(failedEntries.length, 2);
+  for (const entry of failedEntries) {
+    assert.equal(entry.context, expectedContext);
+    assert.equal(entry.describe((key) => en[key]), `${en['dashboard.base']} · ${expectedContext}`);
+    assert.equal(entry.describe((key) => zh[key]), `${zh['dashboard.base']} · ${expectedContext}`);
+  }
+  findAll(node, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  await tick();
+  harness.render();
+  await tick();
+  assert.deepEqual(diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+  harness.dispose();
+
+  // Retired save failure after unmount also preserves describe metadata.
+  const retiredDiagnostics = createWorktreeDiagnostics();
+  let rejectLate;
+  const lateHarness = renderHarness(async () => true, { stubBranchPicker: true, diagnostics: retiredDiagnostics });
+  let lateNode = lateHarness.render({
+    record: child,
+    workspaceTitle: 'Repo',
+    branches: [{ name: 'main' }, { name: record.branch }],
+    onSaveBaseline: () => new Promise((_, reject) => { rejectLate = reject; }),
+  });
+  findAll(lateNode, (item) => item.props?.['data-dashboard-baseline-edit'])[0].props.onClick();
+  lateNode = lateHarness.render();
+  findAll(lateNode, (item) => item.type === 'baseline-picker')[0].props.onChange('main');
+  lateNode = lateHarness.render();
+  findAll(lateNode, (item) => item.props?.['data-dashboard-baseline-save'])[0].props.onClick();
+  lateHarness.dispose();
+  rejectLate(Object.assign(new Error('late baseline failure'), { code: 'WORKTREE_STATE_CONFLICT' }));
+  await tick();
+  const [retiredEntry] = retiredDiagnostics.getSnapshot();
+  assert.equal(retiredEntry.status, 'inactive');
+  assert.equal(retiredEntry.describe((key) => en[key]), `${en['dashboard.base']} · ${expectedContext}`);
+});
+
+test('repeated copy and baseline sync failures resolve every prior occurrence on recovery', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  let clipboardOk = false;
+  let failSyncs = 2;
+  const harness = renderHarness(async () => clipboardOk, { diagnostics });
+  let node = harness.render({
+    record: { ...record, baseBranch: 'main' },
+    workspaceTitle: 'Repo',
+    onSyncBaseline: async () => {
+      if (failSyncs > 0) {
+        failSyncs -= 1;
+        throw new Error('sync temporary error');
+      }
+      return { sessionId: 'sync-ok', status: 'dispatched' };
+    },
+  });
+
+  // Two copy failures followed by one success resolve both copy diagnostics.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+    await tick();
+    node = harness.render();
+  }
+  assert.equal(diagnostics.getSnapshot().length, 2);
+  clipboardOk = true;
+  findAll(node, (item) => item.props?.['aria-label'] === en['worktree.copyPath'])[0].props.onClick();
+  await tick();
+  assert.deepEqual(diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+
+  // Two baseline sync failures followed by dispatched success resolve both sync diagnostics.
+  harness.center.dispose();
+  findAll(node, (item) => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+  node = harness.render();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    findAll(node, (item) => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+    await tick();
+    node = harness.render();
+  }
+  assert.equal(diagnostics.getSnapshot().length, 2);
+  findAll(node, (item) => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+  await tick();
+  assert.deepEqual(diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
   harness.dispose();
 });

@@ -1,6 +1,8 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useRef, useState } from 'react';
 import type { WorktreeTranslate } from '../surface/types.js';
-import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import styles from './dashboard.css';
@@ -21,6 +23,7 @@ export function WorktreeInstructions({
   const [saved, setSaved] = useState(value);
   const [draft, setDraft] = useState<string>();
   const [error, setError] = useState<WorktreeViewError>();
+  const reportIdsRef = useRef<ReportId[]>([]);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const alive = useRef(true);
@@ -28,6 +31,7 @@ export function WorktreeInstructions({
     alive.current = true;
     return () => {
       alive.current = false;
+      reportIdsRef.current = [];
     };
   }, []);
   useEffect(() => {
@@ -38,15 +42,30 @@ export function WorktreeInstructions({
     if (busy.current || draft === undefined || !onSave) return;
     busy.current = true;
     setPending(true);
-    setError(undefined);
+    const priorReports = [...reportIdsRef.current];
     try {
       const result = await onSave(draft, expected.current);
+      for (const reportId of priorReports) worktreeNotifications.resolve(reportId);
+      reportIdsRef.current = reportIdsRef.current.filter((id) => !priorReports.includes(id));
       if (alive.current) {
+        setError(undefined);
         setSaved(result);
         setDraft(undefined);
       }
     } catch (cause) {
-      if (alive.current) setError(toWorktreeViewError(cause));
+      const failure = toWorktreeViewError(cause);
+      const reported = worktreeNotifications.reportError(failure, {
+        context,
+        describe: (translate) => translate('dashboard.instructions') + ' · ' + (context ?? ''),
+        origin: alive.current ? undefined : 'retired',
+        message: translate =>
+          translate('dashboard.instructionsSaveFailed') +
+          (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)),
+      });
+      if (alive.current) {
+        reportIdsRef.current.push(reported.reportId);
+        setError(reported);
+      }
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);
@@ -67,6 +86,7 @@ export function WorktreeInstructions({
             onClick={() => {
               expected.current = saved;
               setDraft(saved);
+              reportIdsRef.current = [];
               setError(undefined);
             }}
           >
@@ -99,13 +119,14 @@ export function WorktreeInstructions({
               disabled={pending}
               onClick={() => {
                 setDraft(undefined);
+                reportIdsRef.current = [];
                 setError(undefined);
               }}
             >
               {t('dashboard.cancelInstructions')}
             </button>
           </div>
-          <NotificationToasts
+          <NotificationRecovery
             notices={
               error === undefined
                 ? []

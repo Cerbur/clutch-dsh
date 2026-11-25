@@ -109,7 +109,7 @@ type Input = {
     WorktreeSurfaceProps,
     'insertWorkspaceBefore' | 'insertSessionBefore' | 'sessionOrder' | 'insertWorktreeBefore'
   >;
-  mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'setActionError'>;
+  mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'clearActionError' | 'reportActionError'>;
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'refresh'>;
 };
 
@@ -122,7 +122,7 @@ export function useDragActions({
 }: Input) {
   const { workspaces, sessionOrderSnapshot } = source;
   const { insertWorkspaceBefore, insertSessionBefore, sessionOrder, insertWorktreeBefore } = props;
-  const { setActionError } = mutation;
+  const { clearActionError, reportActionError } = mutation;
   const { refresh } = read;
   const [workspaceDrag, setWorkspaceDrag] = useState<WorkspaceDragState>();
   const workspaceDropCommitted = useRef(false);
@@ -157,16 +157,16 @@ export function useDragActions({
       return;
     }
     if (insertWorkspaceBefore === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKSPACE_ORDER_UNAVAILABLE',
         message: '',
         retryable: true,
       });
       return;
     }
-    setActionError(undefined);
+    clearActionError();
     void insertWorkspaceBefore(activeDrag.workspaceId, beforeWorkspaceId).catch((error) => {
-      setActionError(toWorktreeViewError(error));
+      reportActionError(toWorktreeViewError(error));
     });
   };
   const commitSessionDrag = (
@@ -191,14 +191,14 @@ export function useDragActions({
     if (move === undefined) return;
     const isWorktreeSession = activeDrag.groupKey.startsWith('worktree:');
     if (!isWorktreeSession && insertSessionBefore === undefined) {
-      setActionError({
+      reportActionError({
         code: 'SESSION_ORDER_UNAVAILABLE',
         message: '',
         retryable: true,
       });
       return;
     }
-    setActionError(undefined);
+    clearActionError();
     void commitSessionOrder({
       groupKey: activeDrag.groupKey,
       workspaceId,
@@ -209,7 +209,7 @@ export function useDragActions({
       setOrder: sessionOrder.actions.setOrder,
       updatedAtById: updatedAtById(sessionIds, source.sessions),
     }).catch((error) => {
-      setActionError(toWorktreeViewError(error));
+      reportActionError(toWorktreeViewError(error));
     });
   };
   const commitWorktreeDrag = (
@@ -230,14 +230,14 @@ export function useDragActions({
     );
     if (move === undefined) return;
     if (insertWorktreeBefore === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKTREE_ORDER_UNAVAILABLE',
         message: '',
         retryable: true,
       });
       return;
     }
-    setActionError(undefined);
+    clearActionError();
     void insertWorktreeBefore(workspaceId, activeDrag.worktreeId, move.beforeWorktreeId)
       .then(() =>
         refresh({
@@ -247,7 +247,7 @@ export function useDragActions({
         }),
       )
       .catch((error) => {
-        setActionError(toRetryableWorktreeOrderError(error));
+        reportActionError(toRetryableWorktreeOrderError(error));
       });
   };
   return {

@@ -14,7 +14,7 @@ import * as surfaceSelectors from '../lib/client/surface/selectors.js';
 import * as labels from '../lib/client/session/session-labels.js';
 import * as dashboardSelection from '../lib/client/dashboard/dashboard-selection.js';
 import * as acquisition from '../lib/client/dashboard/worktree-acquisition-facts.js';
-import * as diagnostics from '../lib/client/settings/diagnostics.js';
+import * as notifications from '../lib/client/surface/notification-center.js';
 import { effectiveViewMode } from '../lib/client/view/view-mode.js';
 
 /**
@@ -277,8 +277,8 @@ export async function statusRenderers() {
       Input: 'Input',
     },
     '../dsh-icons.js': icons,
-    '../surface/components/NotificationToasts.js': { NotificationToasts: 'Toasts' },
-    '../settings/diagnostics.js': diagnostics,
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: 'Toasts' },
+    '../surface/notification-center.js': notifications,
     '../view/worktree-view.js': {},
     '../view/worktree-error-copy.js': {},
     './dashboard-overlay.js': {},

@@ -84,7 +84,7 @@ export type WorkspaceTreeInput = {
   >;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
-    'actionPending' | 'setActionError' | 'runMutation'
+    'actionPending' | 'clearActionError' | 'reportActionError' | 'runMutation'
   >;
   menus: Pick<
     ReturnType<typeof useSurfaceMenus>,
@@ -376,6 +376,9 @@ export function WorkspaceTree({
                     {read.readState.targetErrors?.[workspace.workspaceId]
                       ? t('status.workspaceFailed') : t('status.loading')}
                   </p>
+                )}
+                {expanded && view !== undefined && read.readState.targetErrors?.[workspace.workspaceId]?.showingCachedView && (
+                  <p className={styles.message} role="status">{t('status.refreshStale')}</p>
                 )}
                 {expanded && view !== undefined && (
                   <div className={styles.treeChildren}>

@@ -13,9 +13,12 @@ import * as navigation from '../lib/client/dashboard/dashboard-navigation.js';
 import * as sessions from '../lib/client/dashboard/dashboard-sessions.js';
 import { createNativeChangesNavigation } from '../lib/client/dashboard/git/native-changes-navigation.js';
 import { en, zh } from '../lib/client/locales.js';
+import * as center from '../lib/client/surface/notification-center.js';
 import * as queue from '../lib/client/surface/notification-queue.js';
 import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { useSurfaceMutation } from '../lib/client/surface/actions/useSurfaceMutation.js';
+import { forkRecoveryError } from '../lib/client/surface/shared.js';
+import { createWorktreeSessionForkCoordinator } from '../lib/client/session/worktree-session-fork.js';
 
 async function clientModule(file) {
   const compiled = ts.transpileModule(await readFile(new URL('../src/client/' + file, import.meta.url), 'utf8'), {
@@ -36,13 +39,14 @@ async function clientModule(file) {
 
 const surfaceModule = await clientModule('WorktreeSurface.tsx');
 const errorCopy = (await clientModule('view/worktree-error-copy.ts'))({});
-const notifications = (await clientModule('surface/components/NotificationToasts.tsx'))({
-  '../notification-queue.js': queue, '../../settings/diagnostics.js': diagnostics,
+const notifications = (await clientModule('surface/components/NotificationRecovery.tsx'))({
+  '../notification-queue.js': queue, '../notification-center.js': center,
   '../../view/worktree-error-copy.js': errorCopy,
   '@deepseek-ai/dsh-client-ui-primitives': { Toast: ({ text }) => React.createElement('output', null, text) },
 });
 const { SurfaceContent } = (await clientModule('surface/components/SurfaceContent.tsx'))({
-  './NotificationToasts.js': notifications, '../notification-queue.js': queue,
+  '../shared.js': { forkRecoveryError },
+  './NotificationRecovery.js': notifications, '../notification-queue.js': queue,
   '../../view/worktree-error-copy.js': errorCopy,
 });
 const { WorktreeSettings } = (await clientModule('settings/WorktreeSettings.tsx'))({
@@ -63,7 +67,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
   const source = { mode: 'worktree', currentSessionId: 'old', workspaceIds: ['ws'], forkRecoverySnapshot: { pending: [] },
     workspaces: { items: [{ workspaceId: 'ws', path: '/checkout', sessionIds: ['old', 'matching'] }] },
     sessions: { ids: ['old', 'matching'], byId: {}, phase: 'ready' }, archivedSessionIds: [], sessionPresentations: {} };
-  const view = { worktrees: main ? [] : [record], branches: [], knownSessionIds: ['old', 'matching'],
+  const view = { workspaceId: 'ws', readiness: { status: 'ready' }, worktrees: main ? [] : [record], branches: [], knownSessionIds: ['old', 'matching'],
     bindings: main ? [] : ['old', 'matching'].map((sessionId) => ({ workspaceId: 'ws', worktreeId: 'wt', sessionId, status: 'active' })) };
   const listeners = new Set();
   let snapshot = { workspaceId: 'ws', worktreeId: record.worktreeId, sessionId: 'old' };
@@ -82,14 +86,15 @@ async function fixture(t, { main, external, openNativeChanges }) {
     './dashboard/dashboard-navigation.js': navigation,
     './dashboard/dashboard-sessions.js': sessions,
     './dashboard/WorktreeDashboard.js': { WorktreeDashboard: Dashboard },
-    './surface/components/NotificationToasts.js': notifications,
+    './surface/components/NotificationRecovery.js': notifications,
     './surface/components/SurfaceContent.js': { SurfaceContent: (input) => {
       f.openDashboard = input.props.openDashboard;
+      f.runMutation = input.mutation.runMutation;
       f.error = input.mutation.actionError;
       return React.createElement(SurfaceContent, input);
     } },
     './surface/state/useSurfaceSources.js': { useSurfaceSources: () => source },
-    './surface/state/useSurfaceRefresh.js': { useSurfaceRefresh: () => ({ viewByWorkspace: new Map([['ws', view]]), readState: { status: 'ready' } }) },
+    './surface/state/useSurfaceRefresh.js': { useSurfaceRefresh: () => ({ viewByWorkspace: new Map([['ws', view]]), readState: { status: 'ready', views: [view] } }) },
     './surface/actions/useSurfaceMutation.js': { useSurfaceMutation },
     './surface/actions/useLifecycleActions.js': { useLifecycleActions: () => ({ recoveryAction: () => null }) },
     './surface/state/useSessionOrdering.js': { useSessionOrdering: () => ({ orderedSessionIdsByAccount: new Map() }) },
@@ -108,6 +113,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
   const render = (locale = en, showSettings = false) => {
     props.t = (key) => locale[key];
     root.render(React.createElement(React.Fragment, null, React.createElement(WorktreeSurface, props),
+      React.createElement(notifications.NotificationPresenter, { t: props.t }),
       showSettings && React.createElement(WorktreeSettings, { t: props.t })));
   };
   f.render = (...args) => React.act(async () => render(...args));
@@ -118,7 +124,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
   f.switchTo = async (id) => { source.currentSessionId = id; await f.render(); };
   t.after(async () => {
     native.dispose(); await React.act(async () => root.unmount()); dom.window.close();
-    diagnostics.worktreeDiagnostics.dispose();
+    center.worktreeNotifications.dispose();
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
     }
@@ -127,6 +133,55 @@ async function fixture(t, { main, external, openNativeChanges }) {
   if (!external) await React.act(async () => f.openDashboard(record));
   return f;
 }
+
+test('one component catches A, B and repeated B before React commits and retains all occurrences in order', async (t) => {
+  const f = await fixture(t, { external: true });
+  await React.act(async () => {
+    for (const code of ['A', 'B', 'B']) {
+      await f.runMutation(async () => { throw { code, message: code, retryable: true }; });
+    }
+  });
+  const history = diagnostics.worktreeDiagnostics.getSnapshot();
+  assert.deepEqual(history.map(entry => entry.error.code), ['A', 'B', 'B']);
+  assert.equal(new Set(history.map(entry => entry.reportId)).size, 3);
+  assert.deepEqual(history.map(entry => entry.status), ['reported', 'reported', 'active']);
+  assert.equal(history[0].actions.length, 0);
+  assert.equal(center.worktreeNotifications.getSnapshot().error.code, 'A');
+  await React.act(async () => center.worktreeNotifications.dismiss(center.worktreeNotifications.getSnapshot().key));
+  assert.equal(center.worktreeNotifications.getSnapshot().error.code, 'B');
+  assert.deepEqual(diagnostics.worktreeDiagnostics.getSnapshot(), history);
+});
+
+test('historical fork repair appears only in Settings across reloads, but a new failed fork shows its toast', async (t) => {
+  const f = await fixture(t, { external: true });
+  const options = {
+    sessions: { getSnapshot: () => ({ phase: 'ready', ids: ['parent', 'old-child'],
+      byId: { parent: {}, 'old-child': { parentId: 'parent' } } }) },
+    fork: async () => 'new-child',
+    findBindings: async () => ({ bySessionId: new Map([['parent', { status: 'found',
+      binding: { workspaceId: 'ws', worktreeId: 'wt', status: 'active', sessionId: 'parent' } }]]) }),
+    bindSession: async () => { throw Object.assign(new Error('checkout missing'), { code: 'WORKTREE_NOT_FOUND' }); },
+  };
+  for (const withNewFork of [false, true]) {
+    const coordinator = createWorktreeSessionForkCoordinator(options);
+    await coordinator.reconcile();
+    f.source.forkRecoverySnapshot = coordinator.recovery.getSnapshot();
+    await f.render(zh);
+    await f.render(zh, true);
+    assert.equal(f.document.querySelector('output'), null);
+    const entry = f.document.querySelector('[data-worktree-diagnostic]');
+    assert.match(entry.textContent, /old-child/);
+    assert.match(entry.querySelector('pre').textContent, /WORKTREE_NOT_FOUND/);
+    assert.ok(entry.textContent.includes(zh['action.openCreatedSession']));
+    if (withNewFork) {
+      await coordinator.fork({ sessionId: 'parent' });
+      f.source.forkRecoverySnapshot = coordinator.recovery.getSnapshot();
+      await f.render(zh, true);
+      assert.ok(f.document.querySelector('output').textContent.includes(zh['error.worktreeNotFound']));
+    }
+    coordinator.dispose();
+  }
+});
 
 test('a synchronous native selection commit preserves the Dashboard and retry feedback', async (t) => {
   const f = await fixture(t, { external: true });

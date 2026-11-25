@@ -58,7 +58,7 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
     '../shared.js': {},
     './WorkspaceTree.js': { WorkspaceTree: () => React.createElement('div', { 'data-tree': true }, 'ready worktree content') },
     './OverlayScrollbar.js': { OverlayScrollbar: () => React.createElement('div', { 'data-legacy-scrollbar': true }) },
-    './NotificationToasts.js': { NotificationToasts: () => null },
+    './NotificationRecovery.js': { NotificationRecovery: () => null },
     '../notification-queue.js': {},
   });
   let mounts = 0;
@@ -74,12 +74,13 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
           source: { forkRecoverySnapshot: { pending: [] }, workspaces: { items: [] }, sessions: { byId: {} } },
           props: { sidebarSeat, t: (key) => key },
           lifecycle: {}, mutation: {}, session: {},
-          read: { readState: { status: 'ready' } },
+          read: { readState: { status: 'ready', views: [] } },
           expansion: { contentRef },
         })), sidebarSeat.element));
   }
   const { WorktreeOverlay } = await load('overlay/WorktreeOverlay.tsx', {
     '../WorktreeSurface.js': { WorktreeSurface: Surface },
+    '../surface/components/NotificationRecovery.js': { NotificationPresenter: () => null },
     '../context/WorktreeHeroContext.js': { WorktreeHeroContext: () => null },
     '../view/SidebarViewSwitch.js': { SidebarViewSwitch: () => null },
     '../view/view-mode-dispatch.js': { registerViewModeSetter: () => {} },

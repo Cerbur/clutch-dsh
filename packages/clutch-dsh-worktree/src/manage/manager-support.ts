@@ -281,11 +281,18 @@ export async function resolveWorktreeWorkspaceRecord(
   record: WorktreeRecord,
   details: WorktreeErrorDetails = {},
 ): Promise<WorktreeRecord> {
-  const repositoryRoot = record.gitRootPath === undefined && context.git.resolveRepositoryRoot
-    ? await context.git.resolveRepositoryRoot(workspace.rootPath)
-    : workspace.rootPath;
+  let repositoryRoot: string;
+  try {
+    repositoryRoot = record.gitRootPath === undefined && context.git.resolveRepositoryRoot
+      ? await context.git.resolveRepositoryRoot(workspace.rootPath)
+      : workspace.rootPath;
+  } catch (error) {
+    await requireWorkspaceRoot(workspace);
+    throw error;
+  }
   const projected = await projectWorktreePath(record, workspace.rootPath, repositoryRoot);
   if (!(await worktreeWorkspaceAvailable(projected))) {
+    await requireWorkspaceRoot(workspace);
     throw providerError('WORKTREE_NOT_FOUND', 'Workspace directory is unavailable inside the Worktree', {
       ...details,
       workspaceId: workspace.workspaceId,

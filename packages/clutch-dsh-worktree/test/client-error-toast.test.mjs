@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
-import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
+import { failureToastKey } from '../lib/client/surface/notification-queue.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 import { WORKTREE_ERROR_CODES } from '../lib/contract/index.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
@@ -38,7 +39,7 @@ test('the Worktree list contains no error banner or diagnostics drawer', async (
     source,
     /<details|role="alert"|data-worktree-error|data-worktree-target-error/,
   );
-  assert.match(source, /NotificationToasts/);
+  assert.match(source, /NotificationRecovery/);
 });
 
 test('Git failures distinguish local changes, access, locks, naming and timeout without exposing stderr', () => {
@@ -128,99 +129,96 @@ function hookHarness(source, modules, context) {
   };
 }
 
-async function toastHarness(context) {
-  const source = await readFile(
-    new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url),
-    'utf8',
-  );
+async function toastHarness() {
+  const source = await readFile(new URL('../src/client/surface/components/NotificationRecovery.tsx', import.meta.url), 'utf8');
   const diagnostics = createWorktreeDiagnostics();
-  const harness = hookHarness(
-    source,
-    {
-      '@deepseek-ai/dsh-client-ui-primitives': { Toast: 'toast' },
-      '../notification-queue.js': { reconcileNotifications, failureToastKey },
-      '../../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
-      '../../view/worktree-error-copy.js': { formatWorktreeViewError },
-    },
-    context,
-  );
-  return { ...harness, diagnostics };
+  const center = createNotificationCenter(diagnostics);
+  const modules = {
+    '@deepseek-ai/dsh-client-ui-primitives': { Toast: 'toast' },
+    '../notification-queue.js': { failureToastKey },
+    '../notification-center.js': { worktreeNotifications: center },
+    '../../view/worktree-error-copy.js': { formatWorktreeViewError },
+  };
+  const reporter = hookHarness(source, modules);
+  const presenter = hookHarness(source, modules);
+  return { center, diagnostics, report: (notices) => reporter.render('NotificationRecovery', { notices }),
+    toast: (props = {}) => presenter.render('NotificationPresenter', { t: key => en[key], ...props }),
+    dispose: reporter.dispose };
 }
 
-test('toasts show complete guidance, serialize failures, and do not replay after dismissal', async () => {
+test('independent sources serialize complete guidance and do not replay a dismissed failure until resolved', async () => {
   const h = await toastHarness();
   const text = 'Problem. '.repeat(40) + 'Recovery instructions at the end.';
-  let recovered = 0;
-  const notices = [
-    { key: 'a', text, actions: [{ label: 'Recover', onClick: () => recovered++ }] },
-    { key: 'b', text: 'Second failure' },
-  ];
-  h.render('NotificationToasts', { notices });
-  let node = h.render('NotificationToasts', { notices });
-  assert.equal(node.type, 'toast');
-  assert.equal(node.props.text, text, 'guidance must not be truncated');
-  assert.equal(node.props.actions, undefined, 'recovery actions belong to Settings');
-  h.diagnostics.getSnapshot()[0].actions[0].onClick();
-  assert.equal(recovered, 1);
+  const notices = [{ key: 'a', text, reportId: h.center.report({ key: 'a', text }) }];
+  assert.equal(h.report(notices), null);
+  h.center.report({ key: 'b', text: 'Second failure' });
+  assert.equal(h.toast(), null, 'reports are asynchronous');
+  await Promise.resolve();
+  let node = h.toast();
+  assert.equal(node.props.text, text + ' ' + en['settings.toastHint']);
+  assert.equal(node.props.actions, undefined);
   node.props.onDone();
-  node = h.render('NotificationToasts', { notices });
-  assert.equal(node.props.text, 'Second failure');
+  await Promise.resolve();
+  node = h.toast();
+  assert.equal(node.props.text, 'Second failure ' + en['settings.toastHint']);
   node.props.onDone();
-  assert.equal(
-    h.render('NotificationToasts', { notices: notices.map((notice) => ({ ...notice })) }),
-    null,
-  );
-  h.render('NotificationToasts', { notices: [] });
-  h.render('NotificationToasts', { notices });
-  assert.equal(h.render('NotificationToasts', { notices }).props.text, text);
+  h.report(notices.map(notice => ({ ...notice })));
+  await Promise.resolve();
+  assert.equal(h.toast(), null);
+  h.report([]);
+  h.report([{ ...notices[0], reportId: h.center.report({ key: 'a', text }) }]);
+  await Promise.resolve();
+  assert.equal(h.toast().props.text, text + ' ' + en['settings.toastHint']);
   h.dispose();
 });
 
 test('shared registration keeps the latest recovery callback and withdraws on unmount', async () => {
-  const publications = [];
-  const h = await toastHarness((id, notices) => publications.push({ id, notices }));
+  const h = await toastHarness();
   let recovered;
-  const makeNotice = (target) => ({
-    key: 'same',
-    text: 'Same failure',
-    actions: [
-      {
-        label: 'Recover',
-        onClick: () => {
-          recovered = target;
-        },
-      },
-    ],
-  });
-  h.render('NotificationToasts', { notices: [makeNotice('old')] });
-  const registered = publications[0].notices[0];
-  h.render('NotificationToasts', { notices: [makeNotice('new')] });
-  assert.equal(publications.length, 1, 'unchanged copy must not republish');
+  const reportId = h.center.report({ key: 'same', text: 'Same failure' });
+  const makeNotice = target => ({ reportId, key: 'same', text: 'Same failure',
+    actions: [{ label: 'Recover', onClick: () => { recovered = target; } }] });
+  h.report([makeNotice('old')]);
+  await Promise.resolve();
+  const registered = h.diagnostics.getSnapshot()[0];
+  h.report([makeNotice('new')]);
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot()[0], registered);
   registered.actions[0].onClick();
   assert.equal(recovered, 'new');
   h.dispose();
-  assert.deepEqual(publications.at(-1).notices, []);
   recovered = undefined;
   registered.actions[0].onClick();
-  assert.equal(recovered, undefined, 'unmounted recovery actions must be inert');
+  assert.equal(recovered, undefined, 'recovery is revoked even before the queued unmount');
+  await Promise.resolve();
+  assert.ok(h.toast(), 'unmount revokes recovery without cancelling an already reported occurrence');
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'inactive');
 });
 
-test('the shared toast opens Settings while repair callbacks stay in the diagnostic record', async () => {
+test('direct and wrapped missing-root errors retain the code and recovery without hiding unrelated operations', async () => {
   const h = await toastHarness();
-  let opened = 0;
-  const input = { children: null, t: key => en[key], openSettings: () => { opened++; return true; } };
-  let node = h.render('NotificationProvider', input);
-  node.props.value('operation-dialog', [{ key: 'error', text: 'Problem and solution',
-    actions: [{ label: 'Retry', onClick() { throw new Error('must not run from toast'); } }] }]);
-  h.render('NotificationProvider', input);
-  node = h.render('NotificationProvider', input);
-  const toast = nodes(node).find(item => item.type === 'toast');
-  assert.ok(toast, JSON.stringify(node));
-  assert.ok(toast.props.text.includes(en['settings.toastHint']));
-  assert.equal(toast.props.actions.length, 1);
-  assert.equal(toast.props.actions[0].label, en['settings.errors']);
+  const missing = { code: 'WORKSPACE_ROOT_MISSING', message: 'missing', retryable: false };
+  const checkout = { ...missing, code: 'WORKTREE_NOT_FOUND' };
+  const wrapped = { ...missing, code: 'SESSION_BINDING_FAILED', details: { causeCode: missing.code, sessionId: 'child' } };
+  let recovered = false;
+  const notices = [{ key: 'create', text: 'Missing directory', error: missing },
+    { key: 'binding', text: 'Missing directory', error: wrapped, actions: [{ label: 'Open', onClick: () => { recovered = true; } }] },
+    { key: 'read', text: 'Cached', error: checkout, origin: 'cached-refresh' }];
+  h.report(notices.map(notice => ({ ...notice, reportId: h.center.report(notice) })));
+  await Promise.resolve();
+  assert.equal(h.toast(), null);
+  const history = h.diagnostics.getSnapshot();
+  assert.deepEqual(history.map(entry => entry.error), [missing, wrapped, checkout]);
+  history[1].actions[0].onClick();
+  assert.ok(recovered);
+  h.center.report({ key: 'retry', text: 'Missing directory', error: checkout });
+  await Promise.resolve();
+  let opened = false;
+  const toast = h.toast({ openSettings: () => { opened = true; return true; } });
+  assert.equal(toast.props.text, 'Missing directory ' + en['settings.toastHint']);
+  assert.deepEqual(toast.props.actions.map(action => action.label), [en['settings.errors']]);
   toast.props.actions[0].onClick();
-  assert.equal(opened, 1);
+  assert.ok(opened);
   h.dispose();
 });
 
@@ -249,7 +247,7 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
     },
     './WorkspaceTree.js': { WorkspaceTree: 'tree' },
     './OverlayScrollbar.js': { OverlayScrollbar: 'scrollbar' },
-    './NotificationToasts.js': { NotificationToasts: 'notices' },
+    './NotificationRecovery.js': { NotificationRecovery: 'notices' },
     '../notification-queue.js': { failureToastKey },
   });
   const refreshed = [];
@@ -265,7 +263,7 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
       refresh: (options) => refreshed.push(options),
       readState: {
         status: 'ready',
-        views: [{ workspaceId: 'unrelated' }],
+        views: [{ workspaceId: 'unrelated', readiness: { status: 'ready' } }],
         targetErrors: {
           affected: { code: 'CONNECTION_CALL_FAILED', message: '', retryable: true },
         },
@@ -289,14 +287,19 @@ test('ready Workspaces stay visible and targeted recovery remains reachable afte
   assert.ok(notice.text.length > 25);
   notice.actions[0].onClick();
   assert.deepEqual(refreshed, [
-    { scope: { kind: 'workspaces', workspaceIds: ['affected'] }, preserveCurrent: true },
+    { userRequested: true, scope: { kind: 'workspaces', workspaceIds: ['affected'] }, preserveCurrent: true },
   ]);
   assert.ok(nodes(node).some((item) => item.type === 'tree'));
+  assert.equal(notice.origin, undefined);
+  input.read.readState.targetErrors.affected.showingCachedView = true;
+  const cached = nodes(h.render('SurfaceContent', input)).find((item) => item.type === 'notices').props.notices[0];
+  assert.equal(cached.origin, 'cached-refresh');
+  assert.equal(cached.error.code, notice.error.code);
   // A read retry may clear actionError while the retained Session still needs binding repair.
-  input.read.readState = { status: 'ready', views: [{ workspaceId: 'unrelated' }] };
+  input.read.readState = { status: 'ready', views: [{ workspaceId: 'unrelated', readiness: { status: 'ready' } }] };
   let opened;
   input.props.openSession = (sessionId) => { opened = sessionId; };
-  input.mutation.setActionError = () => {};
+  input.mutation.clearActionError = () => {};
   input.session.pendingSessionBinding = { workspaceId: 'affected', sessionId: 'retained-session' };
   input.session.setPendingSessionBinding = () => {};
   input.session.retrySessionBinding = () => {};
@@ -322,7 +325,10 @@ test('Settings renders contextual explanations, original diagnostics and safe re
     './settings.css': { default: {} },
   });
   let retried = 0, closed = 0;
-  store.publish('view', [{
+  const reportId = { sequence: 1 };
+  store.record('view', [{ key: 'failure', reportId, text: 'old language',
+    error: { code: 'GIT_OPERATION_FAILED', retryable: true, message: 'raw Git failure', details: { gitStderr: 'fatal: permission denied' } } }]);
+  store.updateRecovery('view', [{ reportId,
     key: 'failure', context: 'My Workspace · feature/task · /repo/wt',
     text: 'old language',
     error: { code: 'GIT_OPERATION_FAILED', retryable: true, message: 'raw Git failure',
@@ -445,10 +451,47 @@ test('tool settings preserve ready content after a failed save and retry reads t
 
 test('a pending toast follows a language change even when the notice identity is unchanged', async () => {
   const h = await toastHarness();
-  h.render('NotificationToasts', { notices: [{ key: 'copy', text: en['dashboard.copyFailed'] }] });
-  let node = h.render('NotificationToasts', { notices: [{ key: 'copy', text: en['dashboard.copyFailed'] }] });
-  assert.equal(node.props.text, en['dashboard.copyFailed']);
-  node = h.render('NotificationToasts', { notices: [{ key: 'copy', text: zh['dashboard.copyFailed'] }] });
-  assert.equal(node.props.text, zh['dashboard.copyFailed']);
+  const reportId = h.center.report({ key: 'copy', text: en['dashboard.copyFailed'] });
+  for (const locale of [en, zh]) {
+    h.report([{ key: 'copy', reportId, text: locale['dashboard.copyFailed'] }]);
+    await Promise.resolve();
+    assert.equal(h.toast({ t: key => locale[key] }).props.text,
+      locale['dashboard.copyFailed'] + ' ' + locale['settings.toastHint']);
+  }
   h.dispose();
+});
+
+test('Settings opens Errors tab for reported entries, distinguishes reported from resolved, and tracks clearHistory availability', async () => {
+  const store = createWorktreeDiagnostics();
+  const center = createNotificationCenter(store);
+  const source = await readFile(new URL('../src/client/settings/WorktreeSettings.tsx', import.meta.url), 'utf8');
+  const h = hookHarness(source, {
+    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'button', SegmentedTabs: 'tabs', Tag: 'tag' },
+    '../view/worktree-error-copy.js': { formatWorktreeViewError },
+    './diagnostics.js': { worktreeDiagnostics: store },
+    './ToolSettings.js': { ToolSettings: 'ToolSettings' },
+    '../PluginAttribution.js': { PluginAttribution: 'PluginAttribution' },
+    './settings.css': { default: {} },
+  });
+  const reportId = center.report({ key: 'reported-only', text: 'Reported failure' });
+  await Promise.resolve();
+  const input = { t: (key) => en[key], close() {} };
+  let node = h.render('WorktreeSettings', input);
+  const tabs = nodes(node).find((item) => item.type === 'tabs');
+  assert.equal(tabs.props.value, 'errors', 'reported entry or pending toast must open Errors tab');
+  assert.ok(nodes(node).some((item) => item.type === 'tag' && item.props.children === en['settings.reported']));
+  assert.ok(!nodes(node).some((item) => item.type === 'tag' && item.props.children === en['settings.resolved']));
+  const clearButton = (tree) => nodes(tree).find((item) => item.type === 'button' && item.props.children === en['settings.clearHistory']);
+  assert.equal(clearButton(node).props.disabled, true, 'Clear history must stay disabled while only pending-toast entries exist');
+  center.dismiss(center.getSnapshot().key);
+  await Promise.resolve();
+  node = h.render('WorktreeSettings', input);
+  assert.equal(clearButton(node).props.disabled, false, 'Clear history enables after toast dismissal');
+  center.resolve(reportId);
+  await Promise.resolve();
+  node = h.render('WorktreeSettings', { ...input, t: (key) => zh[key] });
+  assert.ok(nodes(node).some((item) => item.type === 'tag' && item.props.children === zh['settings.resolved']));
+  assert.ok(zh['settings.reported'] && en['settings.reported']);
+  h.dispose();
+  center.dispose();
 });

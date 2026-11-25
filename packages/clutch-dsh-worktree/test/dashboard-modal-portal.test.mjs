@@ -71,7 +71,7 @@ function dashboard() {
     },
     '../settings/ToolSettings.js': { ToolSettings: noop },
     '../branch/GitBranchSelector.js': { GitBranchPicker: noop },
-    '../surface/components/NotificationToasts.js': { NotificationToasts: noop },
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: noop },
     './dashboard.css': { default: {} },
     './batch-manage.js': batch,
     '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },

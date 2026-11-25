@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { worktreeNotifications } from '../notification-center.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WorktreeRecord } from '../../../contract/index.js';
+import type { ReportId } from '../../view/worktree-view-errors.js';
 import {
   createDefaultWorktreeName,
   executeWorktreeAction,
@@ -8,6 +10,7 @@ import {
   toWorktreeViewError,
   WorktreeSessionBindingError,
   type CreateSessionForWorktreeInput,
+  type WorktreeViewError,
 } from '../../view/worktree-view.js';
 import { WorktreeCreateDefaults } from '../shared.js';
 import type {
@@ -23,11 +26,13 @@ import type { useSurfaceRefresh } from '../state/useSurfaceRefresh.js';
 import type { useSurfaceSources } from '../state/useSurfaceSources.js';
 
 type Input = {
-  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces'>;
+  source: Pick<ReturnType<typeof useSurfaceSources>, 'workspaces'> &
+    Partial<Pick<ReturnType<typeof useSurfaceSources>, 'mode'>>;
   registrationState: Pick<
     ReturnType<typeof useRegistrationState>,
     | 'worktreeModalWorkspaceId'
     | 'modalReadLoading'
+    | 'modalReadError'
     | 'modalBranches'
     | 'setModalBranches'
     | 'setSelectedBranch'
@@ -57,7 +62,7 @@ type Input = {
   props: Pick<WorktreeSurfaceProps, 'manager' | 'createSessionForWorktree'>;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
-    'actionPending' | 'setActionError' | 'setActionPending'
+    'actionPending' | 'clearActionError' | 'reportActionError' | 'setActionPending'
   >;
   session: Pick<ReturnType<typeof useSessionActions>, 'setPendingSessionBinding'>;
 };
@@ -71,9 +76,20 @@ export function useWorktreeRegistration({
   session,
 }: Input) {
   const { workspaces } = source;
+  const alive = useRef(true);
+  const modeRef = useRef(source.mode);
+  modeRef.current = source.mode;
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+  const importCandidatesReportRef = useRef<{ readonly workspaceId: string; readonly reportIds: ReportId[] }>();
+  const branchConflictReportRef = useRef<ReportId[]>([]);
+  const [branchConflict, setBranchConflict] = useState<WorktreeViewError>();
   const {
     worktreeModalWorkspaceId,
     modalReadLoading,
+    modalReadError,
     modalBranches,
     setModalBranches,
     setSelectedBranch,
@@ -98,7 +114,7 @@ export function useWorktreeRegistration({
   } = registrationState;
   const { viewByWorkspace, loadModalWorktreeView, refresh } = read;
   const { manager, createSessionForWorktree: createSessionCallback } = props;
-  const { actionPending, setActionError, setActionPending } = mutation;
+  const { actionPending, clearActionError, reportActionError, setActionPending } = mutation;
   const { setPendingSessionBinding } = session;
   const modalWorkspace = workspaces.items.find(
     (workspace) => workspace.workspaceId === worktreeModalWorkspaceId,
@@ -118,7 +134,7 @@ export function useWorktreeRegistration({
         ? undefined
         : modalReadiness?.status;
   const modalCanCreate =
-    !modalReadLoading && modalSetupStatus === undefined && modalReadiness?.status === 'ready';
+    !modalReadLoading && modalReadError === undefined && modalReadiness?.status === 'ready';
   useEffect(() => {
     if (worktreeModalWorkspaceId === undefined || modalView === undefined) return;
     if (modalReadLoading) return;
@@ -145,24 +161,35 @@ export function useWorktreeRegistration({
     async (workspaceId: string): Promise<void> => {
       if (manager === undefined) return;
       setImportCandidates((current) => ({ status: 'loading', candidates: current.candidates }));
-      await importCandidatesGuard.current.run(
-        () => manager.listImportCandidates({ workspaceId }),
-        (candidates) => {
-          if (modalWorkspaceIdRef.current !== workspaceId) return;
+      const guard = importCandidatesGuard.current;
+      const generation = guard.begin();
+      const isCurrent = () => alive.current && guard.isCurrent(generation) && modalWorkspaceIdRef.current === workspaceId;
+      try {
+        const candidates = await manager.listImportCandidates({ workspaceId });
+        if (isCurrent()) {
+          const previous = importCandidatesReportRef.current;
+          if (previous?.workspaceId === workspaceId) {
+            for (const reportId of previous.reportIds) worktreeNotifications.resolve(reportId);
+            importCandidatesReportRef.current = undefined;
+          }
           setImportCandidates({ status: 'ready', candidates });
-        },
-        (error) => {
-          if (modalWorkspaceIdRef.current !== workspaceId) return;
+        }
+      } catch (error) {
+        const active = isCurrent();
+        const failure = worktreeNotifications.reportError(toWorktreeViewError(error), { origin: active ? 'inline' : 'retired', context: workspaceId });
+        if (active) {
+          const previous = importCandidatesReportRef.current;
+          if (previous?.workspaceId === workspaceId) previous.reportIds.push(failure.reportId);
+          else importCandidatesReportRef.current = { workspaceId, reportIds: [failure.reportId] };
           setImportCandidates((current) => ({
-            status: 'error',
-            candidates: current.candidates,
-            error: toWorktreeViewError(error),
+            status: 'error', candidates: current.candidates, error: failure,
           }));
-        },
-      );
+        }
+      }
     },
     [manager],
   );
+
   const closeWorktreeCreator = (force = false): void => {
     if (actionPending && !force) return;
     modalGenerationRef.current++;
@@ -170,6 +197,8 @@ export function useWorktreeRegistration({
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
+    importCandidatesReportRef.current = undefined;
+    branchConflictReportRef.current = [];
     setWorktreeModalWorkspaceId(undefined);
     setModalReadError(undefined);
     setModalReadLoading(false);
@@ -185,18 +214,20 @@ export function useWorktreeRegistration({
     modalReadLoader.current.invalidate();
     modalReadViewRef.current = undefined;
     importCandidatesGuard.current.invalidate();
+    importCandidatesReportRef.current = undefined;
+    branchConflictReportRef.current = [];
     setWorktreeModalWorkspaceId(workspace.workspaceId);
+    setBranchConflict(undefined);
     setModalBranches(undefined);
     setWorktreeModalMode('create');
     setImportCandidates({ status: 'idle', candidates: [] });
     setSelectedImportPath(undefined);
-    setActionError(undefined);
+    clearActionError();
     setModalReadError(undefined);
-    setModalReadLoading(false);
+    loadModalWorktreeView(workspace.workspaceId, { revalidate: true, reuseInFlight: true });
     if (view === undefined || view.branches.length === 0) {
       setSelectedBranch(defaults.baseBranch ?? '');
       setNewBranch(defaults.newBranch ?? '');
-      loadModalWorktreeView(workspace.workspaceId);
       return;
     }
     setSelectedBranch(defaults.baseBranch ?? (view.checkout?.currentHead !== undefined && view.checkout.currentHead.kind !== 'branch'
@@ -208,7 +239,6 @@ export function useWorktreeRegistration({
           ...view.worktrees.map((worktree) => worktree.branch),
         ]),
     );
-    loadModalWorktreeView(workspace.workspaceId);
   };
   const changeWorktreeModalMode = (mode: WorktreeRegistrationMode): void => {
     if (mode !== worktreeModalMode) modalGenerationRef.current++;
@@ -230,7 +260,7 @@ export function useWorktreeRegistration({
       preserveCurrent: true,
     });
     if (createSessionCallback === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE',
         message: '',
         retryable: true,
@@ -254,10 +284,10 @@ export function useWorktreeRegistration({
       }));
     } catch (error) {
       const sessionError = toWorktreeViewError(error);
-      setActionError({ ...sessionError, details: { ...sessionError.details, workspaceId: registeredWorktree.workspaceId } });
-      if (error instanceof WorktreeSessionBindingError) {
+      const reported = reportActionError({ ...sessionError, details: { ...sessionError.details, workspaceId: registeredWorktree.workspaceId } });
+      if (error instanceof WorktreeSessionBindingError && alive.current) {
         setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId,
-          error: sessionError });
+          error: reported });
       }
       // Registration already committed even when opening the first Session failed.
       await refreshRegistration();
@@ -275,8 +305,10 @@ export function useWorktreeRegistration({
     )
       return;
     if (worktreeModalMode === 'import' && selectedImportCandidate === undefined) return;
+    const generation = modalGenerationRef.current;
     setActionPending(true);
-    setActionError(undefined);
+    setBranchConflict(undefined);
+    clearActionError();
     setPendingSessionBinding(undefined);
     try {
       const registeredWorktree =
@@ -307,14 +339,42 @@ export function useWorktreeRegistration({
           retryable: true,
         };
       }
+      const previousConflicts = branchConflictReportRef.current;
+      if (previousConflicts.length) {
+        for (const reportId of previousConflicts) worktreeNotifications.resolve(reportId);
+        branchConflictReportRef.current = [];
+      }
       await continueWorktreeRegistration(registeredWorktree);
     } catch (error) {
-      setActionError(toWorktreeViewError(error));
+      const failure = toWorktreeViewError(error);
+      const staleModal =
+        !alive.current ||
+        (modeRef.current !== undefined && modeRef.current !== 'worktree') ||
+        generation !== modalGenerationRef.current ||
+        modalWorkspaceIdRef.current !== modalWorkspace.workspaceId;
+      if (worktreeModalMode === 'create' && failure.code === 'WORKTREE_BRANCH_CONFLICT') {
+        if (staleModal) {
+          worktreeNotifications.reportError(failure, { origin: 'retired', context: modalWorkspace.path });
+        } else {
+          const reported = worktreeNotifications.reportError(failure, { origin: 'inline', context: modalWorkspace.path });
+          branchConflictReportRef.current.push(reported.reportId);
+          setBranchConflict(reported);
+        }
+      } else if (staleModal) {
+        worktreeNotifications.reportError(failure, { origin: 'retired', context: modalWorkspace.path });
+      } else {
+        reportActionError(failure);
+        if (failure.code === 'WORKSPACE_ROOT_MISSING') {
+          loadModalWorktreeView(modalWorkspace.workspaceId, { revalidate: true });
+        }
+      }
     } finally {
-      setActionPending(false);
+      if (alive.current) setActionPending(false);
     }
   };
   return {
+    branchConflict,
+    setBranchConflict,
     modalWorkspace,
     modalView,
     modalReadiness,

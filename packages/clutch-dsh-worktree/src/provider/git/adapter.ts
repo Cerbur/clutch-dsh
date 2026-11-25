@@ -395,6 +395,11 @@ function isMissingGit(error: GitCommandError): boolean {
   return error.exitCode === 'ENOENT';
 }
 
+function completedWithExitCode(error: unknown, code: number): error is GitCommandError {
+  return error instanceof GitCommandError && error.exitCode === code && !error.signal &&
+    !error.timedOut && !error.aborted && !error.outputTruncated && !error.processTreeDidNotExit;
+}
+
 function missingGitError(
   operation: string,
   error: GitCommandError,
@@ -614,43 +619,45 @@ export class LocalGitAdapter implements GitWorktreeAdapter {
         options,
       );
     } catch (error) {
-      if (error instanceof GitCommandError) {
-        if (isMissingGit(error)) {
-          throw missingGitError('validate repository', error);
-        }
-        if (error.timedOut || error.aborted) throw operationError('validate repository', workspaceRoot, undefined, undefined, error);
+      // Git uses exit 128 for both repository discovery and configuration errors.
+      // The runner sets LC_ALL=C for both subprocess implementations.
+      if (completedWithExitCode(error, 128) &&
+          /^fatal: not a git repository \(or any (?:of the parent directories|parent up to mount point [^\n]+)\)/u.test(error.stderr)) {
         throw providerError('WORKSPACE_NOT_GIT_REPOSITORY', `Workspace is not a Git repository: ${workspaceRoot}`, {
           ...gitDetails(error),
         });
       }
-      throw error;
+      throw operationError('validate repository', workspaceRoot, undefined, undefined, error);
     }
 
-    if (result.stdout.trim() !== 'true') {
+    const insideWorkTree = result.stdout.trim();
+    if (insideWorkTree === 'false') {
       throw providerError('WORKSPACE_NOT_GIT_REPOSITORY', `Workspace is not a Git work tree: ${workspaceRoot}`, {
         workspaceRoot,
+      });
+    }
+    if (insideWorkTree !== 'true') {
+      throw providerError('GIT_OPERATION_FAILED', 'Git returned an invalid work tree status', {
+        workspaceRoot, gitStdout: boundedDiagnostic(result.stdout), gitStderr: boundedDiagnostic(result.stderr),
+        operation: 'validate repository',
       });
     }
 
     try {
       await this.run(
-        ['rev-parse', '--verify', 'HEAD^{commit}'],
+        ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'],
         workspaceRoot,
         options,
       );
     } catch (error) {
-      if (error instanceof GitCommandError) {
-        if (isMissingGit(error)) {
-          throw missingGitError('validate repository', error);
-        }
-        if (error.timedOut || error.aborted) throw operationError('validate repository', workspaceRoot, undefined, undefined, error);
+      if (completedWithExitCode(error, 1) && error.stderr.trim() === '') {
         throw providerError(
           'WORKTREE_REQUIRES_INITIAL_COMMIT',
           `Workspace has no initial commit: ${workspaceRoot}`,
           { ...gitDetails(error) },
         );
       }
-      throw error;
+      throw operationError('validate repository', workspaceRoot, undefined, undefined, error);
     }
   }
 

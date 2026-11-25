@@ -1,83 +1,123 @@
 import type { WorktreeNotification } from '../surface/notification-queue.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 
-export interface WorktreeDiagnostic extends WorktreeNotification {
+export type ReportedNotification = WorktreeNotification & { readonly reportId: ReportId };
+
+export interface WorktreeDiagnostic extends ReportedNotification {
   readonly source: string;
-  readonly status: 'active' | 'resolved' | 'inactive';
+  readonly status: 'reported' | 'active' | 'resolved' | 'inactive';
   readonly actions: NonNullable<WorktreeNotification['actions']>;
 }
 
-/** Browser-memory history. Unmount is not proof of recovery; stale actions are revoked. */
+/** History is ordered by occurrence. Recovery owners can only update existing rows. */
 export function createWorktreeDiagnostics() {
   let snapshot: readonly WorktreeDiagnostic[] = [];
-  const sources = new Map<string, readonly WorktreeNotification[]>();
+  // Retain original facts for deferred recovery only while the operation holds its ID.
+  let originals = new WeakMap<ReportId, WorktreeDiagnostic>();
+  const announced = new Set<ReportId>();
+  const owners = new Map<string, Map<ReportId, ReportedNotification>>();
   const listeners = new Set<() => void>();
-  const emit = () => listeners.forEach((listener) => listener());
-  const limitHistory = () => {
-    const history = snapshot.filter((entry) => entry.status !== 'active').slice(-100);
-    snapshot = [...history, ...snapshot.filter((entry) => entry.status === 'active')];
+  const emit = () => {
+    const retired = snapshot.filter(entry => entry.status !== 'active' && !announced.has(entry.reportId));
+    if (retired.length > 100) {
+      const evicted = new Set(retired.slice(0, -100));
+      snapshot = snapshot.filter(entry => !evicted.has(entry));
+    }
+    listeners.forEach(listener => listener());
   };
-  const retire = (source: string, status: 'resolved' | 'inactive', keys = new Set<string>()) => {
-    snapshot = snapshot.map((entry) =>
-      entry.source === source && entry.status === 'active' && !keys.has(entry.key)
-        ? { ...entry, status, actions: [] }
-        : entry,
-    );
-    limitHistory();
-  };
-  return {
-    getSnapshot: () => snapshot,
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-    publish(source: string, notices: readonly WorktreeNotification[]) {
-      sources.set(source, notices);
-      retire(source, 'resolved', new Set(notices.map((notice) => notice.key)));
-      for (const notice of notices) {
-        const entry: WorktreeDiagnostic = {
-          ...notice, source, status: 'active',
-          actions: (notice.actions ?? []).map((action) => ({
-            ...action,
-            onClick: () => {
-              const current = sources.get(source)?.find((item) => item.key === notice.key)?.actions
-                ?.find((item) => item.label === action.label);
-              if (current !== undefined && !current.disabled) current.onClick();
+  const setRecovery = (source: string, notices: readonly ReportedNotification[], status: 'reported' | 'inactive') => {
+    const previous = owners.get(source);
+    if (!previous && !notices.length) return;
+    const next = new Map(notices.filter(notice => originals.has(notice.reportId))
+      .map(notice => [notice.reportId, notice]));
+    const visible = new Set(snapshot.map(entry => entry.reportId));
+    const restored = [...next.keys()].filter(id => !visible.has(id)).map(id => originals.get(id)!);
+    if (restored.length) snapshot = [...snapshot, ...restored].sort((a, b) => a.reportId.sequence - b.reportId.sequence);
+    const affected = new Set([...(previous?.keys() ?? []), ...next.keys()]);
+    owners.delete(source);
+    if (next.size) owners.set(source, next);
+    const latestOwners = [...owners].reverse();
+    snapshot = snapshot.map(entry => {
+      if (!originals.has(entry.reportId) || !affected.has(entry.reportId)) return entry;
+      const base = originals.get(entry.reportId) ?? entry;
+      // The sidebar and a dialog can both offer recovery for the same occurrence.
+      for (const [owner, records] of latestOwners) {
+        const notice = records.get(entry.reportId);
+        if (!notice) continue;
+        return {
+          ...base,
+          text: notice.text || base.text,
+          ...(notice.toastKey !== undefined ? { toastKey: notice.toastKey } : {}),
+          ...(notice.origin !== undefined ? { origin: notice.origin } : {}),
+          ...(notice.failures !== undefined ? { failures: notice.failures } : {}),
+          ...(notice.context !== undefined ? { context: notice.context } : {}),
+          ...(notice.describe !== undefined ? { describe: notice.describe } : {}),
+          ...(notice.message !== undefined ? { message: notice.message } : {}),
+          source: owner,
+          status: 'active',
+          actions: (notice.actions ?? []).map(action => ({
+            ...action, onClick: () => {
+              const live = owners.get(owner)?.get(entry.reportId)?.actions?.find(item => item.label === action.label);
+              if (live && !live.disabled) live.onClick();
             },
           })),
         };
-        snapshot = [...snapshot.filter((item) => item.key !== notice.key), entry];
       }
-      // Keep active recoveries even when many historical failures have accumulated.
-      limitHistory();
+      return { ...entry, status, actions: [] };
+    });
+    emit();
+  };
+  return {
+    getSnapshot: () => snapshot,
+    canClearHistory: () => snapshot.some(entry => entry.status !== 'active' && !announced.has(entry.reportId)),
+    hasPendingToast: () => announced.size > 0,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    record(source: string, notices: readonly ReportedNotification[], status: 'reported' | 'inactive' = 'inactive', queued = false) {
+      if (!notices.length) return;
+      const rows = notices.map(notice => ({ ...notice, source, status, actions: [] }));
+      for (const row of rows) {
+        originals.set(row.reportId, row);
+        if (queued) announced.add(row.reportId);
+      }
+      snapshot = [...snapshot, ...rows];
       emit();
     },
-    /** Late results retain evidence without reactivating an unmounted UI source. */
-    recordInactive(source: string, notices: readonly WorktreeNotification[]) {
-      if (notices.length === 0) return;
-      for (const notice of notices) {
-        snapshot = [...snapshot.filter((entry) => entry.key !== notice.key), {
-          ...notice, source, status: 'inactive', actions: [],
-        }];
+    dismiss(reportId: ReportId | readonly ReportId[]) {
+      if (Array.isArray(reportId)) {
+        for (const id of reportId) announced.delete(id);
+      } else {
+        announced.delete(reportId as ReportId);
       }
-      limitHistory();
       emit();
+    },
+    updateRecovery(source: string, notices: readonly ReportedNotification[]) {
+      setRecovery(source, notices, 'reported');
     },
     deactivate(source: string) {
-      sources.delete(source);
-      retire(source, 'inactive');
+      setRecovery(source, [], 'inactive');
+    },
+    resolve(reportId: ReportId) {
+      announced.delete(reportId);
+      if (!originals.delete(reportId)) return;
+      for (const records of owners.values()) records.delete(reportId);
+      snapshot = snapshot.map(entry => entry.reportId === reportId ? { ...entry, status: 'resolved', actions: [] } : entry);
       emit();
     },
     clearHistory() {
-      snapshot = snapshot.filter((entry) => entry.status === 'active');
+      snapshot = snapshot.filter(entry => entry.status === 'active' || announced.has(entry.reportId));
       emit();
     },
     dispose() {
-      sources.clear();
+      originals = new WeakMap();
+      announced.clear();
+      owners.clear();
       snapshot = [];
       emit();
     },
   };
 }
 
-// Shared by the native Settings seat and surface within one loaded Client module.
 export const worktreeDiagnostics = createWorktreeDiagnostics();

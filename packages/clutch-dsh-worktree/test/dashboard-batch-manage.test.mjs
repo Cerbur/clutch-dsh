@@ -7,6 +7,8 @@ import * as React from 'react';
 import * as jsx from 'react/jsx-runtime';
 import { createRoot } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
+import * as notifications from '../lib/client/surface/notification-center.js';
+import { shouldAnnounce } from '../lib/client/surface/notification-queue.js';
 import * as batch from '../lib/client/dashboard/batch-manage.js';
 import * as selection from '../lib/client/dashboard/dashboard-selection.js';
 import { runWorktreeCleanupFlow } from '../lib/client/surface/actions/worktree-cleanup-flow.js';
@@ -66,6 +68,13 @@ test('batch continues independent failures and stops scheduling after owner reti
     calls.push(target.worktreeId); current = false;
   }, () => current, () => assert.fail('retired owner received a result'));
   assert.deepEqual(calls, ['one']);
+  current = true;
+  const late = [];
+  await batch.runWorktreeBatch('forget', [archived, archivedSecond], async () => {
+    current = false;
+    throw Object.assign(new Error('late rejection'), { code: 'WORKTREE_STATE_CONFLICT' });
+  }, () => current, () => assert.fail('retired view received a result'), (row, error) => late.push([row.worktreeId, error.code]));
+  assert.deepEqual(late, [['one', 'WORKTREE_STATE_CONFLICT']]);
 });
 
 async function operationsFixture() {
@@ -329,7 +338,9 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
       Modal: ({ open, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog' }, title, description, children, footer) : null,
     },
     '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
-    '../surface/components/NotificationToasts.js': { NotificationToasts: () => null },
+    '../surface/notification-center.js': notifications,
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: ({ notices }) =>
+      notices.map((notice) => React.createElement('output', { key: notice.key, 'data-diagnostic-only': !shouldAnnounce(notice) }, notice.text)) },
     '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
     './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
   });
@@ -351,8 +362,8 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
         { ...record, workspaceId: 'other', worktreeId: 'hidden' }],
       t, actionPending: false, onManage: async (action, target) => {
         calls.push([action, target.worktreeId]);
-        if (target.worktreeId === 'one') await deferred;
-        else throw { code: 'WORKTREE_DIRTY', message: 'dirty' };
+        if (target.worktreeId === 'one' && calls.length === 1) await deferred;
+        else throw { code: calls.length > 4 || target.worktreeId === 'one' ? 'WORKSPACE_ROOT_MISSING' : 'WORKTREE_DIRTY', message: 'missing' };
       },
     })));
     const doc = dom.window.document;
@@ -375,14 +386,148 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
     assert.deepEqual(calls, [['clean', 'one'], ['clean', 'two']]);
     assert.equal(doc.querySelectorAll('[data-batch-result="success"]').length, 1);
     assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 1);
+    assert.deepEqual([...doc.querySelectorAll('output[data-diagnostic-only="false"]')].map((el) => el.textContent), ['2 项操作中有 1 项失败。']);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 1);
     assert.equal(doc.querySelector('input[aria-label="feat/one · /repo/one"]').checked, false);
     assert.equal(doc.querySelector('input[aria-label="feat/two · /repo/two"]').checked, true);
     assert.equal(doc.querySelector('input[aria-label="active · /repo/active"]').checked, true);
     assert.equal(doc.querySelector('[role="dialog"]'), null);
+    await click('input[aria-label="全选"]');
+    await click('[data-batch-action="clean"]');
+    await click('[role="dialog"] input');
+    await click('[data-batch-confirm]');
+    assert.deepEqual([...doc.querySelectorAll('output[data-diagnostic-only="false"]')].map((el) => el.textContent), ['2 项操作中有 2 项失败。']);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 2);
+    assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 2);
+    await click('[data-batch-action="clean"]');
+    await click('[role="dialog"] input');
+    await click('[data-batch-confirm]');
+    assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 2);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="false"]').length, 0);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 3);
     for (const locale of [en, zh]) assert.ok(locale['dashboard.manage.stopped']);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+    }
+  }
+});
+
+test('batch UI labels summary diagnostics and resolves prior failures once retried items succeed', async () => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  const module = await compile('../src/client/dashboard/BatchManageWorktrees.tsx', {
+    react: React, 'react/jsx-runtime': jsx,
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Button: ({ variant, ...props }) => { void variant; return React.createElement('button', props); },
+      Modal: ({ open, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog' }, title, description, children, footer) : null,
+    },
+    '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
+    '../surface/notification-center.js': notifications,
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: () => null },
+    '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
+    './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
+  });
+  const dom = new JSDOM('<div id="app"></div>');
+  const previous = new Map();
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const root = createRoot(dom.window.document.getElementById('app'));
+  let failFirst = true;
+  const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replace('{' + name + '}', value), en[key]);
+  try {
+    await React.act(async () => root.render(React.createElement(module.BatchManageWorktrees, {
+      workspaceId: 'repo', worktrees: [record], t, actionPending: false,
+      onManage: async () => {
+        if (failFirst) throw { code: 'WORKTREE_STATE_CONFLICT', message: 'busy' };
+      },
+    })));
+    const doc = dom.window.document;
+    const click = async (selector) => React.act(async () => doc.querySelector(selector).click());
+    await click('input[aria-label="Select all"]');
+    await click('[data-batch-action="archive"]');
+    await click('[data-batch-confirm]');
+    await Promise.resolve();
+    const afterFailure = worktreeDiagnostics.getSnapshot();
+    assert.equal(afterFailure.length, 2);
+    const summaryEntry = afterFailure.find((entry) => entry.failures?.length === 1);
+    assert.equal(summaryEntry.context, 'repo');
+    assert.equal(summaryEntry.describe(t), `${en['dashboard.tab.manage']} · ${en['dashboard.manage.archive']}`);
+
+    failFirst = false;
+    await click('[data-batch-action="archive"]');
+    await click('[data-batch-confirm]');
+    await Promise.resolve();
+    assert.deepEqual(worktreeDiagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    notifications.worktreeNotifications.dispose();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+    }
+  }
+});
+
+test('batch UI resolves every prior failed attempt and summary once repeated retries succeed', async () => {
+  const { worktreeDiagnostics } = await import('../lib/client/settings/diagnostics.js');
+  notifications.worktreeNotifications.dispose();
+  const module = await compile('../src/client/dashboard/BatchManageWorktrees.tsx', {
+    react: React, 'react/jsx-runtime': jsx,
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Button: ({ variant, ...props }) => { void variant; return React.createElement('button', props); },
+      Modal: ({ open, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog' }, title, description, children, footer) : null,
+    },
+    '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
+    '../surface/notification-center.js': notifications,
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: () => null },
+    '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
+    './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
+  });
+  const dom = new JSDOM('<div id="app"></div>');
+  const previous = new Map();
+  for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  const root = createRoot(dom.window.document.getElementById('app'));
+  let remainingFailures = 2;
+  const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replace('{' + name + '}', value), en[key]);
+  try {
+    await React.act(async () => root.render(React.createElement(module.BatchManageWorktrees, {
+      workspaceId: 'repo', worktrees: [record], t, actionPending: false,
+      onManage: async () => {
+        if (remainingFailures > 0) {
+          remainingFailures -= 1;
+          throw { code: 'WORKTREE_STATE_CONFLICT', message: 'busy' };
+        }
+      },
+    })));
+    const doc = dom.window.document;
+    const click = async (selector) => React.act(async () => doc.querySelector(selector).click());
+    await click('input[aria-label="Select all"]');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await click('[data-batch-action="archive"]');
+      await click('[data-batch-confirm]');
+      await Promise.resolve();
+    }
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 4);
+
+    await click('[data-batch-action="archive"]');
+    await click('[data-batch-confirm]');
+    await Promise.resolve();
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => entry.status),
+      ['resolved', 'resolved', 'resolved', 'resolved'],
+    );
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    notifications.worktreeNotifications.dispose();
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
     }

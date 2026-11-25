@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../notification-center.js';
 import { runWorktreeCleanupFlow } from './worktree-cleanup-flow.js';
 import { executeWorktreeAction, toWorktreeViewError } from '../../view/worktree-view.js';
 import type { LifecycleDialogInput } from '../components/LifecycleDialogs.js';
@@ -23,7 +24,7 @@ export function createLifecycleCommands({
     cleanupGuard,
     setWorktreeForget,
   } = lifecycleState;
-  const { runMutation, setActionError, setActionPending } = mutation;
+  const { runMutation, clearActionError, reportActionError, setActionPending } = mutation;
   const { cleanDiskTarget, forgetTarget } = lifecycle;
   const { suppressCurrentSessionReveal, clearSessionGroups } = expansion;
   const { readStateRef, setReadState, refresh, readState } = read;
@@ -51,7 +52,7 @@ export function createLifecycleCommands({
     const target = worktreeRemoval;
     const mutationToken = target.mutationToken;
     if (mutationToken === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKTREE_STATE_CONFLICT',
         message: '',
         retryable: true,
@@ -86,7 +87,7 @@ export function createLifecycleCommands({
     const target = cleanDiskTarget;
     const mutationToken = target.mutationToken;
     if (mutationToken === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKTREE_STATE_CONFLICT',
         message: '',
         retryable: true,
@@ -106,7 +107,7 @@ export function createLifecycleCommands({
           view.worktrees.some((record) => record.worktreeId === target.worktreeId),
       );
     setActionPending(true);
-    setActionError(undefined);
+    clearActionError();
     void runWorktreeCleanupFlow({
       clean: async () => {
         await executeWorktreeAction(manager, {
@@ -162,7 +163,8 @@ export function createLifecycleCommands({
       },
     })
       .catch((error) => {
-        if (isCurrent()) setActionError(toWorktreeViewError(error));
+        if (isCurrent()) reportActionError(toWorktreeViewError(error));
+        else worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'retired', context: target.absolutePath });
       })
       .finally(() => {
         if (isCurrent()) setActionPending(false);
@@ -173,7 +175,7 @@ export function createLifecycleCommands({
     const target = forgetTarget;
     const mutationToken = target.mutationToken;
     if (mutationToken === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKTREE_STATE_CONFLICT',
         message: '',
         retryable: true,

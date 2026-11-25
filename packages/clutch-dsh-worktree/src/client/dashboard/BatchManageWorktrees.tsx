@@ -1,9 +1,12 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../../contract/index.js';
+import type { WorktreeNotification } from '../surface/notification-queue.js';
 import type { WorktreeTranslate } from '../surface/types.js';
+import type { ReportId, WorktreeViewError } from '../view/worktree-view-errors.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
-import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
 import { IconBranchOutline16 } from '../dsh-icons.js';
 import { canManageWorktree, runWorktreeBatch, type BatchWorktreeAction, type BatchWorktreeResult } from './batch-manage.js';
 import styles from './dashboard.css';
@@ -26,36 +29,79 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
   const [stopped, setStopped] = useState(false);
   const busy = useRef(false);
   const generation = useRef(0);
+  const previousReports = useRef<{ summaries: ReportId[]; byWorktreeId: Map<string, ReportId[]> }>({
+    summaries: [],
+    byWorktreeId: new Map(),
+  });
   useEffect(() => {
     generation.current++;
     busy.current = false;
+    previousReports.current = { summaries: [], byWorktreeId: new Map() };
     setPending(false);
     setConfirmation(undefined);
     setSelected(new Set());
     setResults([]);
+    setSummary(undefined);
     return () => { generation.current++; };
   }, [workspaceId, onManage]);
   const picked = rows.filter((record) => selected.has(record.worktreeId));
   const disabled = pending || actionPending || onManage === undefined;
+  const [summary, setSummary] = useState<WorktreeNotification>();
   const allSelected = rows.length > 0 && picked.length === rows.length;
   const close = () => { if (!busy.current) setConfirmation(undefined); };
   const submit = async () => {
     if (busy.current || actionPending || !confirmation || !onManage ||
       (confirmation.action === 'clean' && !stopped)) return;
+    const action = confirmation.action;
     busy.current = true;
     setPending(true);
     setResults([]);
-    const lifetime = generation.current;
+    setSummary(undefined);
+    const lifetime = ++generation.current;
     const isCurrent = () => generation.current === lifetime;
+    const failures: WorktreeViewError[] = [];
+    let total = 0;
     try {
-      await runWorktreeBatch(confirmation.action, confirmation.records, onManage, isCurrent, (result) => {
+      await runWorktreeBatch(action, confirmation.records, onManage, isCurrent, (result) => {
+        total++;
+        if (result.error) {
+          const error = worktreeNotifications.reportError(result.error, {
+            origin: 'batch-item', context: result.record.branch + ' · ' + result.record.absolutePath,
+          });
+          const prior = previousReports.current.byWorktreeId.get(result.record.worktreeId) ?? [];
+          prior.push(error.reportId);
+          previousReports.current.byWorktreeId.set(result.record.worktreeId, prior);
+          failures.push(error);
+          result = { ...result, error };
+        } else {
+          const prior = previousReports.current.byWorktreeId.get(result.record.worktreeId);
+          if (prior) {
+            for (const reportId of prior) worktreeNotifications.resolve(reportId);
+            previousReports.current.byWorktreeId.delete(result.record.worktreeId);
+          }
+        }
         setResults((current) => [...current, result]);
         if (!result.error) setSelected((current) => {
           const next = new Set(current);
           next.delete(result.record.worktreeId);
           return next;
         });
+      }, (record, error) => {
+        worktreeNotifications.reportError(error, { origin: 'retired', context: record.branch + ' · ' + record.absolutePath });
       });
+      if (isCurrent()) {
+        if (failures.length) {
+          const message = (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed: failures.length, total });
+          const describe = (translate: WorktreeTranslate) => translate('dashboard.tab.manage') + ' · ' + translate(`dashboard.manage.${action}`);
+          const notice = { key: 'batch-summary:' + workspaceId + ':' + lifetime, failures, context: workspaceId, describe, text: message(t), message };
+          const reportId = worktreeNotifications.report(notice);
+          previousReports.current.summaries.push(reportId);
+          setSummary({ ...notice, reportId });
+        } else if (previousReports.current.summaries.length && previousReports.current.byWorktreeId.size === 0) {
+          for (const reportId of previousReports.current.summaries) worktreeNotifications.resolve(reportId);
+          previousReports.current.summaries = [];
+        }
+      }
     } finally {
       if (isCurrent()) { busy.current = false; setPending(false); setConfirmation(undefined); }
     }
@@ -108,10 +154,13 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           : t('dashboard.manage.success')}
       </li>)}
     </ul>
-    <NotificationToasts notices={results.flatMap(({ record, error }) => error ? [{
-      key: 'batch:' + record.worktreeId, error, context: record.branch + ' · ' + record.absolutePath,
-      text: formatWorktreeViewError(error, t), message: (translate: WorktreeTranslate) => formatWorktreeViewError(error, translate),
-    }] : [])} />
+    <NotificationRecovery notices={[
+      ...(summary ? [summary] : []),
+      ...results.flatMap(({ record, error }) => error ? [{
+        key: 'batch:' + record.worktreeId, origin: 'batch-item' as const, error, context: record.branch + ' · ' + record.absolutePath,
+        text: formatWorktreeViewError(error, t), message: (translate: WorktreeTranslate) => formatWorktreeViewError(error, translate),
+      }] : []),
+    ]} />
     <Modal open={confirmation !== undefined} onClose={close} closeLabel={t('dialog.cancel')}
       title={confirmation ? t(`dashboard.manage.${confirmation.action}`) : ''}
       description={confirmation ? t(`dashboard.manage.confirm.${confirmation.action}`) : ''}

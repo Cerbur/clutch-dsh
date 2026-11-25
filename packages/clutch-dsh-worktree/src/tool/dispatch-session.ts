@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createBoundWorktreeSession } from './create-session.js';
+import { createBoundWorktreeSession, sessionFailure } from './create-session.js';
 import type { WorktreeRecord, WorktreeManager } from '../contract/index.js';
 import type { WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
 import type { ToolModel, WorktreeToolSessionPort } from './native-session.js';
@@ -23,12 +23,12 @@ export async function dispatchWorktreeSession(input: {
   const created = await createBoundWorktreeSession({ record, manager, sessions, signal, check });
   const { sessionId } = created;
   const requestId = `clutch-worktree:${sessionId}:${randomUUID()}`;
-  if (!created.bound) return { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
-    sessionId, requestId, model, status: 'binding-failed', error: created.error };
-  if (created.error !== undefined) return { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
-    sessionId, requestId, model, status: 'prompt-failed', error: created.error };
+  if (!created.bound || created.error !== undefined) return { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
+    sessionId, requestId, model, status: created.bound ? 'prompt-failed' : 'binding-failed', error: created.error,
+    ...(created.causeCode === undefined ? {} : { causeCode: created.causeCode }),
+    ...(created.rootPath === undefined ? {} : { rootPath: created.rootPath }) };
   let status: WorktreeSessionDispatchResult['status'] = 'model-failed';
-  let error: string | undefined;
+  let failure: ReturnType<typeof sessionFailure> | undefined;
   try {
     check();
     await sessions.configureModel(sessionId, model, signal);
@@ -51,8 +51,8 @@ export async function dispatchWorktreeSession(input: {
     else await sessions.prompt(message, signal);
     status = 'dispatched';
   } catch (cause) {
-    error = (cause instanceof Error ? cause.message : String(cause)).slice(0, 700);
+    failure = sessionFailure(cause);
   }
   return { workspaceId: record.workspaceId, worktreeId: record.worktreeId, sessionId, requestId,
-    model, status, ...(error === undefined ? {} : { error }) };
+    model, status, ...failure };
 }

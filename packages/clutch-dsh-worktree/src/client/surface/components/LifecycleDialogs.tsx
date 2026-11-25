@@ -31,7 +31,7 @@ export type LifecycleDialogInput = {
   >;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
-    'actionPending' | 'actionError' | 'runMutation' | 'setActionError' | 'setActionPending'
+    'actionPending' | 'actionError' | 'runMutation' | 'clearActionError' | 'reportActionError' | 'setActionPending'
   >;
   lifecycle: Pick<
     ReturnType<typeof useLifecycleActions>,

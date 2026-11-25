@@ -55,6 +55,23 @@ test('shared status filters stale imports and repairs managed stale registration
   });
 });
 
+test('a Workspace disappearing during a Git history read reports the missing root', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, sidecar, provider }) => {
+    const input = { workspaceId: 'ws_one' };
+    const record = await provider.createWorktree({ ...input, branch: 'main', newBranch: 'nested-checkout' });
+    const read = sidecar.read.bind(sidecar);
+    sidecar.read = async (workspaceId) => {
+      const snapshot = await read(workspaceId);
+      // The Workspace passed the initial root check. Its checkout disappears with it.
+      await rename(workspaceRoot, path.join(tempRoot, 'moved-workspace'));
+      return snapshot;
+    };
+    await assert.rejects(provider.listWorktreeCommits({ ...input, worktreeId: record.worktreeId }), {
+      code: 'WORKSPACE_ROOT_MISSING', details: { workspaceId: input.workspaceId, rootPath: workspaceRoot },
+    });
+  });
+});
+
 test('loads an imported Workspace Worktree view after its root directory disappears', async () => {
   await withGitFixture(async ({ workspaceRoot, tempRoot, sidecar, provider }) => {
     const imported = {
@@ -1224,6 +1241,22 @@ test('rejects a non-Git Workspace', async () => {
   } finally {
     await rm(fixture.tempRoot, { recursive: true, force: true });
   }
+});
+
+test('Create readiness propagates Git configuration errors and recovers after repair', async () => {
+  await withGitFixture(async ({ provider, workspaceRoot }) => {
+    const config = path.join(workspaceRoot, '.git', 'config');
+    const original = await readFile(config, 'utf8');
+    await writeFile(config, original + '\n[invalid section\n');
+    await assert.rejects(loadWorktreeView(provider, 'ws_one'), (error) => {
+      assert.equal(error.code, 'GIT_OPERATION_FAILED');
+      assert.match(error.details.gitStderr, /bad config line/);
+      assert.deepEqual(error.details.gitArgs, ['rev-parse', '--is-inside-work-tree']);
+      return true;
+    });
+    await writeFile(config, original);
+    assert.equal((await loadWorktreeView(provider, 'ws_one')).readiness.status, 'ready');
+  });
 });
 
 test('reports a missing Git executable separately from a non-Git Workspace', async () => {
@@ -3811,5 +3844,145 @@ test('unarchive rejects cleaned worktrees and conflict states', async () => {
       provider.unarchiveWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: staleToken }),
       { code: 'WORKTREE_STATE_CONFLICT' }
     );
+  });
+});
+
+test('missing Workspace root mid-operation classifies Git file/diff, bindSession, and unarchive as WORKSPACE_ROOT_MISSING', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, dshHome }) => {
+    const baseGit = new LocalGitAdapter();
+    let onListWorktrees;
+    const wrappedGit = Object.create(baseGit);
+    wrappedGit.listWorktrees = async (...args) => {
+      if (onListWorktrees) {
+        const hook = onListWorktrees;
+        onListWorktrees = undefined;
+        await hook();
+      }
+      return baseGit.listWorktrees(...args);
+    };
+    const moved = path.join(tempRoot, 'moved-race-ws');
+    let boundCwd = '';
+    const dsh = {
+      getWorkspace: async (workspaceId) =>
+        workspaceId === 'ws_one' ? { workspaceId, rootPath: workspaceRoot, title: 'Workspace One' } : undefined,
+      getSession: async (sessionId) => ({
+        sessionId,
+        workspaceId: 'ws_one',
+        cwd: boundCwd,
+      }),
+    };
+    const provider = createWorktreeManager({ dsh, dshHome, git: wrappedGit });
+    const record = await provider.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/race-check' });
+    await writeFile(path.join(record.absolutePath, 'change.txt'), 'hello\n');
+    await runGit(record.absolutePath, ['add', 'change.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'add change']);
+    const head = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    boundCwd = record.absolutePath;
+
+    // 1. listWorktreeCommitFiles when root disappears during listWorktrees inside resolveWorktree
+    onListWorktrees = () => rename(workspaceRoot, moved);
+    await assert.rejects(
+      provider.listWorktreeCommitFiles({ workspaceId: 'ws_one', worktreeId: record.worktreeId, commit: head, baseBranch: 'main' }),
+      { code: 'WORKSPACE_ROOT_MISSING', details: { workspaceId: 'ws_one', rootPath: workspaceRoot } },
+    );
+    await rename(moved, workspaceRoot);
+
+    // 2. getWorktreeCommitFileDiff when root disappears during listWorktrees inside resolveWorktree
+    onListWorktrees = () => rename(workspaceRoot, moved);
+    await assert.rejects(
+      provider.getWorktreeCommitFileDiff({ workspaceId: 'ws_one', worktreeId: record.worktreeId, commit: head, path: 'change.txt', baseBranch: 'main' }),
+      { code: 'WORKSPACE_ROOT_MISSING', details: { workspaceId: 'ws_one', rootPath: workspaceRoot } },
+    );
+    await rename(moved, workspaceRoot);
+
+    // 3. unarchiveWorktree when root disappears during listWorktrees inside mutate
+    const archiveToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    await provider.removeWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: archiveToken });
+    const unarchiveToken = await mutationTokenFor(provider, 'ws_one', record.worktreeId);
+    onListWorktrees = () => rename(workspaceRoot, moved);
+    await assert.rejects(
+      provider.unarchiveWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: unarchiveToken }),
+      { code: 'WORKSPACE_ROOT_MISSING', details: { workspaceId: 'ws_one', rootPath: workspaceRoot } },
+    );
+    await rename(moved, workspaceRoot);
+
+    // Restore and test bindSession race inside resolveWorktreeWorkspaceRecord
+    await provider.unarchiveWorktree({ workspaceId: 'ws_one', worktreeId: record.worktreeId, mutationToken: unarchiveToken });
+    const origGetSession = dsh.getSession;
+    dsh.getSession = async (sessionId) => {
+      const result = await origGetSession(sessionId);
+      await rename(workspaceRoot, moved);
+      return result;
+    };
+    await assert.rejects(
+      provider.bindSession({ workspaceId: 'ws_one', worktreeId: record.worktreeId, sessionId: 'session-race' }),
+      { code: 'WORKSPACE_ROOT_MISSING', details: { workspaceId: 'ws_one', rootPath: workspaceRoot } },
+    );
+    await rename(moved, workspaceRoot);
+  });
+});
+
+test('aborted Git history reads do not misclassify concurrent Workspace root disappearance as WORKSPACE_ROOT_MISSING', async () => {
+  await withGitFixture(async ({ workspaceRoot, tempRoot, dshHome }) => {
+    const moved = path.join(tempRoot, 'moved-abort-ws');
+    const dsh = {
+      getWorkspace: async (workspaceId) =>
+        workspaceId === 'ws_one' ? { workspaceId, rootPath: workspaceRoot, title: 'Workspace One' } : undefined,
+      getSession: async () => undefined,
+    };
+    const makeAbortingProvider = (hookFn) => {
+      const baseGit = new LocalGitAdapter();
+      const wrappedGit = Object.create(baseGit);
+      let armed = true;
+      wrappedGit.listWorktrees = async (...args) => {
+        if (armed) {
+          armed = false;
+          await hookFn();
+        }
+        return baseGit.listWorktrees(...args);
+      };
+      return createWorktreeManager({ dsh, dshHome, git: wrappedGit });
+    };
+
+    // Seed a managed Worktree and commit first using a clean manager.
+    const setup = createWorktreeManager({ dsh, dshHome, git: new LocalGitAdapter() });
+    const record = await setup.createWorktree({ workspaceId: 'ws_one', branch: 'main', newBranch: 'feature/abort-check' });
+    await writeFile(path.join(record.absolutePath, 'abort.txt'), 'hello\n');
+    await runGit(record.absolutePath, ['add', 'abort.txt']);
+    await runGit(record.absolutePath, ['commit', '-m', 'add abort test file']);
+    const head = (await runGit(record.absolutePath, ['rev-parse', 'HEAD'])).stdout.trim();
+    await setup.close();
+
+    // 1. Aborted listWorktreeCommitFiles when Workspace root disappears concurrently.
+    let closingFiles;
+    const filesProvider = makeAbortingProvider(async () => {
+      await rename(workspaceRoot, moved);
+      closingFiles = filesProvider.close();
+    });
+    await assert.rejects(
+      filesProvider.listWorktreeCommitFiles({ workspaceId: 'ws_one', worktreeId: record.worktreeId, commit: head, baseBranch: 'main' }),
+      (error) => {
+        assert.notEqual(error?.code, 'WORKSPACE_ROOT_MISSING', 'aborted read must not be rewritten as WORKSPACE_ROOT_MISSING');
+        return true;
+      },
+    );
+    await closingFiles;
+    await rename(moved, workspaceRoot);
+
+    // 2. Aborted listWorktreeCommits when Workspace root disappears concurrently.
+    let closingCommits;
+    const commitsProvider = makeAbortingProvider(async () => {
+      await rename(workspaceRoot, moved);
+      closingCommits = commitsProvider.close();
+    });
+    await assert.rejects(
+      commitsProvider.listWorktreeCommits({ workspaceId: 'ws_one', worktreeId: record.worktreeId, baseBranch: 'main' }),
+      (error) => {
+        assert.notEqual(error?.code, 'WORKSPACE_ROOT_MISSING', 'aborted read must not be rewritten as WORKSPACE_ROOT_MISSING');
+        return true;
+      },
+    );
+    await closingCommits;
+    await rename(moved, workspaceRoot);
   });
 });

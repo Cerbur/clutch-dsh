@@ -79,6 +79,15 @@ Refresh scope is determined by the smallest affected identity.
 - 移出管理仅清理插件索引，保留磁盘文件与 DSH 原生 Session；
 - 未知路径或存疑状态严禁执行非幂等或破坏性清理。
 
+### 8. Client 错误提示必须由事件驱动
+
+- 在操作的 `catch` 或失败回调中调用 `worktreeNotifications.reportError(...)` 或 `report(...)`，每次失败只上报一次。事件携带结构化错误码、原始消息、必要的上下文和来源；跨 Host/Client 边界包装错误时保留底层 `causeCode`。不要先把错误存进 React state，再通过 render 或 effect 观察状态来上报。仅需组件内处理的字段校验（如 Workspace 重名）可就地提示。
+- `notification-center` 按上报顺序串行处理事件，每次分配独立的 `reportId` 并写入历史。是否弹 toast 由统一层根据错误码、根因和操作来源（如主动重试、后台刷新、批量子项）决定；业务组件不得自行弹错误 toast，也不得匹配本地化文案。相同原因可合并待展示的 toast，每次失败仍有独立记录。
+- 已发出的操作在视图卸载或目标切换后失败，仍按原上下文以 `retired` 来源静默上报。组件存活检查只约束界面更新和恢复回调。React 提交后可按既有 `reportId` 登记或撤销恢复按钮；只有确认恢复成功才调用 `resolve(reportId)`。开始重试、关闭视图或撤下按钮都不代表已解决。100 条历史上限须保留活动恢复项和待展示 toast，包括恢复按钮延迟登记的情形。
+- 修改这条链路时，用回归覆盖受影响的边界：同一组件在下一次渲染前连续报 A、B（含重复码）仍按序入历史；卸载后失败可查；重试成功才解决；超过 100 条时仍可登记恢复。调整 toast 策略时，对照验证 `WORKSPACE_ROOT_MISSING` 静默且保留 `workspaceMissing`，以及根目录存在、仅单个 checkout 缺失时主动刷新仍提示修复。
+
+机制见[架构文档的错误通知与恢复入口](docs/ARCHITECTURE.md#错误通知与恢复入口)，各场景的提示策略见[行为参考的处理错误](docs/BEHAVIOR-REFERENCE.zh.md#处理错误)。
+
 ---
 
 ## 重要禁止事项 (Prohibitions)

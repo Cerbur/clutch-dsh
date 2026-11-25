@@ -20,6 +20,7 @@ export type GitLoadable<Value> =
       readonly status: 'ready';
       readonly value: Value;
       readonly refreshing?: boolean;
+      readonly showingCachedView?: boolean;
       readonly error?: Error;
     }
   | { readonly status: 'error'; readonly error: Error; readonly previous?: Value };

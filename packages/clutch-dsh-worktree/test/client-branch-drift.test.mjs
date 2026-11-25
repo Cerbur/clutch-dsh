@@ -203,7 +203,7 @@ test('adoption failures keep confirmation disabled and offer refresh without an 
       React,
       Modal: 'modal',
       Button: 'button',
-      ErrorToast: 'error-notice',
+      ErrorRecovery: 'error-notice',
       styles: {},
       formatWorktreeViewError: (error) => error.message,
     },
@@ -297,7 +297,8 @@ for (const outcome of [
         setWorktreeBranchAdoption: (value) => {
           target = value;
         },
-        setActionError: (value) => {
+        clearActionError: () => { error = undefined; },
+        reportActionError: (value) => {
           error = value;
         },
         toWorktreeViewError: (value) => value,
@@ -404,7 +405,7 @@ test('production branch menu selects confirmation, displays detached HEAD, and t
       setWorktreeBranchAdoption: (r) => {
         selected = r;
       },
-      setActionError: () => {},
+      clearActionError: () => {}, reportActionError: () => {},
       manager: {
         recoverWorktrees: async (input) => {
           recovery = input;
@@ -455,7 +456,8 @@ test('production adoption handler carries confirmed branch/token and preserves r
       setActionPending: (value) => {
         calls.push(['pending', value]);
       },
-      setActionError: (value) => {
+      clearActionError: () => { error = undefined; },
+      reportActionError: (value) => {
         error = value;
       },
       toWorktreeViewError: (value) => value,
@@ -509,7 +511,7 @@ test('production adoption dialog names the accepted and current branches before 
   );
   const render = evaluate(
     `${fn.getText(file).replace('export ', '')}; return WorktreeAdoptBranchDialog;`,
-    { React, Modal: 'modal', Button: 'button', ErrorToast: 'error-notice' },
+    { React, Modal: 'modal', Button: 'button', ErrorRecovery: 'error-notice' },
   );
   const element = render({
     t: (key, values) => ({ key, values }),
