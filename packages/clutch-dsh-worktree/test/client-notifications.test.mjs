@@ -20,22 +20,45 @@ test('recovery changes never emit occurrences, reorder history or replay dismiss
   center.updateRecovery('panel', [{ ...b, reportId: second }, { ...a, reportId: first }]);
   await Promise.resolve();
   assert.deepEqual(diagnostics.getSnapshot().map(item => item.reportId), [first, second]);
-  center.dismiss(first);
+  center.dismiss(center.getSnapshot().key);
   center.updateRecovery('panel', [{ ...a, reportId: first }]);
   await Promise.resolve();
-  assert.equal(center.getSnapshot().key, second);
-  assert.deepEqual(diagnostics.getSnapshot().map(item => item.status), ['active', 'resolved']);
-  center.dismiss(second);
+  assert.equal(center.getSnapshot().reportId, second);
+  assert.deepEqual(diagnostics.getSnapshot().map(item => item.status), ['active', 'reported']);
+  const staleKey = center.getSnapshot().key;
+  center.dismiss(staleKey);
   const again = center.report(b);
-  center.dismiss(second);
+  center.dismiss(staleKey);
   await Promise.resolve();
-  assert.equal(center.getSnapshot().key, again, 'stale timer cannot dismiss a later occurrence');
+  assert.equal(center.getSnapshot().reportId, again, 'stale timer cannot dismiss a later occurrence');
   assert.equal(diagnostics.getSnapshot().length, 3);
   center.resolve(first);
   center.updateRecovery('panel', [{ ...a, reportId: first }]);
   await Promise.resolve();
   assert.equal(diagnostics.getSnapshot()[0].status, 'resolved', 'late controls cannot reopen a confirmed resolution');
-  assert.equal(center.getSnapshot().key, again);
+  assert.equal(center.getSnapshot().reportId, again);
+});
+
+test('late recovery registration preserves every active occurrence in FIFO order beyond the history cap', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  const rows = Array.from({ length: 104 }, (_, index) => {
+    const notice = { key: 'item-' + index, text: 'original-' + index, origin: index ? 'inline' : undefined };
+    return { ...notice, reportId: center.report(notice), actions: [{ label: 'Retry', onClick() {} }] };
+  });
+  await Promise.resolve();
+  assert.equal(diagnostics.getSnapshot().length, 101);
+  assert.ok(diagnostics.getSnapshot().some(entry => entry.reportId === center.getSnapshot().reportId));
+  assert.ok(!diagnostics.getSnapshot().some(entry => entry.reportId === rows[1].reportId));
+  center.updateRecovery('list', rows);
+  await Promise.resolve();
+  diagnostics.clearHistory();
+  assert.deepEqual(diagnostics.getSnapshot().map(entry => entry.reportId), rows.map(row => row.reportId));
+  assert.ok(diagnostics.getSnapshot().every(entry => entry.status === 'active' && entry.actions.length === 1));
+  center.dismiss(center.getSnapshot().key);
+  center.deactivate('list');
+  await Promise.resolve();
+  assert.equal(diagnostics.getSnapshot().length, 100);
 });
 
 test('closing one recovery view preserves the other owner of the same occurrence', async () => {

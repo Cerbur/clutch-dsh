@@ -72,11 +72,11 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
           setFetched({ source, branches: next });
         }
       } catch (error) {
-        if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
-          setReadError(worktreeNotifications.reportError(toWorktreeViewError(error), {
-            origin: 'inline', context: t('dashboard.searchBranches'),
-          }));
-        }
+        const current = alive.current && generation.current === token && readRequest.current === request && latestSource.current === source;
+        const reported = worktreeNotifications.reportError(toWorktreeViewError(error), {
+          origin: current ? 'inline' : 'retired', context: t('dashboard.searchBranches'),
+        });
+        if (current) setReadError(reported);
       } finally {
         if (readRequest.current === request && generation.current === token) {
           readRequest.current = undefined;
@@ -107,10 +107,12 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
         }, 2000);
       }
     } catch (error) {
-      if (alive.current && generation.current === token) {
-        setFetchError(worktreeNotifications.reportError(toWorktreeViewError(error), {
-          origin: 'inline', context: t('branch.fetch'),
-        }));
+      const current = alive.current && generation.current === token;
+      const reported = worktreeNotifications.reportError(toWorktreeViewError(error), {
+        origin: current ? 'inline' : 'retired', context: t('branch.fetch'),
+      });
+      if (current) {
+        setFetchError(reported);
         setStatus('error');
       }
     } finally { if (generation.current === token) pending.current = false; }

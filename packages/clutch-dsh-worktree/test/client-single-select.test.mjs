@@ -653,6 +653,23 @@ test('fetch failure keeps old branch rows and exposes an inline retryable locali
   assert.equal(find(node, (item) => item.props?.role === 'alert').length, 0);
 });
 
+test('closing the branch picker during Fetch still records its failure', async () => {
+  const h = harness();
+  let reject;
+  const props = { t: key => en[key], value: 'main', branches: [], onChange() {},
+    onFetch: () => new Promise((_, fail) => { reject = fail; }) };
+  const node = h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  find(node, item => item.props?.['data-branch-fetch'] !== undefined)[0].props.onClick();
+  h.dispose();
+  reject(new Error('late fetch failed'));
+  await Promise.resolve();
+  await Promise.resolve();
+  const [entry] = h.diagnostics.getSnapshot();
+  assert.equal(entry.error.message, 'late fetch failed');
+  assert.equal(entry.status, 'inactive');
+  assert.deepEqual(entry.actions, []);
+});
+
 test('Fetch retains diagnostic details and retry history until recovery without a status row', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();

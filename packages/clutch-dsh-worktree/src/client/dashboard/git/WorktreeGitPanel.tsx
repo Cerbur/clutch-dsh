@@ -2,7 +2,7 @@ import { NotificationRecovery } from '../../surface/components/NotificationRecov
 import { IconLoadingOutline16, IconRefreshOutline16, IconRightUpOutline16 } from '../../dsh-icons.js';
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
-import { failureToastKey } from '../../surface/notification-queue.js';
+import { failureToastKey, type WorktreeNotification } from '../../surface/notification-queue.js';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import type {
@@ -197,7 +197,7 @@ export function WorktreeGitPanel({
             {
               key: JSON.stringify([workspaceId, worktreeId, scope, diagnostic.code, diagnostic.details]),
               toastKey: failureToastKey(diagnostic, [workspaceId, worktreeId]),
-              reportId: (error as Error & { reportId?: string }).reportId,
+              reportId: (error as Error & { reportId?: WorktreeNotification['reportId'] }).reportId,
               error: diagnostic,
               origin: showingCachedView ? 'cached-refresh' : undefined,
               context: context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · '),

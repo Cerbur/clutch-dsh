@@ -1,6 +1,7 @@
 import { worktreeNotifications } from '../../surface/notification-center.js';
 import { failureToastKey } from '../../surface/notification-queue.js';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import type { ReportId } from '../../view/worktree-view-errors.js';
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { WORKTREE_GIT_WORKING_TREE } from '../../../contract/index.js';
 import type {
@@ -125,13 +126,23 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   const capturedBaseline = input.capturedBaseline === true;
   const canRead = (baselineBranch: string | undefined): boolean =>
     main || capturedBaseline || baselineBranch !== undefined;
-  const reportRead = (cause: unknown, operation: string, cached = false): Error => {
+  // Only a successful read of the same target can resolve that operation's latest failure.
+  const failedReads = new Map<string, { key: string | undefined; reportId: ReportId }>();
+  const resolveRead = (operation: string, key: string | undefined) => {
+    const previous = failedReads.get(operation);
+    if (previous && previous.key === key) {
+      worktreeNotifications.resolve(previous.reportId);
+      failedReads.delete(operation);
+    }
+  };
+  const reportRead = (cause: unknown, operation: string, key: string | undefined, cached = false): Error => {
     const error = toWorktreeViewError(cause);
     const scope = [input.workspaceId, input.worktreeId];
     const reported = worktreeNotifications.reportError(error, {
-      origin: cached ? 'cached-refresh' : undefined, context: [...scope, operation].join(' · '),
+      origin: disposed ? 'retired' : cached ? 'cached-refresh' : undefined, context: [...scope, operation].join(' · '),
       toastKey: failureToastKey(error, scope),
     });
+    if (!disposed) failedReads.set(operation, { key, reportId: reported.reportId });
     return Object.assign(new Error(error.message), reported);
   };
   let state = emptyState(main ? undefined : input.defaultBaselineBranch, main);
@@ -244,7 +255,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       () => {
         if (filesInFlight.get(key) === promise) filesInFlight.delete(key);
       },
-      () => {
+      (cause) => {
+        if (disposed) reportRead(cause, 'files', key);
         if (filesInFlight.get(key) === promise) filesInFlight.delete(key);
       },
     );
@@ -277,7 +289,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       () => {
         if (diffInFlight.get(key) === promise) diffInFlight.delete(key);
       },
-      () => {
+      (cause) => {
+        if (disposed) reportRead(cause, 'diff', key);
         if (diffInFlight.get(key) === promise) diffInFlight.delete(key);
       },
     );
@@ -303,6 +316,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     try {
       const value = await requestDiff(baselineBranch, state.history, target, diffPath);
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
+      resolveRead('diff', key);
       if (!isLiveTarget(target)) {
         diffCache.set(key, value);
         trimCache(diffCache, MAX_DIFF_CACHE);
@@ -311,8 +325,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } catch (error) {
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       update({ ...state, diff: previous
-        ? { status: 'ready', value: previous, error: reportRead(error, 'diff', true), showingCachedView: true }
-        : { status: 'error', error: reportRead(error, 'diff') } });
+        ? { status: 'ready', value: previous, error: reportRead(error, 'diff', key, true), showingCachedView: true }
+        : { status: 'error', error: reportRead(error, 'diff', key) } });
     }
   };
 
@@ -349,6 +363,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     try {
       const value = await requestFiles(baselineBranch, state.history, target);
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
+      resolveRead('files', key);
       if (!isLiveTarget(target)) {
         filesCache.set(key, value);
         trimCache(filesCache, MAX_FILE_CACHE);
@@ -357,9 +372,9 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } catch (error) {
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       if (preserveReady && previousFiles !== undefined) {
-        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: reportRead(error, 'files', background), showingCachedView: background } });
+        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: reportRead(error, 'files', key, background), showingCachedView: background } });
       } else {
-        update({ ...state, files: { status: 'error', error: reportRead(error, 'files') }, selectedPath: undefined, diff: { status: 'idle' } });
+        update({ ...state, files: { status: 'error', error: reportRead(error, 'files', key) }, selectedPath: undefined, diff: { status: 'idle' } });
       }
     }
   };
@@ -546,7 +561,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         branchesLoaded = true;
         update({ ...state, branches: { status: 'ready', value } });
       } catch (error) {
-        if (disposed || request !== branchesRequest) return;
+        if (disposed) { reportRead(error, 'branches', undefined); return; }
+        if (request !== branchesRequest) return;
         branchesLoaded = false;
         const nextError = asError(error);
         if (previous.status === 'ready') {
@@ -615,6 +631,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           baseBranch: baselineBranch,
         });
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
+        resolveRead('history', baselineBranch);
         historyLoaded = true;
         const selectedCommits = state.view === 'summary'
           ? []
@@ -654,10 +671,11 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           void loadFiles(target, refresh && selectedCommitStillExists, backgroundHistory && selectedCommitStillExists);
         }
       } catch (error) {
-        if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
+        if (disposed) { reportRead(error, 'history', baselineBranch); return; }
+        if (request !== historyRequest || state.baselineBranch !== baselineBranch) return;
         historyLoaded = true;
         const hasCached = previous.status === 'ready' || (previous.status === 'error' && previous.previous !== undefined);
-        const nextError = reportRead(error, 'history', backgroundHistory && hasCached);
+        const nextError = reportRead(error, 'history', baselineBranch, backgroundHistory && hasCached);
         if (previous.status === 'ready') {
           update({ ...state, history: { status: 'ready', value: previous.value, error: nextError, showingCachedView: backgroundHistory } });
         } else if (previous.status === 'error' && previous.previous !== undefined) {
@@ -681,6 +699,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     const previous = state.history.value;
     const baselineBranch = state.baselineBranch;
     const request = historyRequest;
+    const pageKey = JSON.stringify([baselineBranch, previous.headCommit, previous.baseline?.commit, previous.nextOffset]);
     update({ ...state, loadingMore: true, loadMoreError: undefined });
     const run = async (): Promise<void> => {
       try {
@@ -695,13 +714,15 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
           page.unavailableReason !== undefined) throw Object.assign(
             new Error('Git history changed; refresh before loading more'), { code: 'WORKTREE_STATE_CONFLICT' },
           );
+        resolveRead('pagination', pageKey);
         const existing = new Set(previous.commits.map((commit) => commit.sha));
         update({ ...state, loadingMore: false, history: { status: 'ready', value: {
           ...page, commits: [...previous.commits, ...page.commits.filter((commit) => !existing.has(commit.sha))],
         } } });
       } catch (error) {
-        if (disposed || request !== historyRequest || baselineBranch !== state.baselineBranch) return;
-        update({ ...state, loadingMore: false, loadMoreError: reportRead(error, 'pagination') });
+        if (disposed) { reportRead(error, 'pagination', pageKey); return; }
+        if (request !== historyRequest || baselineBranch !== state.baselineBranch) return;
+        update({ ...state, loadingMore: false, loadMoreError: reportRead(error, 'pagination', pageKey) });
       }
     };
     const promise = run().finally(() => {

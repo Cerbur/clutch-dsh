@@ -701,8 +701,7 @@ Ambiguous labels or changed shell markup retain the default icon. Browser-memory
 diagnostics outlive toast dismissal and source unmount. Each entry includes contextual names/paths,
 localized problem/recovery copy, original code/message/details (including Git stderr) and live
 scoped actions. Unmounted sources become inactive and revoke callbacks; absence of a reported
-error moves the record into history, not proof that a retry succeeded. Only inactive history is
-bounded to 100 entries; Clear history preserves active recoveries, and page reload clears all.
+error moves the record into history, not proof that a retry succeeded. An occurrence ID held by a live view can reattach its original diagnostic after history trimming. The 100-entry limit excludes active recoveries and pending toasts; Clear history preserves active recoveries, and page reload clears all.
 The toast's sole action opens the Worktree section through the native rc.1 Settings shell's
 shared viewing store (the winning sidebar.settings ledger entry); it keeps operation dialogs
 mounted so their retry controls remain live. An unavailable store falls back to the written

@@ -1,8 +1,8 @@
-import type { WorktreeViewError } from '../view/worktree-view-errors.js';
+import type { ReportId, WorktreeViewError } from '../view/worktree-view-errors.js';
 import type { WorktreeTranslate } from './types.js';
 
 export interface WorktreeNotification {
-  readonly reportId?: string;
+  readonly reportId?: ReportId;
   readonly key: string;
   readonly text: string;
   readonly toastKey?: string;

@@ -404,6 +404,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
     onOpenSession() {},
   };
   return {
+    center,
     render(next = {}) {
       props = { ...props, ...next };
       cursor = 0;
@@ -600,6 +601,47 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
     }
   });
 }
+
+for (const causeCode of ['WORKSPACE_ROOT_MISSING', 'WORKTREE_NOT_FOUND']) {
+  test(`partial sync retains Session recovery and applies toast policy for ${causeCode}`, async () => {
+    const diagnostics = createWorktreeDiagnostics();
+    const harness = renderHarness(async () => true, { diagnostics });
+    let node = harness.render({ record: { ...record, baseBranch: 'main' }, onSyncBaseline: async () => ({
+      sessionId: 'kept', status: 'binding-failed', error: 'same failure', causeCode,
+    }) });
+    findAll(node, item => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+    node = harness.render();
+    findAll(node, item => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+    await tick();
+    harness.render();
+    await tick();
+    const [entry] = diagnostics.getSnapshot();
+    assert.equal(entry.error.details.causeCode, causeCode);
+    assert.equal(entry.error.details.sessionId, 'kept');
+    assert.equal(entry.actions.length, 1);
+    assert.equal(Boolean(harness.center.getSnapshot()), causeCode === 'WORKTREE_NOT_FOUND');
+    harness.dispose();
+  });
+}
+
+test('a rejected sync after Dashboard unmount is recorded quietly with its original context', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const harness = renderHarness(async () => true, { diagnostics });
+  let reject;
+  let node = harness.render({ record: { ...record, baseBranch: 'main' },
+    onSyncBaseline: () => new Promise((_, fail) => { reject = fail; }) });
+  findAll(node, item => item.props?.['data-dashboard-action'] === 'sync-baseline')[0].props.onClick();
+  node = harness.render();
+  findAll(node, item => item.props?.children === en['dashboard.sync.create'])[0].props.onClick();
+  harness.dispose();
+  reject(new Error('rejected after navigation'));
+  await tick();
+  const [entry] = diagnostics.getSnapshot();
+  assert.equal(entry.error.message, 'rejected after navigation');
+  assert.equal(entry.context, record.absolutePath);
+  assert.equal(entry.status, 'inactive');
+  assert.equal(harness.center.getSnapshot(), undefined);
+});
 
 for (const change of ['baseline', 'worktree', 'manager', 'unmount']) {
   for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporting-failed', 'prompt-failed']) {

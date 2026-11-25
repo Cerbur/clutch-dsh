@@ -7,6 +7,7 @@ export interface WorktreeSessionCreationResult {
   /** This confirmed attempt ended before native directory entry. A new user action may start fresh. */
   readonly retryCreation?: boolean;
   readonly error?: string;
+  readonly causeCode?: string;
   readonly state?: WorktreeSessionState;
 }
 export interface WorktreeSessionCreationRequest {

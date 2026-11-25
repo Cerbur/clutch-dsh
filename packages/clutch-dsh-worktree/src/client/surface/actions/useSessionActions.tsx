@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../notification-center.js';
 import { useState } from 'react';
 import { openWorktreeSession } from '../../view/navigation.js';
 import { retryWorktreeSessionBinding } from '../../session/worktree-session.js';
@@ -92,6 +93,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
           openingSession: { sessionId, worktreeId: pending.worktreeId },
         }),
       });
+      if (pending.error?.reportId) worktreeNotifications.resolve(pending.error.reportId);
       setPendingSessionBinding(undefined);
     } catch (error) {
       const failure = reportActionError(toWorktreeViewError(error));

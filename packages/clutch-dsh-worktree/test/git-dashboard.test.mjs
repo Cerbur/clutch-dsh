@@ -8,6 +8,8 @@ import { setImmediate } from 'node:timers';
 import { promisify } from 'node:util';
 import test from 'node:test';
 
+import { worktreeNotifications } from '../lib/client/surface/notification-center.js';
+import { worktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
 import { createBaselineSync } from '../lib/host/baseline-sync.js';
 import {
@@ -1495,6 +1497,31 @@ test('selects the working-tree entry explicitly and refreshes its live files', a
   assert.equal(controller.getSnapshot().selectedCommit, committed);
   assert.equal(controller.getSnapshot().selectedPath, 'committed.txt');
   controller.dispose();
+});
+
+test('Git history retry resolves the original occurrence only after the target read succeeds', async () => {
+  worktreeNotifications.dispose();
+  let reject, resolve;
+  const manager = { listWorktreeCommits: () => new Promise((ok, fail) => { resolve = ok; reject = fail; }) };
+  const controller = createWorktreeGitStateController({ manager, workspaceId: 'ws', worktreeId: 'main:ws' });
+  const first = controller.loadHistory();
+  reject(new Error('history failed'));
+  await first;
+  const [entry] = worktreeDiagnostics.getSnapshot();
+  const retry = controller.refresh();
+  assert.equal(worktreeDiagnostics.getSnapshot()[0].status, 'reported');
+  resolve({ commits: [], truncated: false });
+  await retry;
+  assert.equal(worktreeDiagnostics.getSnapshot()[0].reportId, entry.reportId);
+  assert.equal(worktreeDiagnostics.getSnapshot()[0].status, 'resolved');
+  const late = controller.refresh();
+  controller.dispose();
+  reject(new Error('late Git read'));
+  await late;
+  const last = worktreeDiagnostics.getSnapshot().at(-1);
+  assert.equal(last.status, 'inactive');
+  assert.equal(last.error.message, 'late Git read');
+  worktreeNotifications.dispose();
 });
 
 test('shares equivalent in-flight history, file, and diff reads', async () => {

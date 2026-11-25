@@ -1,6 +1,14 @@
 import type { WorktreeManager, WorktreeRecord, WorktreeSessionCreationResult } from '../contract/index.js';
 import { WorktreeDirectoryEntryNotStarted, type WorktreeToolSessionPort } from './native-session.js';
 
+/** Preserve the structured cause across the partial-success RPC boundary. */
+export function sessionFailure(error: unknown): { error: string; causeCode?: string } {
+  const cause = error instanceof WorktreeDirectoryEntryNotStarted ? error.cause : error;
+  const code = cause && typeof cause === 'object' && 'code' in cause ? cause.code : undefined;
+  const message = error && typeof error === 'object' && 'message' in error ? error.message : error;
+  return { error: String(message).slice(0, 700), ...(typeof code === 'string' ? { causeCode: code } : {}) };
+}
+
 /** Native creation owns Workspace membership; native directory publication precedes binding and input. */
 export async function createBoundWorktreeSession(input: {
   record: WorktreeRecord;
@@ -31,7 +39,7 @@ export async function createBoundWorktreeSession(input: {
     }
     return { sessionId, bound: true };
   } catch (error) {
-    return { sessionId, bound, error: (error instanceof Error ? error.message : String(error)).slice(0, 700),
+    return { sessionId, bound, ...sessionFailure(error),
       ...((!initializationStarted && sessions.enterWorkingDirectory) || error instanceof WorktreeDirectoryEntryNotStarted
         ? { retryCreation: true } : {}) };
   }

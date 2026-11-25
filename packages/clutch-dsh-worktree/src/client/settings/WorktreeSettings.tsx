@@ -75,7 +75,7 @@ export function WorktreeSettings({
             {entries.length === 0 && <p className={styles.settingsEmpty}>{t('settings.empty')}</p>}
             <div className={styles.issueList}>
               {[...entries].reverse().map((entry) => (
-                <article key={entry.reportId ?? entry.key} className={styles.issue} data-worktree-diagnostic>
+                <article key={entry.reportId.sequence} className={styles.issue} data-worktree-diagnostic>
                   <div className={styles.issueHeader}>
                     <h3 className={styles.issueTitle}>
                       {entry.describe?.(t) ?? entry.context ?? t('settings.operation')}

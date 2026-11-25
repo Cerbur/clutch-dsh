@@ -79,6 +79,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
     setWorkspaceRenameError(undefined);
     try {
       await renameWorkspace(target.workspaceId, workspaceRenameTrimmed);
+      if (workspaceRenameError?.reportId) worktreeNotifications.resolve(workspaceRenameError.reportId);
       setWorkspaceRenameTarget(undefined);
     } catch (error) {
       setWorkspaceRenameError(worktreeNotifications.reportError(toNativeWorktreeViewError(error)));
@@ -110,6 +111,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
     setWorkspaceDeleteError(undefined);
     try {
       await deleteWorkspace(target.workspaceId);
+      if (workspaceDeleteError?.reportId) worktreeNotifications.resolve(workspaceDeleteError.reportId);
       setWorkspaceDeleteTarget(undefined);
     } catch (error) {
       setWorkspaceDeleteError(worktreeNotifications.reportError(toNativeWorktreeViewError(error)));
@@ -143,6 +145,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
     setSessionRenameError(undefined);
     try {
       await renameSession(target.sessionId, title);
+      if (sessionRenameError?.reportId) worktreeNotifications.resolve(sessionRenameError.reportId);
       setSessionRenameTarget(undefined);
     } catch (error) {
       setSessionRenameError(worktreeNotifications.reportError(toNativeWorktreeViewError(error)));

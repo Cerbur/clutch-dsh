@@ -333,10 +333,13 @@ export function createWorktreeSessionConnector(
           creationRequests.delete(key);
           throw new WorktreeSessionActionError('WORKTREE_SESSION_ENTRY_NOT_STARTED', created.error ?? '', false, {
             workspaceId: input.workspaceId, sessionId: created.sessionId,
+            ...(created.causeCode === undefined ? {} : { causeCode: created.causeCode }),
           });
         }
         creationRequests.set(key, { requestId, sessionId: created.sessionId });
-        if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, new Error(created.error));
+        if (!created.bound) throw new WorktreeSessionBindingError(created.sessionId, {
+          message: created.error ?? '', code: created.causeCode,
+        });
         await prepareOpen(created.sessionId, created.state);
         if (!disposed) options.openSession(created.sessionId);
         creationRequests.delete(key);

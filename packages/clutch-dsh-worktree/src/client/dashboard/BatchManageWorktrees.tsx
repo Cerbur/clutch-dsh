@@ -71,6 +71,8 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           next.delete(result.record.worktreeId);
           return next;
         });
+      }, (record, error) => {
+        worktreeNotifications.reportError(error, { origin: 'retired', context: record.branch + ' · ' + record.absolutePath });
       });
       if (isCurrent() && failures.length) {
         const message = (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed: failures.length, total });

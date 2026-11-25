@@ -1,5 +1,5 @@
 import { worktreeNotifications } from '../surface/notification-center.js';
-import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view-errors.js';
+import { toWorktreeViewError, type ReportId, type WorktreeViewError } from '../view/worktree-view-errors.js';
 import type { SessionBinding } from '../../contract/index.js';
 
 /** The public options accepted by the native DSH Session fork service. */
@@ -27,7 +27,7 @@ export interface WorktreeForkSessionListReader {
 }
 
 export interface WorktreeForkRecovery {
-  readonly reportId: string;
+  readonly reportId: ReportId;
   readonly key: string;
   readonly sourceSessionId: string;
   readonly childSessionId: string;
@@ -323,6 +323,8 @@ export function createWorktreeSessionForkCoordinator(
         status: 'active',
       };
       boundChildren.add(childSessionId);
+      const recovered = pending.get(recoveryKey(sourceSessionId, childSessionId));
+      if (recovered) worktreeNotifications.resolve(recovered.reportId);
       const { workspaceId: previousWorkspaceId } = clearRecovery(sourceSessionId, childSessionId);
       options.onBound?.(childBinding);
       publish([target.workspaceId, ...(previousWorkspaceId === undefined ? [] : [previousWorkspaceId])]);

@@ -27,6 +27,7 @@ export async function runWorktreeBatch(
   execute: (action: BatchWorktreeAction, record: WorktreeRecord, isCurrent: () => boolean) => Promise<void>,
   isCurrent: () => boolean,
   onResult: (result: BatchWorktreeResult) => void,
+  onRetiredFailure?: (record: WorktreeRecord, error: WorktreeViewError) => void,
 ): Promise<void> {
   for (const record of records) {
     if (!isCurrent()) break;
@@ -35,7 +36,9 @@ export async function runWorktreeBatch(
       await execute(action, record, isCurrent);
       if (isCurrent()) onResult({ record });
     } catch (error) {
-      if (isCurrent()) onResult({ record, error: toWorktreeViewError(error) });
+      const failure = toWorktreeViewError(error);
+      if (isCurrent()) onResult({ record, error: failure });
+      else onRetiredFailure?.(record, failure);
     }
   }
 }

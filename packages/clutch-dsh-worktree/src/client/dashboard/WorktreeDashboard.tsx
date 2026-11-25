@@ -1,5 +1,6 @@
 import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
 import { PluginAttribution } from '../PluginAttribution.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 import type { WorktreeNotification } from '../surface/notification-queue.js';
 import { worktreeNotifications } from '../surface/notification-center.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
@@ -66,7 +67,8 @@ function baselineSyncFailureNotice(
     error: {
       code: 'WORKTREE_SYNC_PARTIAL', message: result.error ?? '', retryable: false,
       details: { workspaceId: record.workspaceId, worktreeId: record.worktreeId,
-        requestId, sessionId: result.sessionId, status },
+        requestId, sessionId: result.sessionId, status,
+        ...(result.causeCode === undefined ? {} : { causeCode: result.causeCode }) },
     },
     text: t(`dashboard.sync.${status}`) + ' ' + t('dashboard.sync.partial'),
     message: (translate) => translate(`dashboard.sync.${status}`) + ' ' + translate('dashboard.sync.partial'),
@@ -293,11 +295,10 @@ export function WorktreeBaselineEditor({
       return;
     busy.current = true;
     setPending(true);
-    setError(undefined);
     try {
       const result = await onSave(draft, expected.current);
+      if (error?.reportId) worktreeNotifications.resolve(error.reportId);
       if (alive.current) {
-        if (error?.reportId) worktreeNotifications.resolve(error.reportId);
         setSaved(result);
         expected.current = result;
         editorOpen.current = false;
@@ -306,12 +307,12 @@ export function WorktreeBaselineEditor({
         setDraft(undefined);
       }
     } catch (cause) {
-      if (alive.current) {
-        const failure = toWorktreeViewError(cause);
-        setError(worktreeNotifications.reportError(failure, { context, message: translate =>
+      const failure = toWorktreeViewError(cause);
+      const reported = worktreeNotifications.reportError(failure, { context,
+        origin: alive.current ? undefined : 'retired', message: translate =>
           translate('dashboard.baseSaveFailed') +
-          (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)) }));
-      }
+          (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)) });
+      if (alive.current) setError(reported);
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);
@@ -432,7 +433,7 @@ export function useWorktreeBaselineSync({
   const [syncPending, setSyncPending] = useState(false);
   const [syncError, setSyncError] = useState<WorktreeViewError>();
   const [syncResult, setSyncResult] = useState<WorktreeSessionDispatchResult>();
-  const partialReport = useRef<string>();
+  const partialReport = useRef<ReportId>();
   const syncRequest = useRef<string>();
   const syncBusy = useRef(false);
   const syncGeneration = useRef(0);
@@ -456,12 +457,12 @@ export function useWorktreeBaselineSync({
     const generation = syncGeneration.current;
     syncBusy.current = true;
     setSyncPending(true);
-    setSyncError(undefined);
     let requestId = syncRequest.current;
     try {
       requestId ??= createSyncRequestId();
       syncRequest.current = requestId;
       const result = await onSyncBaseline(syncStrategy, displayedBaseline, requestId);
+      if (result.status === 'dispatched' && syncError?.reportId) worktreeNotifications.resolve(syncError.reportId);
       if (generation !== syncGeneration.current) {
         // Retiring navigation must not discard an already-created Session's failure.
         // Capture the original identity without reviving UI sources or callbacks.
@@ -473,17 +474,19 @@ export function useWorktreeBaselineSync({
       if (result.status !== 'dispatched') {
         partialReport.current = worktreeNotifications.report(baselineSyncFailureNotice(record, requestId, { ...result, status: result.status }, t));
       }
+      setSyncError(undefined);
       setSyncResult(result);
       if (result.status === 'dispatched') {
         setSyncOpen(false);
         onOpenSession(result.sessionId);
       }
     } catch (cause) {
-      if (generation === syncGeneration.current) {
-        const failure = toWorktreeViewError(cause);
-        setSyncError(worktreeNotifications.reportError(failure, { context: record.absolutePath,
-          message: translate => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(failure, translate) }));
-      }
+      const current = generation === syncGeneration.current;
+      const failure = toWorktreeViewError(cause);
+      const reported = worktreeNotifications.reportError(failure, { context: record.absolutePath,
+        origin: current ? undefined : 'retired',
+        message: translate => translate('dashboard.sync.failed') + ' ' + formatWorktreeViewError(failure, translate) });
+      if (current) setSyncError(reported);
     } finally {
       if (generation === syncGeneration.current) {
         syncBusy.current = false;
@@ -629,27 +632,31 @@ export function WorktreeDashboard({
       branchCopyGeneration.current += 1;
     };
   }, [record.branch, record.currentBranch, record.currentHead?.name]);
-  const copyReports = useRef<{ branch?: string; path?: string }>({});
-  const reportCopy = (kind: 'branch' | 'path') => {
+  const copyReports = useRef<{ branch?: ReportId; path?: ReportId }>({});
+  const reportCopy = (kind: 'branch' | 'path', current: boolean) => {
     const label = kind === 'branch' ? 'dashboard.branchCopyFailed' : 'dashboard.copyFailed';
-    copyReports.current[kind] = worktreeNotifications.report({
+    const report = worktreeNotifications.report({ origin: current ? undefined : 'retired',
       key: 'copy-' + kind + ':' + record.absolutePath, text: t(label), message: translate => translate(label),
       context: workspaceTitle + ' · ' + record.branch + ' · ' + record.absolutePath,
     });
+    if (current) copyReports.current[kind] = report;
   };
   const copyPath = async () => {
     if (copyPending.current) return;
     copyPending.current = true;
     const generation = copyGeneration.current;
+    const previous = copyReports.current.path;
     setCopyState('pending');
     try {
       const copied = await writeClipboard(record.absolutePath);
-      if (generation === copyGeneration.current) {
-        if (!copied) reportCopy('path');
-        setCopyState(copied ? 'copied' : 'failed');
-      }
+      const current = generation === copyGeneration.current;
+      if (!copied) reportCopy('path', current);
+      else if (previous) worktreeNotifications.resolve(previous);
+      if (current) setCopyState(copied ? 'copied' : 'failed');
     } catch {
-      if (generation === copyGeneration.current) { reportCopy('path'); setCopyState('failed'); }
+      const current = generation === copyGeneration.current;
+      reportCopy('path', current);
+      if (current) setCopyState('failed');
     } finally {
       if (generation === copyGeneration.current) copyPending.current = false;
     }
@@ -663,15 +670,18 @@ export function WorktreeDashboard({
     if (!branchAvailable || branchCopyPending.current) return;
     branchCopyPending.current = true;
     const generation = branchCopyGeneration.current;
+    const previous = copyReports.current.branch;
     setBranchCopyState('pending');
     try {
       const copied = await writeClipboard(refName);
-      if (generation === branchCopyGeneration.current) {
-        if (!copied) reportCopy('branch');
-        setBranchCopyState(copied ? 'copied' : 'failed');
-      }
+      const current = generation === branchCopyGeneration.current;
+      if (!copied) reportCopy('branch', current);
+      else if (previous) worktreeNotifications.resolve(previous);
+      if (current) setBranchCopyState(copied ? 'copied' : 'failed');
     } catch {
-      if (generation === branchCopyGeneration.current) { reportCopy('branch'); setBranchCopyState('failed'); }
+      const current = generation === branchCopyGeneration.current;
+      reportCopy('branch', current);
+      if (current) setBranchCopyState('failed');
     } finally {
       if (generation === branchCopyGeneration.current) branchCopyPending.current = false;
     }

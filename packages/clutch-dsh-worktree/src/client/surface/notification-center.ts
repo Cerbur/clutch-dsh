@@ -1,6 +1,6 @@
 import { worktreeDiagnostics } from '../settings/diagnostics.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
-import type { WorktreeViewError } from '../view/worktree-view-errors.js';
+import type { ReportId, WorktreeViewError } from '../view/worktree-view-errors.js';
 import { failureToastKey, shouldAnnounce, type WorktreeNotification } from './notification-queue.js';
 
 /** All mounted client roots report to one FIFO. Only the shell subscribes to its toast head. */
@@ -8,7 +8,7 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
   // Occurrences survive batched renders. Only eligible, undismissed events live here.
   const pending = new Map<string, WorktreeNotification>();
   let sequence = 0;
-  const nextId = () => 'occurrence:' + ++sequence;
+  const keyOf = (id: ReportId) => 'occurrence:' + id.sequence;
   const listeners = new Set<() => void>();
   let head: WorktreeNotification | undefined;
   let generation = 0;
@@ -22,13 +22,15 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
     head = next;
     listeners.forEach(listener => listener());
   };
-  const report = (notice: WorktreeNotification): string => {
-    const reportId = nextId();
-    const event = { ...notice, key: reportId, reportId, toastKey: notice.toastKey ?? reportId };
+  const report = (notice: WorktreeNotification): ReportId => {
+    const reportId = { sequence: ++sequence };
+    const key = keyOf(reportId);
+    const event = { ...notice, key, reportId, toastKey: notice.toastKey ?? key };
     post(() => {
-      diagnostics.record(reportId, [event], notice.origin === 'retired' ? 'inactive' : 'reported');
-      if (shouldAnnounce(event) && ![...pending.values()].some(item => item.toastKey === event.toastKey)) {
-        pending.set(reportId, event);
+      const announce = shouldAnnounce(event) && ![...pending.values()].some(item => item.toastKey === event.toastKey);
+      diagnostics.record(key, [event], notice.origin === 'retired' ? 'inactive' : 'reported', announce);
+      if (announce) {
+        pending.set(key, event);
         updateHead();
       }
     });
@@ -42,7 +44,7 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
     getSnapshot: () => head,
     report,
     reportError(error: WorktreeViewError, options: Pick<WorktreeNotification,
-      'origin' | 'toastKey' | 'context' | 'describe' | 'message'> = {}): WorktreeViewError & { reportId: string } {
+      'origin' | 'toastKey' | 'context' | 'describe' | 'message'> = {}): WorktreeViewError & { reportId: ReportId } {
       const reportId = report({ key: error.code, text: '', error, toastKey: failureToastKey(error),
         message: translate => formatWorktreeViewError(error, translate), ...options });
       return { ...error, reportId };
@@ -52,15 +54,16 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
         const records = notices.flatMap(notice => {
           const reportId = notice.reportId ?? notice.error?.reportId;
           if (reportId === undefined) return [];
-          const queued = pending.get(reportId);
-          if (queued) pending.set(reportId, { ...queued, text: notice.text, message: notice.message });
+          const key = keyOf(reportId);
+          const queued = pending.get(key);
+          if (queued?.reportId === reportId) pending.set(key, { ...queued, text: notice.text, message: notice.message });
           return { ...notice, reportId };
         });
         diagnostics.updateRecovery(source, records);
         updateHead();
       });
     },
-    resolve(reportId: string) {
+    resolve(reportId: ReportId) {
       post(() => diagnostics.resolve(reportId));
     },
     deactivate(source: string) {
@@ -69,6 +72,7 @@ export function createNotificationCenter(diagnostics: typeof worktreeDiagnostics
     dismiss(key: string) {
       post(() => {
         if (head?.key !== key) return;
+        diagnostics.dismiss(head.reportId!);
         pending.delete(key);
         updateHead();
       });

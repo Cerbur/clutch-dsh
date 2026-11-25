@@ -817,7 +817,10 @@ If every failure is a missing Workspace root, the summary is recorded silently. 
 A created Session with a failed binding retains its recovery actions even when the underlying error is history-only.
 Each failure is recorded as it happens. Two failures from the same operation view before it repaints,
 including repeated failures with the same code, have separate history entries in arrival order.
-Refreshing recovery buttons, resolving an issue, or closing the view updates the existing entry.
+If the root disappears between Session creation and binding, both New Session and baseline sync record the original cause code and keep recovery for the created Session.
+A save, sync or Fetch that fails after its view closes still appears in history without a toast or buttons for the closed view.
+Starting a retry or withdrawing its controls leaves the failure unconfirmed. A successful retry resolves its record.
+All active recoveries remain available even when more than 100 errors arrive before the view updates. The 100-entry limit applies to history outside active recoveries and queued toasts.
 An equivalent pending toast may cover several entries. Errors from separate views share the same toast queue. Dismissing one toast reveals the next pending failure.
 
 Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,

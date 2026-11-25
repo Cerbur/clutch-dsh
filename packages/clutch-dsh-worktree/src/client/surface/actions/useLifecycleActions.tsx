@@ -4,6 +4,7 @@ import {
   toWorktreeViewError,
   type WorktreeViewError,
 } from '../../view/worktree-view.js';
+import { worktreeNotifications } from '../notification-center.js';
 import type { WorktreeNotification } from '../notification-queue.js';
 import type { WorktreeSurfaceProps } from '../types.js';
 import type { useLifecycleState } from '../state/useLifecycleState.js';
@@ -79,7 +80,10 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       label: t(canQuarantine ? 'worktree.cancelPendingCleanup' : 'worktree.retryRecovery'),
       disabled: actionPending,
       onClick: () => {
-          void runMutation(() => manager.recoverWorktrees({ workspaceId, ...(canQuarantine ? { quarantineOperationId } : {}) }), {
+          void runMutation(async () => {
+            await manager.recoverWorktrees({ workspaceId, ...(canQuarantine ? { quarantineOperationId } : {}) });
+            if (error.reportId) worktreeNotifications.resolve(error.reportId);
+          }, {
             scope: { kind: 'workspace', workspaceId },
             preserveCurrent: true,
           });
@@ -134,6 +138,7 @@ export function useLifecycleActions({ read, lifecycleState, source, props, mutat
       clearActionError();
     } catch (error) {
       if (isCurrent()) reportActionError(toWorktreeViewError(error));
+      else worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'retired', context: target.absolutePath });
     } finally {
       if (isCurrent()) setActionPending(false);
     }

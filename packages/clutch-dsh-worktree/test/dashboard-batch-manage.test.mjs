@@ -68,6 +68,13 @@ test('batch continues independent failures and stops scheduling after owner reti
     calls.push(target.worktreeId); current = false;
   }, () => current, () => assert.fail('retired owner received a result'));
   assert.deepEqual(calls, ['one']);
+  current = true;
+  const late = [];
+  await batch.runWorktreeBatch('forget', [archived, archivedSecond], async () => {
+    current = false;
+    throw Object.assign(new Error('late rejection'), { code: 'WORKTREE_STATE_CONFLICT' });
+  }, () => current, () => assert.fail('retired view received a result'), (row, error) => late.push([row.worktreeId, error.code]));
+  assert.deepEqual(late, [['one', 'WORKTREE_STATE_CONFLICT']]);
 });
 
 async function operationsFixture() {

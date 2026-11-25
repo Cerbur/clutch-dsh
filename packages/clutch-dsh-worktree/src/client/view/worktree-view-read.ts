@@ -296,6 +296,10 @@ export function createWorktreeViewReader(
         const view: WorktreeWorkspaceView = { workspaceId, ...data,
           ...(knownSessionIds === undefined ? {} : { knownSessionIds }) };
         if (!disposed && entries.get(workspaceId) === entry && entry.generation === generation) {
+          const previous = entry.view?.readiness;
+          if (previous?.status === 'workspaceMissing' && previous.error.reportId && view.readiness?.status !== 'workspaceMissing') {
+            worktreeNotifications.resolve(previous.error.reportId);
+          }
           entry.view = view;
           entry.knownSessionIds = knownSessionIds;
           entry.stale = false;

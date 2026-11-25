@@ -39,21 +39,20 @@ export function WorktreeInstructions({
     if (busy.current || draft === undefined || !onSave) return;
     busy.current = true;
     setPending(true);
-    setError(undefined);
     try {
       const result = await onSave(draft, expected.current);
+      if (error?.reportId) worktreeNotifications.resolve(error.reportId);
       if (alive.current) {
-        if (error?.reportId) worktreeNotifications.resolve(error.reportId);
         setSaved(result);
         setDraft(undefined);
       }
     } catch (cause) {
-      if (alive.current) {
-        const failure = toWorktreeViewError(cause);
-        setError(worktreeNotifications.reportError(failure, { context, message: translate =>
+      const failure = toWorktreeViewError(cause);
+      const reported = worktreeNotifications.reportError(failure, { context,
+        origin: alive.current ? undefined : 'retired', message: translate =>
           translate('dashboard.instructionsSaveFailed') +
-          (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)) }));
-      }
+          (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)) });
+      if (alive.current) setError(reported);
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);

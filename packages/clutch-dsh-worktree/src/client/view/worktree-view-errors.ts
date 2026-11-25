@@ -1,8 +1,11 @@
 import type { WorktreeLocaleKey } from '../locales.js';
 
+/** A live occurrence can acquire recovery controls after it leaves bounded history. */
+export interface ReportId { readonly sequence: number }
+
 export interface WorktreeViewError {
   /** Client occurrence identity for attaching recovery after React commits. */
-  readonly reportId?: string;
+  readonly reportId?: ReportId;
   readonly code: string;
   readonly message: string;
   readonly messageKey?: WorktreeLocaleKey;

@@ -148,25 +148,26 @@ export function useWorktreeRegistration({
     async (workspaceId: string): Promise<void> => {
       if (manager === undefined) return;
       setImportCandidates((current) => ({ status: 'loading', candidates: current.candidates }));
-      await importCandidatesGuard.current.run(
-        () => manager.listImportCandidates({ workspaceId }),
-        (candidates) => {
-          if (modalWorkspaceIdRef.current !== workspaceId) return;
+      const guard = importCandidatesGuard.current;
+      const generation = guard.begin();
+      const isCurrent = () => guard.isCurrent(generation) && modalWorkspaceIdRef.current === workspaceId;
+      try {
+        const candidates = await manager.listImportCandidates({ workspaceId });
+        if (isCurrent()) {
+          if (importCandidates.status === 'error' && importCandidates.error.reportId) worktreeNotifications.resolve(importCandidates.error.reportId);
           setImportCandidates({ status: 'ready', candidates });
-        },
-        (error) => {
-          if (modalWorkspaceIdRef.current !== workspaceId) return;
-          const failure = worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'inline', context: workspaceId });
-          setImportCandidates((current) => ({
-            status: 'error',
-            candidates: current.candidates,
-            error: failure,
-          }));
-        },
-      );
+        }
+      } catch (error) {
+        const active = isCurrent();
+        const failure = worktreeNotifications.reportError(toWorktreeViewError(error), { origin: active ? 'inline' : 'retired', context: workspaceId });
+        if (active) setImportCandidates((current) => ({
+          status: 'error', candidates: current.candidates, error: failure,
+        }));
+      }
     },
-    [manager],
+    [manager, importCandidates],
   );
+
   const closeWorktreeCreator = (force = false): void => {
     if (actionPending && !force) return;
     modalGenerationRef.current++;

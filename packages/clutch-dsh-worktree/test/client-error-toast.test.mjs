@@ -325,9 +325,10 @@ test('Settings renders contextual explanations, original diagnostics and safe re
     './settings.css': { default: {} },
   });
   let retried = 0, closed = 0;
-  store.record('view', [{ key: 'failure', reportId: '1', text: 'old language',
+  const reportId = { sequence: 1 };
+  store.record('view', [{ key: 'failure', reportId, text: 'old language',
     error: { code: 'GIT_OPERATION_FAILED', retryable: true, message: 'raw Git failure', details: { gitStderr: 'fatal: permission denied' } } }]);
-  store.updateRecovery('view', [{ reportId: '1',
+  store.updateRecovery('view', [{ reportId,
     key: 'failure', context: 'My Workspace · feature/task · /repo/wt',
     text: 'old language',
     error: { code: 'GIT_OPERATION_FAILED', retryable: true, message: 'raw Git failure',

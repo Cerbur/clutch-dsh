@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../notification-center.js';
 import { runWorktreeCleanupFlow } from './worktree-cleanup-flow.js';
 import { executeWorktreeAction, toWorktreeViewError } from '../../view/worktree-view.js';
 import type { LifecycleDialogInput } from '../components/LifecycleDialogs.js';
@@ -163,6 +164,7 @@ export function createLifecycleCommands({
     })
       .catch((error) => {
         if (isCurrent()) reportActionError(toWorktreeViewError(error));
+        else worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'retired', context: target.absolutePath });
       })
       .finally(() => {
         if (isCurrent()) setActionPending(false);

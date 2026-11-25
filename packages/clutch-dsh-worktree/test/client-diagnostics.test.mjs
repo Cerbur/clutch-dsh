@@ -8,8 +8,9 @@ import { en, zh } from '../lib/client/locales.js';
 import { WorktreeSessionBindingError, toWorktreeViewError } from '../lib/client/view/worktree-view-errors.js';
 
 // Each test chooses explicitly when an occurrence is recorded and when its recovery changes.
+let sequence = 0;
 function attach(store, source, notices) {
-  const records = notices.map(notice => ({ ...notice, reportId: notice.key }));
+  const records = notices.map(notice => ({ ...notice, reportId: store.getSnapshot().find(entry => entry.key === notice.key)?.reportId ?? { sequence: ++sequence } }));
   for (const record of records) {
     if (!store.getSnapshot().some(entry => entry.reportId === record.reportId)) {
       store.record(source, [record]);
@@ -41,6 +42,8 @@ test('diagnostics outlive toasts and sources, but never execute an unmounted cal
   assert.equal(clicks, 1);
   attach(store, 'panel', [notice]);
   attach(store, 'panel', []);
+  assert.equal(store.getSnapshot()[0].status, 'reported');
+  store.resolve(store.getSnapshot()[0].reportId);
   assert.equal(store.getSnapshot()[0].status, 'resolved');
   assert.equal(store.getSnapshot()[0].text, notice.text);
 });
@@ -128,7 +131,7 @@ test('late failures are recorded atomically as bounded inactive history without 
   store.record('retired', []);
   assert.equal(updates, 0, 'successful late admission produces no diagnostic update');
   const late = Array.from({ length: 110 }, (_, index) => ({
-    reportId: 'late-' + index, key: 'late-' + index, text: 'Late partial failure',
+    reportId: { sequence: ++sequence }, key: 'late-' + index, text: 'Late partial failure',
     error: { code: 'WORKTREE_SYNC_PARTIAL', message: 'raw', details: { sessionId: 'session-' + index } },
     actions: [{ label: 'Must not survive', onClick() { assert.fail('inactive action ran'); } }],
   }));

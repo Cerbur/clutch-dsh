@@ -201,6 +201,8 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
             // flushSync may run membership effects before this request's finally.
             // The authoritative result is settled before publishing its ready view.
             request.pending = false;
+            const recovered = readStateRef.current.targetErrors?.[workspaceId]?.reportId;
+            if (recovered) worktreeNotifications.resolve(recovered);
             const publish = () => setReadState((current) => {
               const targetErrors = { ...current.targetErrors };
               delete targetErrors[workspaceId];
