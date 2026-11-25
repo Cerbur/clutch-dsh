@@ -1,3 +1,5 @@
+import { worktreeNotifications } from '../../surface/notification-center.js';
+import { failureToastKey } from '../../surface/notification-queue.js';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { WORKTREE_GIT_WORKING_TREE } from '../../../contract/index.js';
@@ -123,6 +125,15 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
   const capturedBaseline = input.capturedBaseline === true;
   const canRead = (baselineBranch: string | undefined): boolean =>
     main || capturedBaseline || baselineBranch !== undefined;
+  const reportRead = (cause: unknown, operation: string, cached = false): Error => {
+    const error = toWorktreeViewError(cause);
+    const scope = [input.workspaceId, input.worktreeId];
+    const reported = worktreeNotifications.reportError(error, {
+      origin: cached ? 'cached-refresh' : undefined, context: [...scope, operation].join(' · '),
+      toastKey: failureToastKey(error, scope),
+    });
+    return Object.assign(new Error(error.message), reported);
+  };
   let state = emptyState(main ? undefined : input.defaultBaselineBranch, main);
   let disposed = false;
   let branchesLoaded = false;
@@ -300,8 +311,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } catch (error) {
       if (!isCurrentRequest(request, diffRequest, baselineBranch, target, selectedPath)) return;
       update({ ...state, diff: previous
-        ? { status: 'ready', value: previous, error: asError(error), showingCachedView: true }
-        : { status: 'error', error: asError(error) } });
+        ? { status: 'ready', value: previous, error: reportRead(error, 'diff', true), showingCachedView: true }
+        : { status: 'error', error: reportRead(error, 'diff') } });
     }
   };
 
@@ -346,9 +357,9 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
     } catch (error) {
       if (!isCurrentRequest(request, filesRequest, baselineBranch, target)) return;
       if (preserveReady && previousFiles !== undefined) {
-        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: asError(error), showingCachedView: background } });
+        update({ ...state, files: { status: 'ready', value: previousFiles.value, error: reportRead(error, 'files', background), showingCachedView: background } });
       } else {
-        update({ ...state, files: { status: 'error', error: asError(error) }, selectedPath: undefined, diff: { status: 'idle' } });
+        update({ ...state, files: { status: 'error', error: reportRead(error, 'files') }, selectedPath: undefined, diff: { status: 'idle' } });
       }
     }
   };
@@ -645,7 +656,8 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
       } catch (error) {
         if (disposed || request !== historyRequest || state.baselineBranch !== baselineBranch) return;
         historyLoaded = true;
-        const nextError = asError(error);
+        const hasCached = previous.status === 'ready' || (previous.status === 'error' && previous.previous !== undefined);
+        const nextError = reportRead(error, 'history', backgroundHistory && hasCached);
         if (previous.status === 'ready') {
           update({ ...state, history: { status: 'ready', value: previous.value, error: nextError, showingCachedView: backgroundHistory } });
         } else if (previous.status === 'error' && previous.previous !== undefined) {
@@ -689,7 +701,7 @@ export function createWorktreeGitStateController(input: ControllerInput): Worktr
         } } });
       } catch (error) {
         if (disposed || request !== historyRequest || baselineBranch !== state.baselineBranch) return;
-        update({ ...state, loadingMore: false, loadMoreError: asError(error) });
+        update({ ...state, loadingMore: false, loadMoreError: reportRead(error, 'pagination') });
       }
     };
     const promise = run().finally(() => {

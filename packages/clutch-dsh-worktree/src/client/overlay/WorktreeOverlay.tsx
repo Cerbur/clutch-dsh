@@ -1,4 +1,4 @@
-import { NotificationPresenter } from '../surface/components/NotificationToasts.js';
+import { NotificationPresenter } from '../surface/components/NotificationRecovery.js';
 import type { WorktreeHeroContextProps } from '../context/WorktreeHeroContext.js';
 import { WorktreeHeroContext } from '../context/WorktreeHeroContext.js';
 import { WorktreeSurface, type WorktreeSurfaceProps } from '../WorktreeSurface.js';

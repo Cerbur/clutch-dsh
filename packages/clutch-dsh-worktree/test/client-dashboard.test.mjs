@@ -229,7 +229,7 @@ const singleSelectSource = await readFile(
   new URL('../src/client/select/SearchableSingleSelect.tsx', import.meta.url), 'utf8',
 );
 const notificationSource = await readFile(
-  new URL('../src/client/surface/components/NotificationToasts.tsx', import.meta.url), 'utf8',
+  new URL('../src/client/surface/components/NotificationRecovery.tsx', import.meta.url), 'utf8',
 );
 
 function renderHarness(writeClipboard, { stubBranchPicker = false, overview = () => ({ status: 'unavailable' }), diagnostics, browserCrypto = globalThis.crypto } = {}) {
@@ -270,7 +270,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
   const notificationExports = {};
-  const center = diagnostics && createNotificationCenter(diagnostics);
+  const center = createNotificationCenter(diagnostics ?? createWorktreeDiagnostics());
   if (diagnostics !== undefined) {
     const compiled = ts.transpileModule(notificationSource, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -308,7 +308,8 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
       IconCheckOutline16: () => jsx('svg', { 'data-icon': 'check' }),
       IconSearchOutline16: () => jsx('svg', { 'data-icon': 'search' }),
     }, './git-branch.css': { default: {} }, '../select/SearchableSingleSelect.js': selectExports,
-    '../surface/components/NotificationToasts.js': { ErrorToast: (props) => jsx('branch-error-toast', props) },
+    '../surface/notification-center.js': { worktreeNotifications: center },
+    '../surface/components/NotificationRecovery.js': { ErrorRecovery: (props) => jsx('branch-error-toast', props) },
     '../view/worktree-view.js': { toWorktreeViewError: (error) => ({ message: error.message, retryable: true }) },
   })[name] ?? {}, branchExports);
   const exports = {};
@@ -338,8 +339,8 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
           Tooltip: ({ children }) => children,
           writeClipboard,
         },
-        '../surface/components/NotificationToasts.js': {
-          NotificationToasts: notificationExports.NotificationToasts ?? (({ notices }) => jsx('toasts', { notices })),
+        '../surface/components/NotificationRecovery.js': {
+          NotificationRecovery: notificationExports.NotificationRecovery ?? (({ notices }) => jsx('toasts', { notices })),
         },
         '../surface/notification-center.js': { worktreeNotifications: center },
         '../view/worktree-view.js': { toWorktreeViewError },
@@ -562,7 +563,7 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
       node = harness.render();
       await Promise.resolve();
       const entry = diagnostics.getSnapshot().find((item) => item.error?.details?.sessionId === 'retained-session');
-      assert.ok(entry, 'the real NotificationToasts component must publish this result');
+      assert.ok(entry, 'the result must be recorded and receive recovery controls');
       assert.equal(entry.status, 'active');
       assert.equal(entry.error.details.status, status);
       assert.equal(entry.error.details.workspaceId, record.workspaceId);
@@ -1638,7 +1639,8 @@ test('Surface connects dashboard actions and preserves external Dashboard naviga
   };
   const mutation = {
     actionPending: false,
-    setActionError: (value) => calls.push(['error', value]),
+    clearActionError: () => calls.push(['error', undefined]),
+    reportActionError: (value) => calls.push(['error', value]),
   };
   const jsx = (type, props) => ({ type, props });
   const exports = {};

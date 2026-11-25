@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import type {
   BranchRecord,
   SessionBinding,
@@ -213,14 +214,14 @@ export function worktreeSetupCommands(
   }
 }
 
-function readinessFromBranchError(error: unknown): WorktreeGitReadiness | undefined {
+function readinessFromBranchError(error: unknown, workspaceId: string): WorktreeGitReadiness | undefined {
   const viewError = toWorktreeViewError(error);
   // 只有确认根目录缺失才降级为 workspaceMissing；未知 Workspace、无效或无法解析的
   // root 继续以自身错误语义上抛，不被误报成目录缺失。
   // Only a confirmed-missing root degrades to workspaceMissing; an unknown Workspace and an
   // invalid or unresolvable root keep their own error semantics instead of being misreported.
   if (viewError.code === 'WORKSPACE_ROOT_MISSING') {
-    return { status: 'workspaceMissing', error: viewError };
+    return { status: 'workspaceMissing', error: worktreeNotifications.reportError(viewError, { context: workspaceId }) };
   }
   if (viewError.code === 'GIT_NOT_INSTALLED') {
     return { status: 'gitNotInstalled', error: viewError };
@@ -442,7 +443,7 @@ export async function loadWorktreeView(
     if (!unsupported) {
       const { gitState, ...snapshot } = navigation!;
       if (!gitState.ok) {
-        const readiness = readinessFromBranchError(gitState.error);
+        const readiness = readinessFromBranchError(gitState.error, workspaceId);
         if (!readiness) throw gitState.error;
         return { ...snapshot, branches: [], readiness };
       }
@@ -468,7 +469,7 @@ export async function loadWorktreeView(
   if (bindingsResult.status === 'rejected') throw bindingsResult.reason;
   if (mainInstructionsResult.status === 'rejected') throw mainInstructionsResult.reason;
   if (branchesResult.status === 'rejected') {
-    const readiness = readinessFromBranchError(branchesResult.reason);
+    const readiness = readinessFromBranchError(branchesResult.reason, workspaceId);
     if (readiness === undefined) throw branchesResult.reason;
     return {
       worktrees: worktreesResult.value,

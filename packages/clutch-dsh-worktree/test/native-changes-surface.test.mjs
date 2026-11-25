@@ -39,14 +39,14 @@ async function clientModule(file) {
 
 const surfaceModule = await clientModule('WorktreeSurface.tsx');
 const errorCopy = (await clientModule('view/worktree-error-copy.ts'))({});
-const notifications = (await clientModule('surface/components/NotificationToasts.tsx'))({
+const notifications = (await clientModule('surface/components/NotificationRecovery.tsx'))({
   '../notification-queue.js': queue, '../notification-center.js': center,
   '../../view/worktree-error-copy.js': errorCopy,
   '@deepseek-ai/dsh-client-ui-primitives': { Toast: ({ text }) => React.createElement('output', null, text) },
 });
 const { SurfaceContent } = (await clientModule('surface/components/SurfaceContent.tsx'))({
   '../shared.js': { forkRecoveryError },
-  './NotificationToasts.js': notifications, '../notification-queue.js': queue,
+  './NotificationRecovery.js': notifications, '../notification-queue.js': queue,
   '../../view/worktree-error-copy.js': errorCopy,
 });
 const { WorktreeSettings } = (await clientModule('settings/WorktreeSettings.tsx'))({
@@ -86,9 +86,10 @@ async function fixture(t, { main, external, openNativeChanges }) {
     './dashboard/dashboard-navigation.js': navigation,
     './dashboard/dashboard-sessions.js': sessions,
     './dashboard/WorktreeDashboard.js': { WorktreeDashboard: Dashboard },
-    './surface/components/NotificationToasts.js': notifications,
+    './surface/components/NotificationRecovery.js': notifications,
     './surface/components/SurfaceContent.js': { SurfaceContent: (input) => {
       f.openDashboard = input.props.openDashboard;
+      f.runMutation = input.mutation.runMutation;
       f.error = input.mutation.actionError;
       return React.createElement(SurfaceContent, input);
     } },
@@ -132,6 +133,24 @@ async function fixture(t, { main, external, openNativeChanges }) {
   if (!external) await React.act(async () => f.openDashboard(record));
   return f;
 }
+
+test('one component catches A, B and repeated B before React commits and retains all occurrences in order', async (t) => {
+  const f = await fixture(t, { external: true });
+  await React.act(async () => {
+    for (const code of ['A', 'B', 'B']) {
+      await f.runMutation(async () => { throw { code, message: code, retryable: true }; });
+    }
+  });
+  const history = diagnostics.worktreeDiagnostics.getSnapshot();
+  assert.deepEqual(history.map(entry => entry.error.code), ['A', 'B', 'B']);
+  assert.equal(new Set(history.map(entry => entry.reportId)).size, 3);
+  assert.deepEqual(history.map(entry => entry.status), ['reported', 'reported', 'active']);
+  assert.equal(history[0].actions.length, 0);
+  assert.equal(center.worktreeNotifications.getSnapshot().error.code, 'A');
+  await React.act(async () => center.worktreeNotifications.dismiss(center.worktreeNotifications.getSnapshot().key));
+  assert.equal(center.worktreeNotifications.getSnapshot().error.code, 'B');
+  assert.deepEqual(diagnostics.worktreeDiagnostics.getSnapshot(), history);
+});
 
 test('historical fork repair appears only in Settings across reloads, but a new failed fork shows its toast', async (t) => {
   const f = await fixture(t, { external: true });

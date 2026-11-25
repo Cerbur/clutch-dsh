@@ -1,4 +1,4 @@
-import { NotificationToasts } from '../../surface/components/NotificationToasts.js';
+import { NotificationRecovery } from '../../surface/components/NotificationRecovery.js';
 import { IconLoadingOutline16, IconRefreshOutline16, IconRightUpOutline16 } from '../../dsh-icons.js';
 import { toWorktreeViewError } from '../../view/worktree-view.js';
 import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
@@ -181,7 +181,7 @@ export function WorktreeGitPanel({
 
   return (
     <section className={styles.gitPanel} data-dashboard-git-panel>
-      <NotificationToasts
+      <NotificationRecovery
         notices={[
           // Branch list and Fetch errors belong to the picker, which also owns retry.
           ['pagination', state.loadMoreError, false] as const,
@@ -197,6 +197,7 @@ export function WorktreeGitPanel({
             {
               key: JSON.stringify([workspaceId, worktreeId, scope, diagnostic.code, diagnostic.details]),
               toastKey: failureToastKey(diagnostic, [workspaceId, worktreeId]),
+              reportId: (error as Error & { reportId?: string }).reportId,
               error: diagnostic,
               origin: showingCachedView ? 'cached-refresh' : undefined,
               context: context ?? [currentBranch, workspaceId, worktreeId].filter(Boolean).join(' · '),

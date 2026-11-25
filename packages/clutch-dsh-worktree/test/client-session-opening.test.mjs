@@ -100,7 +100,7 @@ for (const outcome of ['ready', 'slow-context', 'failed', 'missing-binding', 'su
     const errors = [];
     const actions = useSessionActions({ source: { archivedSessionIds: [] },
       props: { createSessionForWorktree: (input, beforeOpen) => connector.create(input, beforeOpen) },
-      mutation: { setActionPending() {}, setActionError: (error) => { if (error) errors.push(error); } }, read });
+      mutation: { setActionPending() {}, clearActionError() {}, reportActionError: (error) => { errors.push(error); return error; } }, read });
     const pending = actions.createSession({ workspaceId: 'ws', worktreeId: 'wt', cwd: '/repo/wt' });
     await flush();
     assert.deepEqual(calls, ['invalidate:ws', 'read:ws']);

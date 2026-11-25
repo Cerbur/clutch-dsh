@@ -357,7 +357,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           ? source.currentSessionId
           : worktreeSessions[0];
       if (targetSessionId === undefined) {
-        mutation.setActionError({ code: 'GIT_FILE_SESSION_REQUIRED', message: props.t('dashboard.git.sessionRequired'), retryable: false });
+        mutation.reportActionError({ code: 'GIT_FILE_SESSION_REQUIRED', message: props.t('dashboard.git.sessionRequired'), retryable: false });
         return;
       }
       let address: string;
@@ -374,7 +374,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         );
       } catch (error) {
         if (!(error instanceof GitFileAddressError)) throw error;
-        mutation.setActionError({ code: error.code, message: props.t('dashboard.git.outsideSession'), retryable: false });
+        mutation.reportActionError({ code: error.code, message: props.t('dashboard.git.outsideSession'), retryable: false });
         return;
       }
       props.openResource(address, options);
@@ -384,7 +384,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       props.openResource,
       props.openRightSidebar,
       props.t,
-      mutation.setActionError,
+      mutation.reportActionError,
       dashboardRecord,
       source.currentSessionId,
       source.sessions,
@@ -582,7 +582,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           onOpenNativeChanges={async (baseBranch, isBaseCurrent = () => true) => {
             const isCurrent = () => isBaseCurrent() && nativeChangesSelection.current === dashboard && dashboard !== undefined &&
               nativeChangesRecord.current === nativeChangesRecordKey;
-            mutation.setActionError(undefined);
+            mutation.clearActionError();
             const ids = dashboardSessionIds(dashboardRecord, source.sessions,
               dashboardView?.bindings ?? [], source.archivedSessionIds, [],
               dashboardWorkspace?.sessionIds ?? [], dashboardView?.knownSessionIds);
@@ -601,12 +601,12 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               switching = true;
               // Native selection can commit before this async action resumes.
               if (nativeChangesSelection.current === dashboard || nativeChangesSelection.current === pending.selection) {
-                mutation.setActionError(nativeChangesError('session-switching'));
+                mutation.reportActionError(nativeChangesError('session-switching'));
               }
             }, forgeConfirmation.confirm, { baseBranch })
               .catch(() => 'verification-failed' as const) ?? 'unavailable';
             if (switching || !isCurrent() || result === 'opened' || result === 'stale' || result === 'cancelled') return;
-            mutation.setActionError(nativeChangesError(result));
+            mutation.reportActionError(nativeChangesError(result));
           }}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
@@ -657,7 +657,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               ? () => {
                   if (mutation.actionPending) return;
                   lifecycleState.setWorktreeRemoval(dashboardManagedRecord);
-                  mutation.setActionError(undefined);
+                  mutation.clearActionError();
                 }
               : undefined
           }

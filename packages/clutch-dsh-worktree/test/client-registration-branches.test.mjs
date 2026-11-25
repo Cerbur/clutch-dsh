@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 import ts from 'typescript';
+import * as notifications from '../lib/client/surface/notification-center.js';
 import * as viewHelpers from '../lib/client/view/worktree-view.js';
 import { createWorktreeSessionConnector } from '../lib/client/session/worktree-session.js';
 
@@ -48,6 +49,7 @@ async function harness({ onRefresh, onActionError, onModalRead } = {}) {
     const exports = {};
     new Function('require', 'exports', output)((name) => ({
       react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+      '../notification-center.js': notifications,
       '../../view/worktree-view.js': { ...viewHelpers, ...branchHelpers },
       '../shared.js': {}, './dialogs.js': { WorktreeCreateDialog: 'dialog' },
     })[name] ?? {}, exports);
@@ -72,7 +74,7 @@ async function harness({ onRefresh, onActionError, onModalRead } = {}) {
     const registrationState = modules.useRegistrationState({ props });
     const read = { viewByWorkspace: new Map([['ws', projection]]), refresh: async (options) => { refreshes++; await onRefresh?.(options); },
       loadModalWorktreeView: (id, options) => { registrationState.modalReadViewRef.current = onModalRead?.(id, options) ?? projection; } };
-    const mutation = { actionPending: false, setActionError: error => onActionError?.(error), setActionPending() {} };
+    const mutation = { actionPending: false, clearActionError() {}, reportActionError: error => { onActionError?.(error); return error; }, setActionPending() {} };
     const registration = modules.useWorktreeRegistration({ source: { workspaces: { items: [workspace] } },
       registrationState, read, props, mutation, session: { setPendingSessionBinding() {} } });
     const dialog = modules.RegistrationDialog({ props, registration, registrationState, read, mutation });

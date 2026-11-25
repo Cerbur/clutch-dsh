@@ -41,7 +41,7 @@ type Input = {
   lifecycle: Pick<WorkspaceTreeInput['lifecycle'], 'branchLabel' | 'branchActions'>;
   session: Pick<WorkspaceTreeInput['session'], 'createSession' | 'openWorkspaceSession'>;
   menus: Pick<WorkspaceTreeInput['menus'], 'openWorktreeMenuId' | 'setOpenWorktreeMenuId'>;
-  mutation: Pick<WorkspaceTreeInput['mutation'], 'actionPending' | 'setActionError'>;
+  mutation: Pick<WorkspaceTreeInput['mutation'], 'actionPending' | 'clearActionError' | 'reportActionError'>;
   read: Pick<WorkspaceTreeInput['read'], 'refresh'>;
   registration: Pick<WorkspaceTreeInput['registration'], 'openWorktreeCreator'>;
   lifecycleState: Pick<WorkspaceTreeInput['lifecycleState'], 'setWorktreeRemoval'>;
@@ -100,7 +100,7 @@ export function ActiveWorktree({
   const { branchLabel, branchActions } = lifecycle;
   const { createSession, openWorkspaceSession } = session;
   const { openWorktreeMenuId, setOpenWorktreeMenuId } = menus;
-  const { actionPending, setActionError } = mutation;
+  const { actionPending, clearActionError } = mutation;
   const { refresh } = read;
   const { openWorktreeCreator } = registration;
   const { setWorktreeRemoval } = lifecycleState;
@@ -267,7 +267,7 @@ export function ActiveWorktree({
             record.status === 'active'
               ? () => {
                   setWorktreeRemoval(record);
-                  setActionError(undefined);
+                  clearActionError();
                 }
               : undefined,
         }}

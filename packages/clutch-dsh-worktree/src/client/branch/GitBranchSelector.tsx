@@ -1,10 +1,11 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { BranchRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { IconBranchOutline16, IconDownloadOutline16, IconLoadingOutline16 } from '../dsh-icons.js';
 import { SearchableSingleSelect, SingleSelectPicker } from '../select/SearchableSingleSelect.js';
 import styles from './git-branch.css';
-import { ErrorToast } from '../surface/components/NotificationToasts.js';
+import { ErrorRecovery } from '../surface/components/NotificationRecovery.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 
 interface BranchPickerProps {
@@ -67,11 +68,14 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       try {
         const next = await onLoad();
         if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
+          if (readError?.reportId) worktreeNotifications.resolve(readError.reportId);
           setFetched({ source, branches: next });
         }
       } catch (error) {
         if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
-          setReadError(toWorktreeViewError(error));
+          setReadError(worktreeNotifications.reportError(toWorktreeViewError(error), {
+            origin: 'inline', context: t('dashboard.searchBranches'),
+          }));
         }
       } finally {
         if (readRequest.current === request && generation.current === token) {
@@ -93,6 +97,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       const next = await onFetch();
       if (alive.current && generation.current === token) {
         setFetched({ source, branches: next });
+        if (fetchError?.reportId) worktreeNotifications.resolve(fetchError.reportId);
+        if (readError?.reportId) worktreeNotifications.resolve(readError.reportId);
         setFetchError(undefined);
         setReadError(undefined);
         setStatus('success');
@@ -102,7 +108,9 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       }
     } catch (error) {
       if (alive.current && generation.current === token) {
-        setFetchError(toWorktreeViewError(error));
+        setFetchError(worktreeNotifications.reportError(toWorktreeViewError(error), {
+          origin: 'inline', context: t('branch.fetch'),
+        }));
         setStatus('error');
       }
     } finally { if (generation.current === token) pending.current = false; }
@@ -119,10 +127,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       ? <span role="alert">{t('branch.fetchRetry')}</span>
       : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
-  return { status, notice: <><ErrorToast origin="inline" error={readError} t={t} scope={'branch-read:' + scope}
+  return { status, notice: <><ErrorRecovery origin="inline" error={readError} t={t} scope={'branch-read:' + scope}
     context={t('dashboard.searchBranches')}
     actions={[{ label: t('action.retry'), disabled: reading, onClick: () => void reload() }]} />
-    <ErrorToast origin="inline" error={fetchError} t={t} scope={'branch-fetch:' + scope}
+    <ErrorRecovery origin="inline" error={fetchError} t={t} scope={'branch-fetch:' + scope}
       context={t('branch.fetch')}
       actions={[{ label: t('branch.fetchRetry'), disabled: props.disabled || props.loading || reading || status === 'pending',
         onClick: () => void fetchBranches() }]} /></>, picker: {

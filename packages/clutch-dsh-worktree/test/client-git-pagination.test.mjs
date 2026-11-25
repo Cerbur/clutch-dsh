@@ -70,7 +70,7 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
     listWorktreeCommitFiles: (input) => listWorktreeCommitFiles(context, input) };
   const reader = createWorktreeViewReader(manager);
   const controller = createWorktreeGitStateController({ manager, workspaceId, worktreeId, defaultBaselineBranch: 'main' });
-  const { NotificationToasts: Toasts, NotificationPresenter } = await loadComponent('../../surface/components/NotificationToasts', {
+  const { NotificationRecovery: Toasts, NotificationPresenter } = await loadComponent('../../surface/components/NotificationRecovery', {
     exportAll: true,
     react: React, 'react/jsx-runtime': jsxRuntime, '../notification-queue.js': queue,
     '../notification-center.js': center,
@@ -78,10 +78,10 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
   });
   const Panel = await loadComponent('WorktreeGitPanel', {
     './useWorktreeGitState.js': { useWorktreeGitState: controller.getSnapshot },
-    '../../surface/components/NotificationToasts.js': { NotificationToasts: Toasts },
+    '../../surface/components/NotificationRecovery.js': { NotificationRecovery: Toasts },
   });
   const Surface = await loadComponent('../../surface/components/SurfaceContent', {
-    '../../worktree.css': { default: {} }, './NotificationToasts.js': { NotificationToasts: Toasts },
+    '../../worktree.css': { default: {} }, './NotificationRecovery.js': { NotificationRecovery: Toasts },
   });
   const dom = new JSDOM('<div id="root"></div>');
   const before = { window: globalThis.window, document: globalThis.document, act: globalThis.IS_REACT_ACT_ENVIRONMENT };

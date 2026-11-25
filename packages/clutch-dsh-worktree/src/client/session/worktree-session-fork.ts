@@ -1,3 +1,5 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
+import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view-errors.js';
 import type { SessionBinding } from '../../contract/index.js';
 
 /** The public options accepted by the native DSH Session fork service. */
@@ -25,6 +27,7 @@ export interface WorktreeForkSessionListReader {
 }
 
 export interface WorktreeForkRecovery {
+  readonly reportId: string;
   readonly key: string;
   readonly sourceSessionId: string;
   readonly childSessionId: string;
@@ -32,6 +35,16 @@ export interface WorktreeForkRecovery {
   readonly historical: boolean;
   readonly binding?: SessionBinding;
   readonly error: unknown;
+}
+
+export function forkRecoveryError(recovery: Pick<WorktreeForkRecovery, 'error' | 'childSessionId'>): WorktreeViewError {
+  const error = toWorktreeViewError(recovery.error);
+  return {
+    ...error,
+    message: typeof recovery.error === 'object' && recovery.error !== null ? error.message : String(recovery.error),
+    code: error.code === 'WORKTREE_VIEW_FAILED' ? 'SESSION_BINDING_FAILED' : error.code,
+    details: { ...error.details, sessionId: recovery.childSessionId },
+  };
 }
 
 export interface WorktreeForkRecoverySnapshot {
@@ -222,11 +235,16 @@ export function createWorktreeSessionForkCoordinator(
   ): void => {
     if (disposed) return;
     const key = recoveryKey(sourceSessionId, childSessionId);
+    const historical = restoredSessionIds?.has(childSessionId) === true;
+    const reported = worktreeNotifications.reportError(forkRecoveryError({ error, childSessionId }), {
+      origin: historical ? 'restored-fork' : undefined, context: childSessionId,
+    });
     pending = new Map(pending).set(key, {
+      reportId: reported.reportId,
       key,
       sourceSessionId,
       childSessionId,
-      historical: restoredSessionIds?.has(childSessionId) === true,
+      historical,
       ...(target === undefined ? {} : { binding: target }),
       error,
     });

@@ -1042,7 +1042,7 @@ test('keeps modal candidate state current without blanking ready Worktrees', asy
 
 test('renders a retry surface instead of treating Worktree failures as an empty list', async () => {
   const source = await readSurfaceSource();
-  assert.match(source, /NotificationToasts notices/);
+  assert.match(source, /NotificationRecovery notices/);
   assert.match(source, /t\('action\.retry'\)/);
   assert.match(source, /status === 'error'/);
   assert.match(source, /executeWorktreeAction/);
@@ -1090,7 +1090,7 @@ test('formats Worktree view errors at render time and leaves plugin literals out
   assert.match(source, /code: 'WORKSPACE_RENAME_UNAVAILABLE'/);
   assert.match(source, /code: 'WORKSPACE_DELETE_UNAVAILABLE'/);
   assert.match(source, /code: 'SESSION_RENAME_UNAVAILABLE'/);
-  assert.match(source, /ErrorToast error=\{error\}/);
+  assert.match(source, /ErrorRecovery error=\{error\}/);
   assert.match(source, /WorktreeWorkspaceRenameDialog/);
   assert.match(source, /WorktreeWorkspaceDeleteDialog/);
   assert.match(source, /WorktreeSessionRenameDialog/);
@@ -1294,7 +1294,7 @@ test('commits Worktree ordering only from valid same-Workspace drop targets', as
   );
   assert.match(
     commitSource,
-    /\.then\(\(\) =>\s*refresh\(\{[\s\S]*?kind: 'workspace',[\s\S]*?workspaceId \},[\s\S]*?invalidateContext: false[\s\S]*?\}\),?\s*\)[\s\S]*?setActionError\(toRetryableWorktreeOrderError\(error\)\)/,
+    /\.then\(\(\) =>\s*refresh\(\{[\s\S]*?kind: 'workspace',[\s\S]*?workspaceId \},[\s\S]*?invalidateContext: false[\s\S]*?\}\),?\s*\)[\s\S]*?reportActionError\(toRetryableWorktreeOrderError\(error\)\)/,
   );
   assert.doesNotMatch(commitSource, /\.then\(\(\) => refresh\(\)\)/);
   assert.match(source, /error\.retryable \?/);
@@ -1447,7 +1447,7 @@ test('loads a missing Workspace projection before enabling Worktree creation', a
   assert.match(coordinator, /readError=\{modalReadError\}/);
   assert.match(coordinator, /onRetry=\{\(\) =>/);
   assert.match(dialogs, /!canCreate/);
-  assert.match(dialogs, /ErrorToast error=\{readError\}/);
+  assert.match(dialogs, /ErrorRecovery error=\{readError\}/);
   assert.match(dialogs, /t\('action\.retry'\)/);
   assert.match(types, /readonly readError\?: WorktreeViewError/);
 });

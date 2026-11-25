@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../notification-center.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WorktreeRecord } from '../../../contract/index.js';
 import {
@@ -58,7 +59,7 @@ type Input = {
   props: Pick<WorktreeSurfaceProps, 'manager' | 'createSessionForWorktree'>;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
-    'actionPending' | 'setActionError' | 'setActionPending'
+    'actionPending' | 'clearActionError' | 'reportActionError' | 'setActionPending'
   >;
   session: Pick<ReturnType<typeof useSessionActions>, 'setPendingSessionBinding'>;
 };
@@ -100,7 +101,7 @@ export function useWorktreeRegistration({
   } = registrationState;
   const { viewByWorkspace, loadModalWorktreeView, refresh } = read;
   const { manager, createSessionForWorktree: createSessionCallback } = props;
-  const { actionPending, setActionError, setActionPending } = mutation;
+  const { actionPending, clearActionError, reportActionError, setActionPending } = mutation;
   const { setPendingSessionBinding } = session;
   const modalWorkspace = workspaces.items.find(
     (workspace) => workspace.workspaceId === worktreeModalWorkspaceId,
@@ -155,10 +156,11 @@ export function useWorktreeRegistration({
         },
         (error) => {
           if (modalWorkspaceIdRef.current !== workspaceId) return;
+          const failure = worktreeNotifications.reportError(toWorktreeViewError(error), { origin: 'inline', context: workspaceId });
           setImportCandidates((current) => ({
             status: 'error',
             candidates: current.candidates,
-            error: toWorktreeViewError(error),
+            error: failure,
           }));
         },
       );
@@ -193,7 +195,7 @@ export function useWorktreeRegistration({
     setWorktreeModalMode('create');
     setImportCandidates({ status: 'idle', candidates: [] });
     setSelectedImportPath(undefined);
-    setActionError(undefined);
+    clearActionError();
     setModalReadError(undefined);
     setModalReadLoading(false);
     if (view === undefined || view.branches.length === 0) {
@@ -233,7 +235,7 @@ export function useWorktreeRegistration({
       preserveCurrent: true,
     });
     if (createSessionCallback === undefined) {
-      setActionError({
+      reportActionError({
         code: 'WORKTREE_REGISTRATION_SESSION_UNAVAILABLE',
         message: '',
         retryable: true,
@@ -257,10 +259,10 @@ export function useWorktreeRegistration({
       }));
     } catch (error) {
       const sessionError = toWorktreeViewError(error);
-      setActionError({ ...sessionError, details: { ...sessionError.details, workspaceId: registeredWorktree.workspaceId } });
+      const reported = reportActionError({ ...sessionError, details: { ...sessionError.details, workspaceId: registeredWorktree.workspaceId } });
       if (error instanceof WorktreeSessionBindingError) {
         setPendingSessionBinding({ ...sessionInput, sessionId: error.sessionId,
-          error: sessionError });
+          error: reported });
       }
       // Registration already committed even when opening the first Session failed.
       await refreshRegistration();
@@ -281,7 +283,7 @@ export function useWorktreeRegistration({
     const generation = modalGenerationRef.current;
     setActionPending(true);
     setBranchConflict(undefined);
-    setActionError(undefined);
+    clearActionError();
     setPendingSessionBinding(undefined);
     try {
       const registeredWorktree =
@@ -316,9 +318,9 @@ export function useWorktreeRegistration({
     } catch (error) {
       const failure = toWorktreeViewError(error);
       if (worktreeModalMode === 'create' && failure.code === 'WORKTREE_BRANCH_CONFLICT' && generation === modalGenerationRef.current) {
-        setBranchConflict(failure);
+        setBranchConflict(worktreeNotifications.reportError(failure, { origin: 'inline', context: modalWorkspace.path }));
       } else {
-        setActionError(failure);
+        reportActionError(failure);
         if (failure.code === 'WORKSPACE_ROOT_MISSING' && generation === modalGenerationRef.current) {
           loadModalWorktreeView(modalWorkspace.workspaceId, { revalidate: true });
         }

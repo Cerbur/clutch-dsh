@@ -84,7 +84,7 @@ export type WorkspaceTreeInput = {
   >;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
-    'actionPending' | 'setActionError' | 'runMutation'
+    'actionPending' | 'clearActionError' | 'reportActionError' | 'runMutation'
   >;
   menus: Pick<
     ReturnType<typeof useSurfaceMenus>,

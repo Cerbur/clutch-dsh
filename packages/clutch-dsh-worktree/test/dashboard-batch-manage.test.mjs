@@ -7,6 +7,7 @@ import * as React from 'react';
 import * as jsx from 'react/jsx-runtime';
 import { createRoot } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
+import * as notifications from '../lib/client/surface/notification-center.js';
 import { shouldAnnounce } from '../lib/client/surface/notification-queue.js';
 import * as batch from '../lib/client/dashboard/batch-manage.js';
 import * as selection from '../lib/client/dashboard/dashboard-selection.js';
@@ -330,7 +331,8 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
       Modal: ({ open, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog' }, title, description, children, footer) : null,
     },
     '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
-    '../surface/components/NotificationToasts.js': { NotificationToasts: ({ notices }) =>
+    '../surface/notification-center.js': notifications,
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: ({ notices }) =>
       notices.map((notice) => React.createElement('output', { key: notice.key, 'data-diagnostic-only': !shouldAnnounce(notice) }, notice.text)) },
     '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
     './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,

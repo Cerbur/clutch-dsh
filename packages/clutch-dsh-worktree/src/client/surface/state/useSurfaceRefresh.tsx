@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../notification-center.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { WorktreeSessionActionError } from '../../session/worktree-session.js';
@@ -216,6 +217,10 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
             if (!guard.isCurrent(request.generation)) return;
             if (targetRefreshGuards.current.get(workspaceId) !== guard) return;
             if (!workspaceIdsRef.current.includes(workspaceId)) return;
+            const showingCachedView = !request.userRequested && readStateRef.current.views.some(view => view.workspaceId === workspaceId);
+            const failure = worktreeNotifications.reportError(toWorktreeViewError(error), {
+              origin: showingCachedView ? 'cached-refresh' : undefined, context: workspaceId,
+            });
             setReadState((current) => {
               return {
                 ...current,
@@ -223,8 +228,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
                 views: mergeWorktreeViews(current.views, workspaceIdsRef.current, []),
                 error: undefined,
                 targetErrors: { ...current.targetErrors,
-                  [workspaceId]: { ...toWorktreeViewError(error), retryable: true,
-                    showingCachedView: !request.userRequested && current.views.some((view) => view.workspaceId === workspaceId) },
+                  [workspaceId]: { ...failure, retryable: true, showingCachedView },
                 },
               };
             });
@@ -259,11 +263,9 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
       setModalReadLoading(true);
       if (manager === undefined) {
         setModalReadLoading(false);
-        setModalReadError({
-          code: 'WORKTREE_VIEW_UNAVAILABLE',
-          message: '',
-          retryable: true,
-        });
+        setModalReadError(worktreeNotifications.reportError({
+          code: 'WORKTREE_VIEW_UNAVAILABLE', message: '', retryable: true,
+        }, { context: workspaceId }));
         return;
       }
       const sessionIds = workspacesRef.current.items.find((item) => item.workspaceId === workspaceId)?.sessionIds ?? [];
@@ -280,7 +282,7 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
         },
         (error) => {
           setModalReadLoading(false);
-          setModalReadError(toWorktreeViewError(error));
+          setModalReadError(worktreeNotifications.reportError(toWorktreeViewError(error), { context: workspaceId }));
         },
       );
     },

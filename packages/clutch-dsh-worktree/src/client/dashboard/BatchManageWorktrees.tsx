@@ -1,9 +1,12 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { WorktreeRecord } from '../../contract/index.js';
+import type { WorktreeNotification } from '../surface/notification-queue.js';
 import type { WorktreeTranslate } from '../surface/types.js';
+import type { WorktreeViewError } from '../view/worktree-view-errors.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
-import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
 import { IconBranchOutline16 } from '../dsh-icons.js';
 import { canManageWorktree, runWorktreeBatch, type BatchWorktreeAction, type BatchWorktreeResult } from './batch-manage.js';
 import styles from './dashboard.css';
@@ -33,12 +36,12 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
     setConfirmation(undefined);
     setSelected(new Set());
     setResults([]);
+    setSummary(undefined);
     return () => { generation.current++; };
   }, [workspaceId, onManage]);
   const picked = rows.filter((record) => selected.has(record.worktreeId));
   const disabled = pending || actionPending || onManage === undefined;
-  const failures = results.flatMap(({ error }) => error ? [error] : []);
-  const failed = failures.length;
+  const [summary, setSummary] = useState<WorktreeNotification>();
   const allSelected = rows.length > 0 && picked.length === rows.length;
   const close = () => { if (!busy.current) setConfirmation(undefined); };
   const submit = async () => {
@@ -47,10 +50,21 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
     busy.current = true;
     setPending(true);
     setResults([]);
+    setSummary(undefined);
     const lifetime = ++generation.current;
     const isCurrent = () => generation.current === lifetime;
+    const failures: WorktreeViewError[] = [];
+    let total = 0;
     try {
       await runWorktreeBatch(confirmation.action, confirmation.records, onManage, isCurrent, (result) => {
+        total++;
+        if (result.error) {
+          const error = worktreeNotifications.reportError(result.error, {
+            origin: 'batch-item', context: result.record.branch + ' · ' + result.record.absolutePath,
+          });
+          failures.push(error);
+          result = { ...result, error };
+        }
         setResults((current) => [...current, result]);
         if (!result.error) setSelected((current) => {
           const next = new Set(current);
@@ -58,6 +72,11 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           return next;
         });
       });
+      if (isCurrent() && failures.length) {
+        const message = (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed: failures.length, total });
+        const notice = { key: 'batch-summary:' + workspaceId + ':' + lifetime, failures, text: message(t), message };
+        setSummary({ ...notice, reportId: worktreeNotifications.report(notice) });
+      }
     } finally {
       if (isCurrent()) { busy.current = false; setPending(false); setConfirmation(undefined); }
     }
@@ -110,12 +129,8 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
           : t('dashboard.manage.success')}
       </li>)}
     </ul>
-    <NotificationToasts notices={[
-      ...(!pending && failed > 0 ? [{
-        failures, key: 'batch-summary:' + workspaceId + ':' + generation.current,
-        text: t('dashboard.manage.batchFailed', { failed, total: results.length }),
-        message: (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed, total: results.length }),
-      }] : []),
+    <NotificationRecovery notices={[
+      ...(summary ? [summary] : []),
       ...results.flatMap(({ record, error }) => error ? [{
         key: 'batch:' + record.worktreeId, origin: 'batch-item' as const, error, context: record.branch + ' · ' + record.absolutePath,
         text: formatWorktreeViewError(error, t), message: (translate: WorktreeTranslate) => formatWorktreeViewError(error, translate),

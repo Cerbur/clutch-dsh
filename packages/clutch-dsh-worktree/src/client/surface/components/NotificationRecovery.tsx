@@ -14,20 +14,20 @@ export function NotificationPresenter({ t, openSettings }: {
   const key = current?.key;
   const onDone = useCallback(() => { if (key !== undefined) worktreeNotifications.dismiss(key); }, [key]);
   if (!current) return null;
-  return <Toast key={key} text={current.text + ' ' + t('settings.toastHint')}
+  return <Toast key={key} text={(current.message?.(t) ?? current.text) + ' ' + t('settings.toastHint')}
     actions={openSettings && [{ label: t('settings.errors'), onClick: openSettings }]}
     holdMs={8000} onDone={onDone} />;
 }
 
-/** Register resolved copy while retaining live callbacks for recovery actions. */
-export function NotificationToasts({ notices }: { notices: readonly WorktreeNotification[] }) {
+/** Bind live recovery controls to known occurrence IDs after React commits. */
+export function NotificationRecovery({ notices }: { notices: readonly WorktreeNotification[] }) {
   const id = useId();
   const latest = useRef(notices);
   const alive = useRef(true);
   latest.current = notices;
   const signature = JSON.stringify(
-    notices.map(({ key, text, context, error, origin, failures, toastKey, actions }) => [
-      key, text, context, error, origin, failures, toastKey, actions?.map(({ label, disabled, leaveSettings }) => [label, disabled, leaveSettings]),
+    notices.map(({ key, reportId, text, context, error, origin, failures, toastKey, actions }) => [
+      key, reportId, text, context, error, origin, failures, toastKey, actions?.map(({ label, disabled, leaveSettings }) => [label, disabled, leaveSettings]),
     ]),
   );
   useEffect(() => {
@@ -38,13 +38,15 @@ export function NotificationToasts({ notices }: { notices: readonly WorktreeNoti
         disabled: action.disabled,
         label: action.label,
         onClick: () => {
-          const current = latest.current.find((item) => item.key === notice.key)?.actions
+          const reportId = notice.reportId ?? notice.error?.reportId;
+          const current = latest.current.find((item) => item.key === notice.key &&
+            (item.reportId ?? item.error?.reportId) === reportId)?.actions
             ?.find((item) => item.label === action.label);
           if (alive.current && !current?.disabled) current?.onClick();
         },
       })),
     }));
-    worktreeNotifications.publish(id, registered);
+    worktreeNotifications.updateRecovery(id, registered);
   }, [id, signature]);
   useEffect(() => {
     alive.current = true;
@@ -56,7 +58,7 @@ export function NotificationToasts({ notices }: { notices: readonly WorktreeNoti
   return null;
 }
 
-export function ErrorToast({
+export function ErrorRecovery({
   error,
   t,
   scope,
@@ -75,7 +77,7 @@ export function ErrorToast({
 }) {
   const text = error === undefined ? undefined : formatWorktreeViewError(error, t);
   return (
-    <NotificationToasts
+    <NotificationRecovery
       notices={
         text === undefined ? [] : [{
           key: JSON.stringify([scope, error?.code, error?.details]), text, error, context, actions, describe,

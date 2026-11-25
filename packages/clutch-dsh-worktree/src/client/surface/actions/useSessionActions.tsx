@@ -22,7 +22,7 @@ type Input = {
     | 'openSession'
     | 'retryForkSession'
   >;
-  mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'setActionError' | 'setActionPending'>;
+  mutation: Pick<ReturnType<typeof useSurfaceMutation>, 'clearActionError' | 'reportActionError' | 'setActionPending'>;
   read: Pick<ReturnType<typeof useSurfaceRefresh>, 'refresh'>;
 };
 
@@ -35,7 +35,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     openSession,
     retryForkSession,
   } = props;
-  const { setActionError, setActionPending } = mutation;
+  const { clearActionError, reportActionError, setActionPending } = mutation;
   const { refresh } = read;
   const [pendingSessionBinding, setPendingSessionBinding] = useState<PendingSessionBinding>();
   const [forkRetryKey, setForkRetryKey] = useState<string>();
@@ -44,7 +44,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     archivedSessionIds.includes(pendingSessionBinding.sessionId);
   const createSession = async (input: CreateSessionForWorktreeInput): Promise<void> => {
     if (createSessionCallback === undefined) {
-      setActionError({
+      reportActionError({
         code: 'SESSION_CREATE_UNAVAILABLE',
         message: '',
         retryable: true,
@@ -52,7 +52,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
       return;
     }
     setActionPending(true);
-    setActionError(undefined);
+    clearActionError();
     setPendingSessionBinding(undefined);
     try {
       await createSessionCallback(input, (sessionId, projectionReady) => refresh({
@@ -62,10 +62,10 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
         openingSession: { sessionId, worktreeId: input.worktreeId },
       }));
     } catch (error) {
+      const failure = reportActionError(toWorktreeViewError(error));
       if (error instanceof WorktreeSessionBindingError) {
-        setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: toWorktreeViewError(error) });
+        setPendingSessionBinding({ ...input, sessionId: error.sessionId, error: failure });
       }
-      setActionError(toWorktreeViewError(error));
     } finally {
       setActionPending(false);
     }
@@ -76,7 +76,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
       return;
     const pending = pendingSessionBinding;
     setActionPending(true);
-    setActionError(undefined);
+    clearActionError();
     try {
       await retryWorktreeSessionBinding({
         manager,
@@ -94,8 +94,8 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
       });
       setPendingSessionBinding(undefined);
     } catch (error) {
-      setPendingSessionBinding({ ...pending, error: toWorktreeViewError(error) });
-      setActionError(toWorktreeViewError(error));
+      const failure = reportActionError(toWorktreeViewError(error));
+      setPendingSessionBinding({ ...pending, error: failure });
     } finally {
       setActionPending(false);
     }
@@ -106,7 +106,7 @@ export function useSessionActions({ source, props, mutation, read }: Input) {
     try {
       await retryForkSession(key);
     } catch (error) {
-      setActionError(toNativeWorktreeViewError(error));
+      reportActionError(toNativeWorktreeViewError(error));
     } finally {
       setForkRetryKey(undefined);
     }

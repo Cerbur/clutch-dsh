@@ -1,6 +1,7 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useRef, useState } from 'react';
 import type { WorktreeTranslate } from '../surface/types.js';
-import { NotificationToasts } from '../surface/components/NotificationToasts.js';
+import { NotificationRecovery } from '../surface/components/NotificationRecovery.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import styles from './dashboard.css';
@@ -42,11 +43,17 @@ export function WorktreeInstructions({
     try {
       const result = await onSave(draft, expected.current);
       if (alive.current) {
+        if (error?.reportId) worktreeNotifications.resolve(error.reportId);
         setSaved(result);
         setDraft(undefined);
       }
     } catch (cause) {
-      if (alive.current) setError(toWorktreeViewError(cause));
+      if (alive.current) {
+        const failure = toWorktreeViewError(cause);
+        setError(worktreeNotifications.reportError(failure, { context, message: translate =>
+          translate('dashboard.instructionsSaveFailed') +
+          (failure.code === 'WORKTREE_VIEW_FAILED' ? '' : ' ' + formatWorktreeViewError(failure, translate)) }));
+      }
     } finally {
       busy.current = false;
       if (alive.current) setPending(false);
@@ -105,7 +112,7 @@ export function WorktreeInstructions({
               {t('dashboard.cancelInstructions')}
             </button>
           </div>
-          <NotificationToasts
+          <NotificationRecovery
             notices={
               error === undefined
                 ? []

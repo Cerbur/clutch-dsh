@@ -1,35 +1,60 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reconcileNotifications } from '../lib/client/surface/notification-queue.js';
+import { shouldAnnounce } from '../lib/client/surface/notification-queue.js';
 import { en, zh } from '../lib/client/locales.js';
 
-const empty = () => ({ seen: [], pending: [] });
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
+import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 const a = { key: 'workspace-a:error', text: 'Failure A' };
 const b = { key: 'workspace-b:error', text: 'Failure B' };
 
-test('simultaneous failures queue once and unchanged renders do not replay dismissed notices', () => {
-  const queued = reconcileNotifications(empty(), [a, b, a]);
-  assert.deepEqual(queued.pending, [a, b]);
-  const dismissed = { ...queued, pending: [b] };
-  assert.equal(reconcileNotifications(dismissed, [{ ...a }, { ...b }]), dismissed);
-  const done = { ...queued, pending: [] };
-  assert.equal(reconcileNotifications(done, [a, b]), done);
+test('recovery changes never emit occurrences, reorder history or replay dismissed toasts', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  center.updateRecovery('panel', [{ ...a, reportId: 'unknown' }]);
+  await Promise.resolve();
+  assert.deepEqual(diagnostics.getSnapshot(), []);
+  assert.equal(center.getSnapshot(), undefined);
+  const first = center.report(a);
+  const second = center.report(b);
+  center.updateRecovery('panel', [{ ...b, reportId: second }, { ...a, reportId: first }]);
+  await Promise.resolve();
+  assert.deepEqual(diagnostics.getSnapshot().map(item => item.reportId), [first, second]);
+  center.dismiss(first);
+  center.updateRecovery('panel', [{ ...a, reportId: first }]);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().key, second);
+  assert.deepEqual(diagnostics.getSnapshot().map(item => item.status), ['active', 'resolved']);
+  center.dismiss(second);
+  const again = center.report(b);
+  center.dismiss(second);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot().key, again, 'stale timer cannot dismiss a later occurrence');
+  assert.equal(diagnostics.getSnapshot().length, 3);
+  center.resolve(first);
+  center.updateRecovery('panel', [{ ...a, reportId: first }]);
+  await Promise.resolve();
+  assert.equal(diagnostics.getSnapshot()[0].status, 'resolved', 'late controls cannot reopen a confirmed resolution');
+  assert.equal(center.getSnapshot().key, again);
 });
 
-test('resolved failures leave the queue, unrelated failures remain, and recurrence can notify again', () => {
-  const queued = reconcileNotifications(empty(), [a, b]);
-  const resolved = reconcileNotifications(queued, [b]);
-  assert.deepEqual(resolved.pending, [b]);
-  const recurring = reconcileNotifications(resolved, [a, b]);
-  assert.deepEqual(recurring.pending, [b, a]);
-  assert.deepEqual(reconcileNotifications(recurring, []), empty());
-});
-
-test('changed diagnosis is announced without replaying another Workspace failure', () => {
-  const queued = reconcileNotifications(empty(), [a, b]);
-  const changed = { key: 'workspace-a:changed', text: 'New diagnosis' };
-  const next = reconcileNotifications({ ...queued, pending: [] }, [changed, b]);
-  assert.deepEqual(next.pending, [changed]);
+test('closing one recovery view preserves the other owner of the same occurrence', async () => {
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
+  const reportId = center.report(a);
+  const clicks = [];
+  for (const owner of ['list', 'dialog']) {
+    center.updateRecovery(owner, [{ ...a, reportId, actions: [{ label: 'Retry', onClick: () => clicks.push(owner) }] }]);
+  }
+  await Promise.resolve();
+  const old = diagnostics.getSnapshot()[0].actions[0];
+  center.deactivate('dialog');
+  await Promise.resolve();
+  old.onClick();
+  diagnostics.getSnapshot()[0].actions[0].onClick();
+  assert.deepEqual(clicks, ['list']);
+  assert.equal(diagnostics.getSnapshot().length, 1);
+  center.dispose();
 });
 
 test('both archive sources preserve bindings and directories in both languages', () => {
@@ -62,5 +87,5 @@ test('a missing Workspace is history-only across actions, wrapped failures and b
     { ...a, key: 'all missing', failures: [missing, wrapped] }, { ...a, key: 'checkout', error: checkout },
     { ...a, key: 'mixed batch', failures: [missing, checkout] },
   ];
-  assert.deepEqual(reconcileNotifications(empty(), notices).pending.map(({ key }) => key), ['checkout', 'mixed batch']);
+  assert.deepEqual(notices.filter(shouldAnnounce).map(({ key }) => key), ['checkout', 'mixed batch']);
 });

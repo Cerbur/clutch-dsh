@@ -45,7 +45,7 @@ type Input = {
   lifecycle: Pick<ArchivedWorktreesInput['lifecycle'], 'branchLabel' | 'branchActions'>;
   mutation: Pick<
     ArchivedWorktreesInput['mutation'],
-    'actionPending' | 'setActionError' | 'runMutation'
+    'actionPending' | 'clearActionError' | 'reportActionError' | 'runMutation'
   >;
   menus: Pick<ArchivedWorktreesInput['menus'], 'openWorktreeMenuId' | 'setOpenWorktreeMenuId'>;
   read: Pick<ArchivedWorktreesInput['read'], 'refresh'>;
@@ -93,7 +93,7 @@ export function ArchivedWorktree({
   const { orderedSessionIdsByAccount } = ordering;
   const { t, manager, renameSession, forkSession, archiveSession } = props;
   const { branchLabel, branchActions } = lifecycle;
-  const { actionPending, setActionError, runMutation } = mutation;
+  const { actionPending, clearActionError, reportActionError, runMutation } = mutation;
   const { openWorktreeMenuId, setOpenWorktreeMenuId } = menus;
   const { refresh } = read;
   const { setWorktreeCleanDisk, setWorktreeForget } = lifecycleState;
@@ -230,7 +230,7 @@ export function ArchivedWorktree({
             onUnarchive: () => {
               if (!manager) return;
               if (!record.mutationToken) {
-                setActionError({
+                reportActionError({
                   code: 'WORKTREE_STATE_CONFLICT',
                   message: '',
                   retryable: true,
@@ -260,11 +260,11 @@ export function ArchivedWorktree({
             },
             onCleanDisk: () => {
               setWorktreeCleanDisk(record);
-              setActionError(undefined);
+              clearActionError();
             },
             onForget: () => {
               setWorktreeForget(record);
-              setActionError(undefined);
+              clearActionError();
             },
           };
         })()}

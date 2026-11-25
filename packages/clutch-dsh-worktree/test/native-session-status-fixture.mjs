@@ -277,7 +277,7 @@ export async function statusRenderers() {
       Input: 'Input',
     },
     '../dsh-icons.js': icons,
-    '../surface/components/NotificationToasts.js': { NotificationToasts: 'Toasts' },
+    '../surface/components/NotificationRecovery.js': { NotificationRecovery: 'Toasts' },
     '../surface/notification-center.js': notifications,
     '../view/worktree-view.js': {},
     '../view/worktree-error-copy.js': {},

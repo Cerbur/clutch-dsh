@@ -1,3 +1,4 @@
+import * as notifications from '../lib/client/surface/notification-center.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
@@ -56,7 +57,8 @@ function harness(onSave) {
         react,
         'react/jsx-runtime': { jsx, jsxs: jsx },
         './dashboard.css': { default: {} },
-        '../surface/components/NotificationToasts.js': { NotificationToasts: 'toasts' },
+        '../surface/components/NotificationRecovery.js': { NotificationRecovery: 'toasts' },
+        '../surface/notification-center.js': notifications,
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
       })[name],

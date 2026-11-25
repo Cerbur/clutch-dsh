@@ -546,7 +546,7 @@ start sync. Native permissions remain unchanged; the UI never executes Git or in
 Request IDs use `crypto.getRandomValues`, including on plain-HTTP LAN origins, and random-source
 errors follow the same notification and busy-state cleanup path as admission errors. Late partial
 results retain the original request/Workspace/Worktree/Session identity in inactive diagnostics via
-`recordInactive`, without reactivating a notification source or retaining navigation callbacks.
+`report` with the `retired` origin, which preserves history and drops stale navigation callbacks.
 
 Git details beyond this read-only history projection, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The Worktree/Main
@@ -684,11 +684,12 @@ protocol link when no application is available or a Host request fails. The sele
 only in current-page memory; after a refresh, the first available application is used.
 
 The list, dialogs, popover and Dashboard report structured errors and recovery actions to
-`notification-center`. It processes source snapshots, withdrawal, late results and dismissal
-in FIFO microtasks, writes browser-memory diagnostics and applies the toast policy.
+`notification-center` from the operation's failure handler. Each call gets a unique report ID
+and is recorded in arrival order through FIFO microtasks. Recovery registration happens separately
+after React commits. A successful retry can resolve its report ID directly. Recovery attaches controls to an existing ID and cannot create a diagnostic or toast.
 Inline field validation can stay local. A single shell overlay subscribes to the queue head
-and renders complete localized guidance with DSH Toast. A stable failure is announced once until
-it resolves. Source unmount revokes its recovery actions and removes its pending toasts.
+and renders complete localized guidance with DSH Toast. Equivalent pending toasts share one announcement.
+Source unmount revokes recovery actions. Toast dismissal advances the queue independently.
 `WORKSPACE_ROOT_MISSING`, including a wrapped cause or the sole cause of batch failures,
 stays in diagnostics. The plugin restart advisory has its own connection lifecycle.
 The native settings.section seat exposes General and Errors & recovery tabs. The Worktree

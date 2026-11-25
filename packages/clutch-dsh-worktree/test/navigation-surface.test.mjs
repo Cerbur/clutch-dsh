@@ -1,3 +1,4 @@
+import * as notifications from '../lib/client/surface/notification-center.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -21,6 +22,7 @@ const modules = {
   react: React, 'react-dom': ReactDOM,
   '../../session/worktree-session.js': session,
   '../../view/worktree-view.js': { ...readerModule, ...errors },
+  '../notification-center.js': notifications,
   '../selectors.js': selectors,
   '../shared.js': { EMPTY_READ_STATE: { status: 'idle', views: [] } },
 };

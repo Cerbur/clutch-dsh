@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../notification-center.js';
 import { useState } from 'react';
 import { type WorktreeViewError } from '../../view/worktree-view.js';
 import { toNativeWorktreeViewError } from '../shared.js';
@@ -67,11 +68,11 @@ export function useNativeActions({ source, props, mutation }: Input) {
     const target = workspaceRenameTarget;
     if (workspaceRenameBlocked || target === undefined) return;
     if (renameWorkspace === undefined) {
-      setWorkspaceRenameError({
+      setWorkspaceRenameError(worktreeNotifications.reportError({
         code: 'WORKSPACE_RENAME_UNAVAILABLE',
         message: '',
         retryable: true,
-      });
+      }));
       return;
     }
     setWorkspaceRenamePending(true);
@@ -80,7 +81,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
       await renameWorkspace(target.workspaceId, workspaceRenameTrimmed);
       setWorkspaceRenameTarget(undefined);
     } catch (error) {
-      setWorkspaceRenameError(toNativeWorktreeViewError(error));
+      setWorkspaceRenameError(worktreeNotifications.reportError(toNativeWorktreeViewError(error)));
     } finally {
       setWorkspaceRenamePending(false);
     }
@@ -98,11 +99,11 @@ export function useNativeActions({ source, props, mutation }: Input) {
     const target = workspaceDeleteTarget;
     if (target === undefined || workspaceDeletePending) return;
     if (deleteWorkspace === undefined) {
-      setWorkspaceDeleteError({
+      setWorkspaceDeleteError(worktreeNotifications.reportError({
         code: 'WORKSPACE_DELETE_UNAVAILABLE',
         message: '',
         retryable: true,
-      });
+      }));
       return;
     }
     setWorkspaceDeletePending(true);
@@ -111,7 +112,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
       await deleteWorkspace(target.workspaceId);
       setWorkspaceDeleteTarget(undefined);
     } catch (error) {
-      setWorkspaceDeleteError(toNativeWorktreeViewError(error));
+      setWorkspaceDeleteError(worktreeNotifications.reportError(toNativeWorktreeViewError(error)));
     } finally {
       setWorkspaceDeletePending(false);
     }
@@ -131,11 +132,11 @@ export function useNativeActions({ source, props, mutation }: Input) {
     const title = sessionRenameDraft.trim();
     if (target === undefined || title.length === 0 || sessionRenamePending) return;
     if (renameSession === undefined) {
-      setSessionRenameError({
+      setSessionRenameError(worktreeNotifications.reportError({
         code: 'SESSION_RENAME_UNAVAILABLE',
         message: '',
         retryable: true,
-      });
+      }));
       return;
     }
     setSessionRenamePending(true);
@@ -144,7 +145,7 @@ export function useNativeActions({ source, props, mutation }: Input) {
       await renameSession(target.sessionId, title);
       setSessionRenameTarget(undefined);
     } catch (error) {
-      setSessionRenameError(toNativeWorktreeViewError(error));
+      setSessionRenameError(worktreeNotifications.reportError(toNativeWorktreeViewError(error)));
     } finally {
       setSessionRenamePending(false);
     }

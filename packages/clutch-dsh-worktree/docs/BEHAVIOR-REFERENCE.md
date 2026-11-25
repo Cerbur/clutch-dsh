@@ -815,7 +815,10 @@ A conflicting new branch name stays in the creation dialog with its error. Branc
 import candidate failures show a local retry and retain their diagnostics. A completed batch shows one failure-count toast when at least one failure has another cause.
 If every failure is a missing Workspace root, the summary is recorded silently. Each item's result remains in the batch list and each failure has diagnostic details.
 A created Session with a failed binding retains its recovery actions even when the underlying error is history-only.
-Errors from separate views enter a single queue in arrival order. Dismissing one toast reveals the next pending failure.
+Each failure is recorded as it happens. Two failures from the same operation view before it repaints,
+including repeated failures with the same code, have separate history entries in arrival order.
+Refreshing recovery buttons, resolving an issue, or closing the view updates the existing entry.
+An equivalent pending toast may cover several entries. Errors from separate views share the same toast queue. Dismissing one toast reveals the next pending failure.
 
 Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,
 to read each failure and expand its original

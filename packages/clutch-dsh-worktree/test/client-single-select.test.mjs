@@ -5,6 +5,7 @@ import { URL } from 'node:url';
 import ts from 'typescript';
 import { en, zh } from '../lib/client/locales.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 
@@ -13,9 +14,10 @@ const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitB
 
 function harness({ deferPreparation = false, geometry } = {}) {
   const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
   const errorToast = (props) => {
-    diagnostics.publish(props.scope, props.error === undefined ? [] : [{
-      key: props.scope + ':' + props.error.code, text: props.error.message, error: props.error, actions: props.actions,
+    center.updateRecovery(props.scope, props.error === undefined ? [] : [{
+      reportId: props.error.reportId, key: props.scope + ':' + props.error.code, text: props.error.message, error: props.error, actions: props.actions,
     }]);
     return jsx('error-toast', props);
   };
@@ -84,8 +86,9 @@ function harness({ deferPreparation = false, geometry } = {}) {
       '../../select/WorktreeSelector.js': modules['select/WorktreeSelector'],
       '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
       '../../view/worktree-error-copy.js': { formatWorktreeViewError },
-      './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
-      '../surface/components/NotificationToasts.js': { ErrorToast: errorToast },
+      '../surface/notification-center.js': { worktreeNotifications: center },
+      './NotificationRecovery.js': { ErrorRecovery: (props) => jsx('error-toast', props) },
+      '../surface/components/NotificationRecovery.js': { ErrorRecovery: errorToast },
       '../view/worktree-view.js': { toWorktreeViewError },
       '../../worktree.css': { default: {} },
     })[id] ?? {}, exports,
@@ -665,6 +668,7 @@ test('Fetch retains diagnostic details and retry history until recovery without 
   finish.reject(failure);
   await Promise.resolve();
   const failed = button();
+  await Promise.resolve();
   assert.ok(failed.props.title.includes(failure.code));
   assert.ok(failed.props.title.includes(failure.message));
   assert.ok(failed.props.title.includes(failure.details.gitStderr));
@@ -675,11 +679,13 @@ test('Fetch retains diagnostic details and retry history until recovery without 
   retry(); retry();
   assert.equal(calls, 2);
   assert.equal(button().props['data-fetch-status'], 'pending');
+  await Promise.resolve();
   assert.equal(h.diagnostics.getSnapshot()[0].status, 'active');
   assert.equal(h.diagnostics.getSnapshot()[0].actions[0].disabled, true);
   finish.resolve([{ name: 'main' }, { name: 'origin/new', kind: 'remote' }]);
   await Promise.resolve();
   assert.equal(button().props['data-fetch-status'], 'success');
+  await Promise.resolve();
   assert.equal(h.diagnostics.getSnapshot()[0].status, 'resolved');
   assert.deepEqual(h.diagnostics.getSnapshot()[0].actions, []);
   retry();
@@ -690,11 +696,13 @@ test('Fetch retains diagnostic details and retry history until recovery without 
   finish.reject(failure);
   await Promise.resolve();
   render();
-  const staleRetry = h.diagnostics.getSnapshot()[0].actions[0].onClick;
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot().length, 2);
+  const staleRetry = h.diagnostics.getSnapshot()[1].actions[0].onClick;
   h.dispose();
   staleRetry();
   assert.equal(calls, 3);
-  assert.equal(h.diagnostics.getSnapshot()[0].status, 'inactive');
+  assert.equal(h.diagnostics.getSnapshot()[1].status, 'inactive');
 });
 
 test('branch option identity uses full refs while labels remain short and legacy adapters keep names', () => {

@@ -1,6 +1,8 @@
 import type { WorktreeLocaleKey } from '../locales.js';
 
 export interface WorktreeViewError {
+  /** Client occurrence identity for attaching recovery after React commits. */
+  readonly reportId?: string;
   readonly code: string;
   readonly message: string;
   readonly messageKey?: WorktreeLocaleKey;

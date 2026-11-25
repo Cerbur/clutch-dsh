@@ -38,7 +38,7 @@ export type ArchivedWorktreesInput = {
   lifecycle: Pick<WorkspaceTreeInput['lifecycle'], 'branchLabel' | 'branchActions'>;
   mutation: Pick<
     WorkspaceTreeInput['mutation'],
-    'actionPending' | 'setActionError' | 'runMutation'
+    'actionPending' | 'clearActionError' | 'reportActionError' | 'runMutation'
   >;
   menus: Pick<WorkspaceTreeInput['menus'], 'openWorktreeMenuId' | 'setOpenWorktreeMenuId'>;
   read: Pick<WorkspaceTreeInput['read'], 'refresh'>;
