@@ -80,6 +80,7 @@ for (const nativeScroller of [true, false]) test(`workspace slot preserves shell
   }
   const { WorktreeOverlay } = await load('overlay/WorktreeOverlay.tsx', {
     '../WorktreeSurface.js': { WorktreeSurface: Surface },
+    '../surface/components/NotificationToasts.js': { NotificationPresenter: () => null },
     '../context/WorktreeHeroContext.js': { WorktreeHeroContext: () => null },
     '../view/SidebarViewSwitch.js': { SidebarViewSwitch: () => null },
     '../view/view-mode-dispatch.js': { registerViewModeSetter: () => {} },

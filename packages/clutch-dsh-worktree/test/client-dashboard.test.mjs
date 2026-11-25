@@ -33,7 +33,8 @@ import {
 } from '../lib/client/session/session-view.js';
 import { sessionStatusLabel, sessionTimeLabel } from '../lib/client/session/session-labels.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
-import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
+import { failureToastKey } from '../lib/client/surface/notification-queue.js';
 
 const record = {
   workspaceId: 'repo',
@@ -269,6 +270,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
   };
   const jsx = (type, props) => (typeof type === 'function' ? type(props) : { type, props });
   const notificationExports = {};
+  const center = diagnostics && createNotificationCenter(diagnostics);
   if (diagnostics !== undefined) {
     const compiled = ts.transpileModule(notificationSource, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -276,9 +278,9 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
     new Function('require', 'exports', compiled)((name) => ({
       react, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@deepseek-ai/dsh-client-ui-primitives': { Toast: 'toast' },
-      '../notification-queue.js': { reconcileNotifications, failureToastKey },
+      '../notification-queue.js': { failureToastKey },
       '../../view/worktree-error-copy.js': { formatWorktreeViewError },
-      '../../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
+      '../notification-center.js': { worktreeNotifications: center },
     })[name] ?? {}, notificationExports);
   }
   const selectOutput = ts.transpileModule(singleSelectSource, {
@@ -339,7 +341,7 @@ function renderHarness(writeClipboard, { stubBranchPicker = false, overview = ()
         '../surface/components/NotificationToasts.js': {
           NotificationToasts: notificationExports.NotificationToasts ?? (({ notices }) => jsx('toasts', { notices })),
         },
-        '../settings/diagnostics.js': { worktreeDiagnostics: diagnostics },
+        '../surface/notification-center.js': { worktreeNotifications: center },
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
         './dashboard-overlay.js': {},
@@ -558,6 +560,7 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
       findAll(node, (item) => item.props?.children === locale['dashboard.sync.create'])[0].props.onClick();
       await tick();
       node = harness.render();
+      await Promise.resolve();
       const entry = diagnostics.getSnapshot().find((item) => item.error?.details?.sessionId === 'retained-session');
       assert.ok(entry, 'the real NotificationToasts component must publish this result');
       assert.equal(entry.status, 'active');
@@ -585,6 +588,7 @@ for (const status of ['binding-failed', 'model-failed', 'title-failed', 'reporti
       assert.equal(diagnostics.getSnapshot().find((item) => item.key === entry.key).status, 'active',
         'closing the sync dialog must retain its recovery');
       harness.dispose();
+      await Promise.resolve();
       const historical = diagnostics.getSnapshot().find((item) => item.key === entry.key);
       assert.equal(historical.status, 'inactive');
       assert.equal(historical.error.details.sessionId, 'retained-session');

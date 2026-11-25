@@ -13,6 +13,7 @@ import * as navigation from '../lib/client/dashboard/dashboard-navigation.js';
 import * as sessions from '../lib/client/dashboard/dashboard-sessions.js';
 import { createNativeChangesNavigation } from '../lib/client/dashboard/git/native-changes-navigation.js';
 import { en, zh } from '../lib/client/locales.js';
+import * as center from '../lib/client/surface/notification-center.js';
 import * as queue from '../lib/client/surface/notification-queue.js';
 import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { useSurfaceMutation } from '../lib/client/surface/actions/useSurfaceMutation.js';
@@ -39,7 +40,7 @@ async function clientModule(file) {
 const surfaceModule = await clientModule('WorktreeSurface.tsx');
 const errorCopy = (await clientModule('view/worktree-error-copy.ts'))({});
 const notifications = (await clientModule('surface/components/NotificationToasts.tsx'))({
-  '../notification-queue.js': queue, '../../settings/diagnostics.js': diagnostics,
+  '../notification-queue.js': queue, '../notification-center.js': center,
   '../../view/worktree-error-copy.js': errorCopy,
   '@deepseek-ai/dsh-client-ui-primitives': { Toast: ({ text }) => React.createElement('output', null, text) },
 });
@@ -111,6 +112,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
   const render = (locale = en, showSettings = false) => {
     props.t = (key) => locale[key];
     root.render(React.createElement(React.Fragment, null, React.createElement(WorktreeSurface, props),
+      React.createElement(notifications.NotificationPresenter, { t: props.t }),
       showSettings && React.createElement(WorktreeSettings, { t: props.t })));
   };
   f.render = (...args) => React.act(async () => render(...args));
@@ -121,7 +123,7 @@ async function fixture(t, { main, external, openNativeChanges }) {
   f.switchTo = async (id) => { source.currentSessionId = id; await f.render(); };
   t.after(async () => {
     native.dispose(); await React.act(async () => root.unmount()); dom.window.close();
-    diagnostics.worktreeDiagnostics.dispose();
+    center.worktreeNotifications.dispose();
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
     }

@@ -1,3 +1,4 @@
+import { NotificationPresenter } from '../surface/components/NotificationToasts.js';
 import type { WorktreeHeroContextProps } from '../context/WorktreeHeroContext.js';
 import { WorktreeHeroContext } from '../context/WorktreeHeroContext.js';
 import { WorktreeSurface, type WorktreeSurfaceProps } from '../WorktreeSurface.js';
@@ -34,6 +35,7 @@ export function WorktreeOverlay(props: WorktreeOverlayProps) {
   }, [active, props.mountWorkspaceSidebar, props.cancelDirectoryFlow]);
   return (
     <>
+      <NotificationPresenter t={props.t} openSettings={props.openErrorSettings} />
       <WorktreeHeroContext {...props} />
       <SidebarViewSwitch
         visible={!active && props.available && props.manager !== undefined}

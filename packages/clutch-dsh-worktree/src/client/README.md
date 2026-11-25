@@ -683,12 +683,14 @@ the Dashboard record's `absolutePath`, never probes the operating system, and fa
 protocol link when no application is available or a Host request fails. The selected application is remembered
 only in current-page memory; after a refresh, the first available application is used.
 
-Surface operation, fork-binding, and read errors are announced by the public
-DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
-are announced once while present; resolved entries leave the queue and a later recurrence
-can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
-notices from the list, native dialogs, instruction/baseline editors and Git Dashboard. It removes
-unmounted sources, retains live action callbacks, and displays complete guidance without truncation.
+The list, dialogs, popover and Dashboard report structured errors and recovery actions to
+`notification-center`. It processes source snapshots, withdrawal, late results and dismissal
+in FIFO microtasks, writes browser-memory diagnostics and applies the toast policy.
+Inline field validation can stay local. A single shell overlay subscribes to the queue head
+and renders complete localized guidance with DSH Toast. A stable failure is announced once until
+it resolves. Source unmount revokes its recovery actions and removes its pending toasts.
+`WORKSPACE_ROOT_MISSING`, including a wrapped cause or the sole cause of batch failures,
+stays in diagnostics. The plugin restart advisory has its own connection lifecycle.
 The native settings.section seat exposes General and Errors & recovery tabs. The Worktree
 navigation entry reuses the sidebar's `IconBranchOutline16`. Because the current DSH shell has
 no section-icon slot, a browser overlay portals the native icon into the uniquely labelled

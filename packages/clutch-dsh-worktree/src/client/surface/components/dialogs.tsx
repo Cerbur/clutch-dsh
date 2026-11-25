@@ -367,7 +367,7 @@ export function WorktreeCreateDialog({
               <div className={styles.recoveryActions}>
                 <p role="status">{formatWorktreeViewError(importCandidates.error, t)}</p>
                 <Button variant="outline" disabled={actionPending} onClick={onRetryImportCandidates}>{t('action.retry')}</Button>
-                <ErrorToast diagnosticOnly
+                <ErrorToast origin="inline"
                   error={importCandidates.error}
                   t={t}
                   scope={'import:' + workspace.workspaceId}
@@ -431,7 +431,7 @@ export function WorktreeCreateDialog({
               />
             </label>
             {branchConflict && <p role="status">{formatWorktreeViewError(branchConflict, t)}</p>}
-            {branchConflict && <ErrorToast diagnosticOnly error={branchConflict} t={t} scope={'create-branch:' + workspace.workspaceId}
+            {branchConflict && <ErrorToast origin="inline" error={branchConflict} t={t} scope={'create-branch:' + workspace.workspaceId}
               context={workspace.title + ' · ' + newBranch} />}
           </>
         ) : (

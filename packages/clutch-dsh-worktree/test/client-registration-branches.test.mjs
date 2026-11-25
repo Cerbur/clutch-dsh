@@ -6,7 +6,7 @@ import ts from 'typescript';
 import * as viewHelpers from '../lib/client/view/worktree-view.js';
 import { createWorktreeSessionConnector } from '../lib/client/session/worktree-session.js';
 
-async function harness({ onRefresh, onActionError } = {}) {
+async function harness({ onRefresh, onActionError, onModalRead } = {}) {
   const branchHelpersSource = await readFile(new URL('../src/client/view/worktree-view-read.ts', import.meta.url), 'utf8');
   const branchHelpers = {};
   new Function('require', 'exports', ts.transpileModule(branchHelpersSource, {
@@ -71,7 +71,7 @@ async function harness({ onRefresh, onActionError } = {}) {
     cursor = 0;
     const registrationState = modules.useRegistrationState({ props });
     const read = { viewByWorkspace: new Map([['ws', projection]]), refresh: async (options) => { refreshes++; await onRefresh?.(options); },
-      loadModalWorktreeView: () => { registrationState.modalReadViewRef.current = projection; } };
+      loadModalWorktreeView: (id, options) => { registrationState.modalReadViewRef.current = onModalRead?.(id, options) ?? projection; } };
     const mutation = { actionPending: false, setActionError: error => onActionError?.(error), setActionPending() {} };
     const registration = modules.useWorktreeRegistration({ source: { workspaces: { items: [workspace] } },
       registrationState, read, props, mutation, session: { setPendingSessionBinding() {} } });
@@ -138,6 +138,26 @@ test('a registered checkout stays visible for a Session retry when Forge rejects
   assert.deepEqual(registered, [record]);
   assert.deepEqual(created, ['created']);
   assert.deepEqual(opened, ['first-session']);
+});
+
+test('a Workspace removed after opening Create is revalidated in the same dialog', async () => {
+  const failure = { code: 'WORKSPACE_ROOT_MISSING', message: 'missing', details: { rootPath: '/repo' }, retryable: true };
+  const errors = [], reads = [];
+  const { render, workspace, props, projection } = await harness({
+    onActionError: error => errors.push(error),
+    onModalRead(id, options) {
+      reads.push([id, options]);
+      if (options?.revalidate) return { ...projection, readiness: { status: 'workspaceMissing', error: failure } };
+    },
+  });
+  props.manager.createWorktree = async () => { throw failure; };
+  render().registration.openWorktreeCreator(workspace);
+  render();
+  await render().registration.submitWorktree();
+  assert.deepEqual(reads, [['ws', undefined], ['ws', { revalidate: true }]]);
+  assert.deepEqual(errors.at(-1), failure);
+  assert.equal(render().dialog.setupStatus, 'workspaceMissing');
+  assert.equal(render().dialog.canCreate, false);
 });
 
 test('HEAD creation carries the observed commit from the modal projection', async () => {

@@ -141,7 +141,7 @@ export function RegistrationDialog({
           modalReadViewRef.current = undefined;
           setSelectedBranch('');
           setNewBranch('');
-          loadModalWorktreeView(worktreeModalWorkspaceId);
+          loadModalWorktreeView(worktreeModalWorkspaceId, { revalidate: true });
         }}
         onModeChange={(mode) => {
           if (!isCurrent()) return;

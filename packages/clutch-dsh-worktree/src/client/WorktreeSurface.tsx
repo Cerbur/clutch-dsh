@@ -3,7 +3,6 @@ import { NativeDialogs } from './surface/components/NativeDialogs.js';
 import { RegistrationDialog } from './surface/components/RegistrationDialog.js';
 import { SurfaceContent } from './surface/components/SurfaceContent.js';
 import { ActivityFilterBar } from './surface/components/ActivityFilterBar.js';
-import { NotificationProvider } from './surface/components/NotificationToasts.js';
 import { SurfaceHeader } from './surface/components/SurfaceHeader.js';
 import { useDragActions } from './surface/actions/useDragActions.js';
 import { useLifecycleActions } from './surface/actions/useLifecycleActions.js';
@@ -400,7 +399,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const { collapsed } = source;
   const { t } = props;
   return (
-    <NotificationProvider t={t} openSettings={props.openErrorSettings}>
+    <>
       {forgeConfirmation.dialog}
       {props.sidebarSeat && createPortal(<aside
         className={styles.surface}
@@ -668,6 +667,6 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           isRightSidebarExpanded={props.isRightSidebarExpanded}
         />
       )}
-    </NotificationProvider>
+    </>
   );
 }

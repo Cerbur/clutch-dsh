@@ -31,7 +31,8 @@ export function createWorktreeDiagnostics() {
       return () => { listeners.delete(listener); };
     },
     publish(source: string, notices: readonly WorktreeNotification[]) {
-      sources.set(source, notices);
+      if (notices.length) sources.set(source, notices);
+      else sources.delete(source);
       retire(source, 'resolved', new Set(notices.map((notice) => notice.key)));
       for (const notice of notices) {
         const entry: WorktreeDiagnostic = {

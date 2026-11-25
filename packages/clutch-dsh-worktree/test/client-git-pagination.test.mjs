@@ -15,6 +15,7 @@ import * as facts from '../lib/client/dashboard/git/git-facts.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import * as queue from '../lib/client/surface/notification-queue.js';
+import * as center from '../lib/client/surface/notification-center.js';
 import * as diagnostics from '../lib/client/settings/diagnostics.js';
 import { createWorktreeGitStateController } from '../lib/client/dashboard/git/useWorktreeGitState.js';
 import { createWorktreeViewReader } from '../lib/client/view/worktree-view-read.js';
@@ -43,7 +44,7 @@ async function loadComponent(name, modules = {}) {
     './worktree-git.css': { default: {} },
     ...modules,
   })[id] ?? {}, exports);
-  return exports[path.basename(name)];
+  return modules.exportAll ? exports : exports[path.basename(name)];
 }
 
 function nodes(tree) {
@@ -69,9 +70,10 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
     listWorktreeCommitFiles: (input) => listWorktreeCommitFiles(context, input) };
   const reader = createWorktreeViewReader(manager);
   const controller = createWorktreeGitStateController({ manager, workspaceId, worktreeId, defaultBaselineBranch: 'main' });
-  const Toasts = await loadComponent('../../surface/components/NotificationToasts', {
+  const { NotificationToasts: Toasts, NotificationPresenter } = await loadComponent('../../surface/components/NotificationToasts', {
+    exportAll: true,
     react: React, 'react/jsx-runtime': jsxRuntime, '../notification-queue.js': queue,
-    '../../settings/diagnostics.js': diagnostics,
+    '../notification-center.js': center,
     '@deepseek-ai/dsh-client-ui-primitives': { Toast: ({ text }) => React.createElement('output', null, text) },
   });
   const Panel = await loadComponent('WorktreeGitPanel', {
@@ -88,7 +90,7 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
   const root = createRoot(dom.window.document.getElementById('root'));
   testContext.after(async () => {
     await React.act(async () => root.unmount());
-    reader.dispose(); controller.dispose(); diagnostics.worktreeDiagnostics.dispose();
+    reader.dispose(); controller.dispose(); center.worktreeNotifications.dispose();
     dom.window.close(); globalThis.window = before.window; globalThis.document = before.document;
     globalThis.IS_REACT_ACT_ENVIRONMENT = before.act;
     await rm(temp, { recursive: true, force: true });
@@ -101,6 +103,7 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
       read: { readState: { status: 'ready', views: [view] } }, expansion: { contentRef: { current: null } } });
     const panel = Panel({ workspaceId, worktreeId, t });
     await React.act(async () => root.render(React.createElement(React.Fragment, null,
+      React.createElement(NotificationPresenter, { t }),
       ...[surface, panel].map((tree, key) => React.createElement(Toasts, {
         ...nodes(tree).find((node) => node.type === Toasts).props, key,
       })))));
@@ -142,7 +145,7 @@ test('opening and refreshing distinguish a missing Workspace root from a missing
   const view = await renderNotices(true);
   assert.equal(view.readiness.status, 'ready');
   assert.equal(controller.getSnapshot().history.error.code, 'WORKTREE_NOT_FOUND');
-  assert.equal(dom.window.document.querySelector('output')?.textContent, en['error.worktreeNotFound']);
+  assert.equal(dom.window.document.querySelector('output')?.textContent, en['error.worktreeNotFound'] + ' ' + en['settings.toastHint']);
   assert.ok(!diagnostics.worktreeDiagnostics.getSnapshot().some((entry) =>
     entry.status === 'active' && entry.error?.code === 'WORKSPACE_ROOT_MISSING'));
 });

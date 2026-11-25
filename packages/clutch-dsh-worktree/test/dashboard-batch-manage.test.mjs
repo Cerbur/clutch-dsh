@@ -7,6 +7,7 @@ import * as React from 'react';
 import * as jsx from 'react/jsx-runtime';
 import { createRoot } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
+import { shouldAnnounce } from '../lib/client/surface/notification-queue.js';
 import * as batch from '../lib/client/dashboard/batch-manage.js';
 import * as selection from '../lib/client/dashboard/dashboard-selection.js';
 import { runWorktreeCleanupFlow } from '../lib/client/surface/actions/worktree-cleanup-flow.js';
@@ -330,7 +331,7 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
     },
     '../view/worktree-error-copy.js': { formatWorktreeViewError: (error) => error.code },
     '../surface/components/NotificationToasts.js': { NotificationToasts: ({ notices }) =>
-      notices.map((notice) => React.createElement('output', { key: notice.key, 'data-diagnostic-only': !!notice.diagnosticOnly }, notice.text)) },
+      notices.map((notice) => React.createElement('output', { key: notice.key, 'data-diagnostic-only': !shouldAnnounce(notice) }, notice.text)) },
     '../dsh-icons.js': { IconBranchOutline16: () => React.createElement('svg', { 'aria-hidden': true }) },
     './batch-manage.js': batch, './dashboard.css': { default: {} }, './dashboard-selection.js': selection,
   });
@@ -353,7 +354,7 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
       t, actionPending: false, onManage: async (action, target) => {
         calls.push([action, target.worktreeId]);
         if (target.worktreeId === 'one' && calls.length === 1) await deferred;
-        else throw { code: 'WORKTREE_DIRTY', message: 'dirty' };
+        else throw { code: calls.length > 4 || target.worktreeId === 'one' ? 'WORKSPACE_ROOT_MISSING' : 'WORKTREE_DIRTY', message: 'missing' };
       },
     })));
     const doc = dom.window.document;
@@ -389,6 +390,12 @@ test('batch UI selects only its Workspace, confirms disk deletion, prevents dupl
     assert.deepEqual([...doc.querySelectorAll('output[data-diagnostic-only="false"]')].map((el) => el.textContent), ['2 项操作中有 2 项失败。']);
     assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 2);
     assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 2);
+    await click('[data-batch-action="clean"]');
+    await click('[role="dialog"] input');
+    await click('[data-batch-confirm]');
+    assert.equal(doc.querySelectorAll('[data-batch-result="failed"]').length, 2);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="false"]').length, 0);
+    assert.equal(doc.querySelectorAll('output[data-diagnostic-only="true"]').length, 3);
     for (const locale of [en, zh]) assert.ok(locale['dashboard.manage.stopped']);
   } finally {
     await React.act(async () => root.unmount());

@@ -253,7 +253,8 @@ export function useSurfaceRefresh({ source, props, registrationState }: Input) {
     });
   }), [props.subscribeToolChanges, mode, refresh]);
   const loadModalWorktreeView = useCallback(
-    (workspaceId: string): void => {
+    (workspaceId: string, options?: { revalidate: boolean }): void => {
+      if (options?.revalidate) viewReader.invalidate(workspaceId);
       setModalReadError(undefined);
       setModalReadLoading(true);
       if (manager === undefined) {

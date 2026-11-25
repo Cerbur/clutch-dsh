@@ -52,3 +52,15 @@ test('both archive sources preserve bindings and directories in both languages',
     assert.ok(locale['worktree.detachedGuidance']);
   }
 });
+
+test('a missing Workspace is history-only across actions, wrapped failures and batch summaries', () => {
+  const missing = { code: 'WORKSPACE_ROOT_MISSING', message: 'identical', retryable: false };
+  const checkout = { ...missing, code: 'WORKTREE_NOT_FOUND' };
+  const wrapped = { ...missing, code: 'SESSION_BINDING_FAILED', details: { causeCode: missing.code } };
+  const notices = [
+    { ...a, key: 'create', error: missing }, { ...a, key: 'binding', error: wrapped },
+    { ...a, key: 'all missing', failures: [missing, wrapped] }, { ...a, key: 'checkout', error: checkout },
+    { ...a, key: 'mixed batch', failures: [missing, checkout] },
+  ];
+  assert.deepEqual(reconcileNotifications(empty(), notices).pending.map(({ key }) => key), ['checkout', 'mixed batch']);
+});

@@ -174,7 +174,7 @@ export function SurfaceContent({
     const error = forkRecoveryError(recovery);
     notices.push({
       key: 'fork:' + recovery.key, error, text: formatWorktreeViewError(error, t),
-      diagnosticOnly: recovery.historical,
+      origin: recovery.historical ? 'restored-fork' : undefined,
       toastKey: failureToastKey(error),
       context: t('settings.binding') + ' · ' + sessionLabel(recovery.childSessionId),
       actions: [
@@ -246,14 +246,14 @@ export function SurfaceContent({
     const { error } = readiness;
     notices.push({
       key: 'workspace-root:' + workspaceId, error, text: formatWorktreeViewError(error, t),
-      context: t('settings.read') + ' · ' + workspaceLabel(workspaceId), diagnosticOnly: true,
+      context: t('settings.read') + ' · ' + workspaceLabel(workspaceId),
     });
   }
   for (const [workspaceId, error] of Object.entries(readState.targetErrors ?? {})) {
     const workspaceIds = [workspaceId];
     notices.push({
       key: 'target:' + JSON.stringify([workspaceIds, error.code, error.details]),
-      diagnosticOnly: error.showingCachedView || error.code === 'WORKSPACE_ROOT_MISSING',
+      origin: error.showingCachedView ? 'cached-refresh' : undefined,
       error, text: formatWorktreeViewError(error, t),
       context: t('settings.read') + ' · ' + workspaceIds.map(workspaceLabel).join(', '),
       actions: [...actionsFor(error), retryRead(workspaceIds)],

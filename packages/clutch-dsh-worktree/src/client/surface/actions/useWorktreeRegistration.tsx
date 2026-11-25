@@ -317,7 +317,12 @@ export function useWorktreeRegistration({
       const failure = toWorktreeViewError(error);
       if (worktreeModalMode === 'create' && failure.code === 'WORKTREE_BRANCH_CONFLICT' && generation === modalGenerationRef.current) {
         setBranchConflict(failure);
-      } else setActionError(failure);
+      } else {
+        setActionError(failure);
+        if (failure.code === 'WORKSPACE_ROOT_MISSING' && generation === modalGenerationRef.current) {
+          loadModalWorktreeView(modalWorkspace.workspaceId, { revalidate: true });
+        }
+      }
     } finally {
       setActionPending(false);
     }

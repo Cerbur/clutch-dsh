@@ -37,7 +37,8 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
   }, [workspaceId, onManage]);
   const picked = rows.filter((record) => selected.has(record.worktreeId));
   const disabled = pending || actionPending || onManage === undefined;
-  const failed = results.filter((result) => result.error).length;
+  const failures = results.flatMap(({ error }) => error ? [error] : []);
+  const failed = failures.length;
   const allSelected = rows.length > 0 && picked.length === rows.length;
   const close = () => { if (!busy.current) setConfirmation(undefined); };
   const submit = async () => {
@@ -111,12 +112,12 @@ export function BatchManageWorktrees({ workspaceId, worktrees, t, actionPending,
     </ul>
     <NotificationToasts notices={[
       ...(!pending && failed > 0 ? [{
-        key: 'batch-summary:' + workspaceId + ':' + generation.current,
+        failures, key: 'batch-summary:' + workspaceId + ':' + generation.current,
         text: t('dashboard.manage.batchFailed', { failed, total: results.length }),
         message: (translate: WorktreeTranslate) => translate('dashboard.manage.batchFailed', { failed, total: results.length }),
       }] : []),
       ...results.flatMap(({ record, error }) => error ? [{
-        key: 'batch:' + record.worktreeId, diagnosticOnly: true, error, context: record.branch + ' · ' + record.absolutePath,
+        key: 'batch:' + record.worktreeId, origin: 'batch-item' as const, error, context: record.branch + ' · ' + record.absolutePath,
         text: formatWorktreeViewError(error, t), message: (translate: WorktreeTranslate) => formatWorktreeViewError(error, translate),
       }] : []),
     ]} />

@@ -119,10 +119,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       ? <span role="alert">{t('branch.fetchRetry')}</span>
       : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
-  return { status, notice: <><ErrorToast diagnosticOnly error={readError} t={t} scope={'branch-read:' + scope}
+  return { status, notice: <><ErrorToast origin="inline" error={readError} t={t} scope={'branch-read:' + scope}
     context={t('dashboard.searchBranches')}
     actions={[{ label: t('action.retry'), disabled: reading, onClick: () => void reload() }]} />
-    <ErrorToast diagnosticOnly error={fetchError} t={t} scope={'branch-fetch:' + scope}
+    <ErrorToast origin="inline" error={fetchError} t={t} scope={'branch-fetch:' + scope}
       context={t('branch.fetch')}
       actions={[{ label: t('branch.fetchRetry'), disabled: props.disabled || props.loading || reading || status === 'pending',
         onClick: () => void fetchBranches() }]} /></>, picker: {

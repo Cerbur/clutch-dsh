@@ -326,7 +326,7 @@ for (const outcome of ['success', 'failure']) {
         assert.equal(option.props.disabled, false);
         if (outcome === 'failure') {
           assert.ok(find(node, (item) => item.props?.role === 'status').length > 0);
-          assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.diagnosticOnly, true);
+          assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.origin, 'inline');
         }
         option.props.onClick();
         assert.deepEqual(chosen, [expected]);
@@ -549,7 +549,7 @@ test('registration keeps branch conflicts and import read failures in the dialog
     const node = h.render(['surface/components/dialogs', 'WorktreeCreateDialog'], props);
     const message = formatWorktreeViewError(error, props.t);
     assert.ok(find(node, (item) => item.props?.role === 'status' && item.props.children === message).length);
-    assert.ok(find(node, (item) => item.type === 'error-toast' && item.props.error === error)[0].props.diagnosticOnly);
+    assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error === error)[0].props.origin, 'inline');
     if (mode === 'import') {
       find(node, (item) => item.type === 'button' && item.props.children === en['action.retry'])[0].props.onClick();
       assert.equal(retries, 1);
@@ -641,7 +641,7 @@ test('fetch failure keeps old branch rows and exposes an inline retryable locali
   let node = render();
   assert.equal(find(fetchButton(node), (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchRetry']);
   assert.ok(fetchButton(node).props.title.includes(en['branch.fetchFailed']));
-  assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.diagnosticOnly, true);
+  assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.origin, 'inline');
   assert.equal(options(node)[0].props['aria-selected'], true);
   fetchButton(node).props.onClick();
   await Promise.resolve();

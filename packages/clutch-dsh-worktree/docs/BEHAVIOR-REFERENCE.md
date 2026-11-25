@@ -805,13 +805,17 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 An unsuccessful explicit operation or a first read with no usable content normally shows one toast.
 A background Workspace or Git refresh that can keep showing the previous result marks that content as stale
 and records the failure in **Errors & recovery**. The next successful read clears the stale message.
-An explicit refresh or retry can report the same failure. Reading a missing Workspace root remains silent.
+An explicit refresh or retry can report the same failure. A confirmed missing Workspace root (`WORKSPACE_ROOT_MISSING`) is recorded in **Errors & recovery**
+without a toast on first entry, refresh or an explicit operation, including a Session failure with this underlying code.
+If the root disappears while Create Worktree is open, submitting the form rechecks that Workspace and displays its missing-directory state.
+Restore the root and retry. A missing individual checkout in an existing Workspace still shows repair guidance on explicit refresh.
 
 A duplicate Workspace name is flagged at the field until corrected and creates no diagnostic entry.
 A conflicting new branch name stays in the creation dialog with its error. Branch list, remote Fetch and
-import candidate failures show a local retry and retain their diagnostics. At the end of a batch, one toast
-gives the number of failures. Each item's result remains in the batch list and each failure has diagnostic details.
-Partial operations such as a created Session with a failed binding keep their toast and recovery actions.
+import candidate failures show a local retry and retain their diagnostics. A completed batch shows one failure-count toast when at least one failure has another cause.
+If every failure is a missing Workspace root, the summary is recorded silently. Each item's result remains in the batch list and each failure has diagnostic details.
+A created Session with a failed binding retains its recovery actions even when the underlying error is history-only.
+Errors from separate views enter a single queue in arrival order. Dismissing one toast reveals the next pending failure.
 
 Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,
 to read each failure and expand its original
@@ -945,4 +949,3 @@ made native-owned by this integration.
 - If the plugin's external index is unavailable or corrupt, native DSH Workspace and Session views
   remain readable and the plugin enters a degraded read-only state. It never replaces native data
   with an empty index.
-

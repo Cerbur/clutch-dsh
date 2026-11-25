@@ -1,7 +1,7 @@
 import { NotificationToasts } from '../surface/components/NotificationToasts.js';
 import { PluginAttribution } from '../PluginAttribution.js';
 import type { WorktreeNotification } from '../surface/notification-queue.js';
-import { worktreeDiagnostics } from '../settings/diagnostics.js';
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 import { formatWorktreeViewError } from '../view/worktree-error-copy.js';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -459,7 +459,7 @@ export function useWorktreeBaselineSync({
       if (generation !== syncGeneration.current) {
         // Retiring navigation must not discard an already-created Session's failure.
         // Capture the original identity without reviving UI sources or callbacks.
-        if (result.status !== 'dispatched') worktreeDiagnostics.recordInactive('sync:' + requestId,
+        if (result.status !== 'dispatched') worktreeNotifications.recordInactive('sync:' + requestId,
           baselineSyncFailureNotices(record, requestId, result, t));
         return;
       }

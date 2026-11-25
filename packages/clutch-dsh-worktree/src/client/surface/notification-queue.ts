@@ -5,7 +5,8 @@ export interface WorktreeNotification {
   readonly key: string;
   readonly text: string;
   readonly toastKey?: string;
-  readonly diagnosticOnly?: boolean;
+  readonly origin?: 'inline' | 'cached-refresh' | 'restored-fork' | 'batch-item';
+  readonly failures?: readonly WorktreeViewError[];
   readonly context?: string;
   readonly error?: WorktreeViewError;
   readonly describe?: (t: WorktreeTranslate) => string;
@@ -32,18 +33,28 @@ export interface NotificationQueue {
   readonly pending: readonly WorktreeNotification[];
 }
 
+function missingWorkspace(error?: WorktreeViewError): boolean {
+  return error?.code === 'WORKSPACE_ROOT_MISSING' || error?.details?.causeCode === 'WORKSPACE_ROOT_MISSING';
+}
+
+export function shouldAnnounce(notice: WorktreeNotification): boolean {
+  if (notice.origin || missingWorkspace(notice.error)) return false;
+  return !notice.failures?.length || !notice.failures.every(missingWorkspace);
+}
+
 /** Resolved notices leave the queue; unchanged snapshots never announce twice. */
 export function reconcileNotifications(
   state: NotificationQueue,
   notices: readonly WorktreeNotification[],
 ): NotificationQueue {
-  const unique = [...new Map(notices.map((notice) => {
+  const unique = [...new Map(notices.filter(shouldAnnounce).map((notice) => {
     const key = notice.toastKey ?? notice.key;
     return [key, { ...notice, key }];
   })).values()];
   const active = new Set(unique.map((notice) => notice.key));
   const seen = new Set(state.seen);
-  const pending = state.pending.filter((notice) => active.has(notice.key));
+  const byKey = new Map(unique.map((notice) => [notice.key, notice]));
+  const pending = state.pending.flatMap(({ key }) => byKey.get(key) ?? []);
   for (const notice of unique) {
     if (!seen.has(notice.key)) pending.push(notice);
   }
@@ -52,7 +63,7 @@ export function reconcileNotifications(
     nextSeen.length === state.seen.length &&
     nextSeen.every((key, index) => key === state.seen[index]) &&
     pending.length === state.pending.length &&
-    pending.every((notice, index) => notice.key === state.pending[index]?.key)
+    pending.every((notice, index) => notice.key === state.pending[index]?.key && notice.text === state.pending[index]?.text)
   )
     return state;
   return { seen: nextSeen, pending };
