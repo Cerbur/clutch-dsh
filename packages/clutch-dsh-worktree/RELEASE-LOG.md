@@ -1,5 +1,25 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.43 — 2026-11-26
+
+### 中文
+
+#### 修复
+
+- Workspace 根目录缺失时，Worktree 会保留目录缺失状态和诊断记录，不再弹出错误通知。
+- 后台刷新、自动补绑派生 Session 或离开视图后才返回的错误会静默记入诊断，仍需用户处理的操作失败则继续提示。
+- 重复错误可以合并提示，但每次失败仍单独记录，直到重试成功才将相关诊断标为已解决。
+- 创建 Worktree 前会重新确认 Workspace 是否就绪，Git 操作失败时也会保留原始错误原因。
+
+### English
+
+#### Fixed
+
+- When a Workspace root is missing, Worktree keeps the missing-directory state and diagnostic record without showing an error toast.
+- Errors from background refreshes, automatic binding of forked sessions, or operations that finish after you leave the view are recorded silently, while failures that still need your attention continue to show a notification.
+- Repeated errors can share a notification while keeping separate diagnostic entries, which are marked resolved only after a successful retry.
+- Worktree rechecks Workspace readiness before creation and preserves the original cause when a Git operation fails.
+
 ## 0.1.42 — 2026-11-24
 
 ### 中文
