@@ -11,6 +11,8 @@ type Input = {
   registration: Pick<
     ReturnType<typeof useWorktreeRegistration>,
     | 'modalWorkspace'
+    | 'branchConflict'
+    | 'setBranchConflict'
     | 'modalView'
     | 'modalSetupStatus'
     | 'modalCanCreate'
@@ -126,6 +128,7 @@ export function RegistrationDialog({
         selectedImportPath={selectedImportPath}
         selectedBranch={selectedBranch}
         newBranch={newBranch}
+        branchConflict={registration.branchConflict}
         actionPending={actionPending}
         onClose={() => {
           if (actionPending || !isCurrent()) return;
@@ -138,7 +141,7 @@ export function RegistrationDialog({
           modalReadViewRef.current = undefined;
           setSelectedBranch('');
           setNewBranch('');
-          loadModalWorktreeView(worktreeModalWorkspaceId);
+          loadModalWorktreeView(worktreeModalWorkspaceId, { revalidate: true });
         }}
         onModeChange={(mode) => {
           if (!isCurrent()) return;
@@ -173,7 +176,7 @@ export function RegistrationDialog({
             }
           }
         }}
-        onNewBranchChange={setNewBranch}
+        onNewBranchChange={(value) => { registration.setBranchConflict(undefined); setNewBranch(value); }}
         onSubmit={submitWorktree}
       />
     </>

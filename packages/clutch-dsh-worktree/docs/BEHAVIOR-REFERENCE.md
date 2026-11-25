@@ -227,8 +227,10 @@ The localized HEAD option includes the current reference name, for example **HEA
 Creation uses the commit shown when selected. If HEAD changes before submission, creation is rejected
 with `WORKTREE_STATE_CONFLICT`; refresh the dialog and select the source again.
 Main displays the current branch, exact Tag, or short Commit and retains its creation action when detached.
-If setup is incomplete, DSH
-shows the relevant readiness message and copyable setup guidance.
+Each time **Create Worktree** opens, it checks the selected Workspace before enabling creation.
+If the directory was moved, the dialog shows the missing-directory message. Restore it and reopen the dialog to continue.
+A Git read failure, including invalid configuration, shows an error with a retry action. The original Git diagnostic
+is available in **Errors & recovery**. The dialog offers initialization commands when Git confirms that setup is incomplete.
 
 When the Workspace is a repository subdirectory, its Worktrees preserve that relative directory.
 For example, a Workspace at `/repo/packages/app` uses `<worktree-root>/packages/app` for new
@@ -464,6 +466,11 @@ The new Session buttons on Local/Main and Worktree rows use DSH's native chat-bu
 
 If DSH creates a Session but binding fails, the Session is kept. The Worktree view exposes retry
 or open recovery actions; the plugin does not delete or rewrite the DSH Session.
+
+Opening or refreshing the Worktree view can uncover a binding failure for an existing fork.
+Find its original error and recovery actions in **Settings → Worktree → Errors & recovery**.
+This background check is silent. A binding failure for a newly forked Session or an explicit
+binding retry still shows a toast. A successful bind clears the pending recovery.
 
 ### Current Session Worktree panel
 
@@ -797,15 +804,32 @@ keeps an active binding and therefore keeps its Worktree instruction effective. 
 
 ### Resolve errors
 
-Failures in the Worktree list, dialogs, and Dashboard appear as native toasts in the current DSH
-language (English or Chinese). Each message explains the problem and how to recover. The list
-keeps its existing content and has no error banner or diagnostics drawer at the top.
+An unsuccessful explicit operation or a first read with no usable content normally shows one toast.
+A background Workspace or Git refresh that can keep showing the previous result marks that content as stale
+and records the failure in **Errors & recovery**. The next successful read clears the stale message.
+An explicit refresh or retry can report the same failure. A confirmed missing Workspace root (`WORKSPACE_ROOT_MISSING`) is recorded in **Errors & recovery**
+without a toast on first entry, refresh or an explicit operation, including a Session failure with this underlying code.
+If the root disappears while Create Worktree is open, submitting the form rechecks that Workspace and displays its missing-directory state.
+Restore the root and retry. A missing individual checkout in an existing Workspace still shows repair guidance on explicit refresh.
+
+A duplicate Workspace name is flagged at the field until corrected and creates no diagnostic entry.
+A conflicting new branch name stays in the creation dialog with its error. Branch list, remote Fetch and
+import candidate failures show a local retry and retain their diagnostics. A completed batch shows one failure-count toast when at least one failure has another cause.
+If every failure is a missing Workspace root, the summary is recorded silently. Each item's result remains in the batch list and each failure has diagnostic details.
+A created Session with a failed binding retains its recovery actions even when the underlying error is history-only.
+Each failure is recorded as it happens. Two failures from the same operation view before it repaints,
+including repeated failures with the same code, have separate history entries in arrival order.
+If the root disappears between Session creation and binding, both New Session and baseline sync record the original cause code and keep recovery for the created Session.
+A save, sync or Fetch that fails after its view closes still appears in history without a toast or buttons for the closed view.
+Starting a retry or withdrawing its controls leaves the failure unconfirmed. A successful retry resolves its record.
+All active recoveries remain available even when more than 100 errors arrive before the view updates. The 100-entry limit applies to history outside active recoveries and queued toasts.
+An equivalent pending toast may cover several entries. Errors from separate views share the same toast queue. Dismissing one toast reveals the next pending failure.
 
 Use **Errors & recovery** in the toast, or open **Settings → Worktree → Errors & recovery**,
 to read each failure and expand its original
 diagnostics (including Git stderr). Retry reads, recover interrupted Worktree operations, retry
 Session bindings, or open retained Sessions from the same tab. Records remain after the toast
-fades; the list and Git panels have no inline error or retry controls. Closed operation views
+fades. Closed operation views
 disable their recovery actions; reopen the corresponding view to load its current state.
 Records stay in page memory and clear on reload. **Clear history** keeps active recoveries.
 Dialogs keep input; failed instruction and baseline saves retain drafts. Git setup guidance
@@ -925,9 +949,11 @@ made native-owned by this integration.
   and no command block; the plugin does not run setup or installation commands.
 - If a Workspace root directory is missing, the Worktree view still renders the indexed Worktrees,
   Session bindings, and recorded instructions, and reports a localized missing-directory state
-  instead of failing the whole view. Git-backed reads, Worktree creation and import, and cleanup
+  in the view. On entry and refresh, a confirmed missing root is recorded in **Settings → Worktree →
+  Errors & recovery** with code `WORKSPACE_ROOT_MISSING` and the root path, without a toast.
+  Restore the directory and refresh to clear the missing state. If only a Worktree checkout is
+  missing, its Git read still shows the usual repair guidance. Git-backed reads, Worktree creation and import, and cleanup
   actions remain rejected for that Workspace until its directory returns.
 - If the plugin's external index is unavailable or corrupt, native DSH Workspace and Session views
   remain readable and the plugin enters a degraded read-only state. It never replaces native data
   with an empty index.
-

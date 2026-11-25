@@ -51,7 +51,7 @@ type Input = {
   >;
   mutation: Pick<
     ReturnType<typeof useSurfaceMutation>,
-    'actionPending' | 'actionError' | 'setActionError' | 'runMutation'
+    'actionPending' | 'actionError' | 'clearActionError' | 'reportActionError' | 'runMutation'
   >;
   session: Pick<
     ReturnType<typeof useSessionActions>,
@@ -117,7 +117,7 @@ type Input = {
 
 import { WorkspaceTree } from './WorkspaceTree.js';
 import { OverlayScrollbar } from './OverlayScrollbar.js';
-import { NotificationToasts } from './NotificationToasts.js';
+import { NotificationRecovery } from './NotificationRecovery.js';
 import type { WorktreeNotification } from '../notification-queue.js';
 import { failureToastKey } from '../notification-queue.js';
 export function SurfaceContent({
@@ -143,7 +143,7 @@ export function SurfaceContent({
   const { forkRecoverySnapshot } = source;
   const { t, retryForkSession, openSession } = props;
   const { recoveryAction } = lifecycle;
-  const { actionPending, actionError, setActionError } = mutation;
+  const { actionPending, actionError, clearActionError } = mutation;
   const {
     forkRetryKey,
     retryForkBinding,
@@ -162,7 +162,7 @@ export function SurfaceContent({
   const retryRead = (workspaceIds?: readonly string[]) => ({
     label: t('action.retry'), disabled: actionPending,
     onClick: () => { void refresh({
-      scope: workspaceIds === undefined ? { kind: 'global' } : { kind: 'workspaces', workspaceIds },
+      userRequested: true, scope: workspaceIds === undefined ? { kind: 'global' } : { kind: 'workspaces', workspaceIds },
       preserveCurrent: true,
     }); },
   });
@@ -173,7 +173,8 @@ export function SurfaceContent({
   for (const recovery of forkRecoverySnapshot.pending) {
     const error = forkRecoveryError(recovery);
     notices.push({
-      key: 'fork:' + recovery.key, error, text: formatWorktreeViewError(error, t),
+      reportId: recovery.reportId, key: 'fork:' + recovery.key, error, text: formatWorktreeViewError(error, t),
+      origin: recovery.historical ? 'restored-fork' : undefined,
       toastKey: failureToastKey(error),
       context: t('settings.binding') + ' · ' + sessionLabel(recovery.childSessionId),
       actions: [
@@ -202,11 +203,12 @@ export function SurfaceContent({
         ...(error.retryable ? [{
           label: t('action.retry'), disabled: actionPending,
           onClick: () => {
-            setActionError(undefined);
+            clearActionError();
             void refresh({
-              scope: typeof workspaceId === 'string'
+              userRequested: true, scope: typeof workspaceId === 'string'
                 ? { kind: 'workspace', workspaceId } : { kind: 'global' },
               preserveCurrent: true,
+              ...(error.reportId ? { resolveOnSuccess: error.reportId } : {}),
             });
           },
         }] : []),
@@ -233,17 +235,27 @@ export function SurfaceContent({
           leaveSettings: true,
           onClick: () => {
             setPendingSessionBinding(undefined);
-            if (actionError?.details?.sessionId === binding.sessionId) setActionError(undefined);
+            if (actionError?.details?.sessionId === binding.sessionId) clearActionError();
             openSession(binding.sessionId);
           },
         },
       ],
     });
   }
+  for (const { workspaceId, readiness } of readState.views) {
+    if (readiness.status !== 'workspaceMissing') continue;
+    const { error } = readiness;
+    notices.push({
+      key: 'workspace-root:' + workspaceId, error, text: formatWorktreeViewError(error, t),
+      context: t('settings.read') + ' · ' + workspaceLabel(workspaceId),
+      actions: [retryRead([workspaceId])],
+    });
+  }
   for (const [workspaceId, error] of Object.entries(readState.targetErrors ?? {})) {
     const workspaceIds = [workspaceId];
     notices.push({
       key: 'target:' + JSON.stringify([workspaceIds, error.code, error.details]),
+      origin: error.showingCachedView ? 'cached-refresh' : undefined,
       error, text: formatWorktreeViewError(error, t),
       context: t('settings.read') + ' · ' + workspaceIds.map(workspaceLabel).join(', '),
       actions: [...actionsFor(error), retryRead(workspaceIds)],
@@ -268,7 +280,7 @@ export function SurfaceContent({
         data-worktree-native-scroll={bindScrollerRef !== undefined || undefined}
       >
         <div className={styles.scrollContent}>
-          <NotificationToasts notices={notices} />
+          <NotificationRecovery notices={notices} />
           {readState.status === 'loading' && (
             <p className={styles.message}>{t('status.loading')}</p>
           )}

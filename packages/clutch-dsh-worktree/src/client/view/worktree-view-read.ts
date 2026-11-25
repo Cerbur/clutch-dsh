@@ -1,3 +1,4 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import type {
   BranchRecord,
   SessionBinding,
@@ -6,7 +7,7 @@ import type {
   WorkspaceCheckout,
   WorktreeSessionState,
 } from '../../contract/index.js';
-import { toWorktreeViewError, type WorktreeViewError } from './worktree-view-errors.js';
+import { toWorktreeViewError, type ReportId, type WorktreeViewError } from './worktree-view-errors.js';
 
 export type WorktreeGitReadiness =
   | { readonly status: 'ready' }
@@ -75,6 +76,7 @@ interface WorktreeViewReaderEntry {
   loadedAt?: number;
   sessionRevision?: string;
   sessionChanges?: Map<string, { generation: number; base?: WorktreeWorkspaceView }>;
+  missingReportIds?: ReportId[];
   inFlight?: {
     generation: number;
     promise: Promise<WorktreeWorkspaceView>;
@@ -113,6 +115,7 @@ export interface WorktreeModalViewLoader {
     workspaceId: string,
     onSuccess: (view: WorktreeWorkspaceView) => void,
     onError: (error: WorktreeViewError) => void,
+    onRetiredError?: (error: WorktreeViewError) => void,
   ): Promise<void>;
 }
 
@@ -148,13 +151,17 @@ export function createWorktreeRefreshGuard() {
       load: () => Promise<T>,
       onSuccess: (value: T) => void,
       onError: (error: unknown) => void,
+      onRetiredError?: (error: unknown) => void,
     ): Promise<void> {
       const generation = begin();
       let value: T;
       try {
         value = await load();
       } catch (error) {
-        if (!isCurrent(generation)) return;
+        if (!isCurrent(generation)) {
+          onRetiredError?.(error);
+          return;
+        }
         onError(error);
         return;
       }
@@ -292,9 +299,27 @@ export function createWorktreeViewReader(
       return loadWorktreeView(manager, workspaceId);
     })
       .then((data) => {
-        const view: WorktreeWorkspaceView = { workspaceId, ...data,
-          ...(knownSessionIds === undefined ? {} : { knownSessionIds }) };
-        if (!disposed && entries.get(workspaceId) === entry && entry.generation === generation) {
+        const isCurrent = !disposed && entries.get(workspaceId) === entry && entry.generation === generation;
+        let readiness = data.readiness;
+        if (readiness.status === 'workspaceMissing') {
+          const reported = worktreeNotifications.reportError(readiness.error, {
+            ...(isCurrent ? {} : { origin: 'retired' }),
+            context: workspaceId,
+          });
+          readiness = { status: 'workspaceMissing', error: reported };
+          if (isCurrent) (entry.missingReportIds ??= []).push(reported.reportId);
+        }
+        const view: WorktreeWorkspaceView = {
+          workspaceId,
+          ...data,
+          readiness,
+          ...(knownSessionIds === undefined ? {} : { knownSessionIds }),
+        };
+        if (isCurrent) {
+          if (view.readiness.status !== 'workspaceMissing' && entry.missingReportIds?.length) {
+            for (const reportId of entry.missingReportIds) worktreeNotifications.resolve(reportId);
+            entry.missingReportIds = undefined;
+          }
           entry.view = view;
           entry.knownSessionIds = knownSessionIds;
           entry.stale = false;
@@ -414,6 +439,7 @@ export function createWorktreeViewReader(
       if (disposed || !Number.isFinite(maxAgeMs) || maxAgeMs < 0) return false;
       const entry = entries.get(workspaceId);
       if (entry === undefined || entry.view === undefined || entry.stale) return false;
+      if (entry.view.readiness.status === 'workspaceMissing') return false;
       if (entry.loadedAt === undefined) return false;
       return Date.now() - entry.loadedAt <= maxAgeMs;
     },
@@ -505,11 +531,12 @@ export function createWorktreeModalViewLoader(
   const guard = createWorktreeRefreshGuard();
   return {
     invalidate: guard.invalidate,
-    load(workspaceId, onSuccess, onError) {
+    load(workspaceId, onSuccess, onError, onRetiredError) {
       return guard.run(
         () => reader.read(workspaceId, { current: true }),
         onSuccess,
         (error) => onError(toWorktreeViewError(error)),
+        onRetiredError === undefined ? undefined : (error) => onRetiredError(toWorktreeViewError(error)),
       );
     },
   };

@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { type SessionListLike } from '../session/session-view.js';
-import type { WorktreeForkRecovery, WorktreeForkRecoveryStore } from '../session/worktree-session-fork.js';
+import type { WorktreeForkRecoveryStore } from '../session/worktree-session-fork.js';
 import {
   stableWorkspaceIds,
   toWorktreeViewError,
@@ -47,17 +47,7 @@ export function updatedAtById(
     sessionIds.map((sessionId) => [sessionId, sessions.byId[sessionId]?.updatedAt]),
   );
 }
-export function forkRecoveryError(recovery: WorktreeForkRecovery): WorktreeViewError {
-  const error = toNativeWorktreeViewError(recovery.error);
-  return {
-    ...error,
-    code: error.code === 'WORKTREE_VIEW_FAILED' ? 'SESSION_BINDING_FAILED' : error.code,
-    details: {
-      ...(error.details ?? {}),
-      sessionId: recovery.childSessionId,
-    },
-  };
-}
+export { forkRecoveryError } from '../session/worktree-session-fork.js';
 export function useStableWorkspaceIds(workspaces: readonly WorkspaceLike[]): readonly string[] {
   const next = workspaces.map((workspace) => workspace.workspaceId);
   const previousRef = useRef<readonly string[]>([]);

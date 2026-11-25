@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createWorktreeSessionForkCoordinator } from '../lib/client/session/worktree-session-fork.js';
+import { worktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
+import { worktreeNotifications } from '../lib/client/surface/notification-center.js';
 
 function binding(overrides = {}) {
   return {
@@ -441,6 +443,36 @@ test('does not invent a Workspace scope for an unknown binding lookup failure', 
   coordinator.dispose();
 });
 
+test('historical fork failures stay silent on replay while new children and explicit retries can notify', async () => {
+  let snapshot = { phase: 'pending', ids: [], byId: {} };
+  const coordinator = createWorktreeSessionForkCoordinator({
+    sessions: { getSnapshot: () => snapshot },
+    fork: async () => 'direct-child',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: async () => { throw Object.assign(new Error('missing checkout'), { code: 'WORKTREE_NOT_FOUND' }); },
+  });
+  const failures = () => Object.fromEntries(coordinator.recovery.getSnapshot().pending.map(
+    (item) => [item.childSessionId, item.historical],
+  ));
+  await coordinator.reconcile();
+  await coordinator.fork({ sessionId: 'parent-session' });
+  snapshot = sessionList();
+  snapshot.ids.push('direct-child');
+  snapshot.byId['direct-child'] = { blank: false, parentId: 'parent-session' };
+  await coordinator.reconcile();
+  assert.deepEqual(failures(), { 'direct-child': false, 'child-session': true });
+  snapshot.ids.push('new-child');
+  snapshot.byId['new-child'] = { blank: false, parentId: 'parent-session' };
+  await coordinator.reconcile();
+  await coordinator.reconcile({ force: true });
+  assert.deepEqual(failures(), { 'direct-child': false, 'child-session': true, 'new-child': false });
+  const historical = coordinator.recovery.getSnapshot().pending.find((item) => item.historical);
+  assert.equal(historical.error.code, 'WORKTREE_NOT_FOUND');
+  assert.equal(await coordinator.retry(historical.key), false);
+  assert.equal(failures()['child-session'], false);
+  coordinator.dispose();
+});
+
 test('waits for a usable Session snapshot after malformed data', async () => {
   let snapshot = { phase: 'pending', ids: [], byId: {} };
   let lookupCount = 0;
@@ -627,5 +659,116 @@ test('unrelated recovery and subsequent fork with new worktree ID succeed after 
     assert.equal(childId, 'child-session-2');
   } finally {
     coordinator.dispose();
+  }
+});
+
+test('reconcile and force reconcile do not duplicate diagnostics or toasts for an already-failed fork', async () => {
+  worktreeNotifications.dispose();
+  let snapshot = { phase: 'ready', ids: ['parent-session'], byId: { 'parent-session': { blank: false } } };
+  let bindCalls = 0;
+  const coordinator = createWorktreeSessionForkCoordinator({
+    sessions: { getSnapshot: () => snapshot },
+    fork: async () => 'direct-child',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: async () => {
+      bindCalls += 1;
+      throw Object.assign(new Error('missing checkout'), { code: 'WORKTREE_NOT_FOUND' });
+    },
+  });
+  try {
+    await coordinator.reconcile();
+    await coordinator.fork({ sessionId: 'parent-session' });
+    await Promise.resolve();
+    const initialEntries = worktreeDiagnostics.getSnapshot();
+    assert.equal(initialEntries.length, 1);
+    const firstReportId = initialEntries[0].reportId;
+    assert.equal(bindCalls, 1);
+
+    snapshot = {
+      phase: 'ready',
+      ids: ['parent-session', 'direct-child'],
+      byId: {
+        'parent-session': { blank: false },
+        'direct-child': { blank: false, parentId: 'parent-session' },
+      },
+    };
+    await coordinator.reconcile();
+    await Promise.resolve();
+    assert.equal(bindCalls, 1, 'non-forced reconcile must not re-attempt an already-pending fork');
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 1);
+
+    await coordinator.reconcile({ force: true });
+    await Promise.resolve();
+    assert.equal(bindCalls, 2);
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 1, 'forced reconcile must reuse the existing reportId');
+    assert.equal(coordinator.recovery.getSnapshot().pending[0].reportId, firstReportId);
+
+    const retried = await coordinator.retry(coordinator.recovery.getSnapshot().pending[0].key);
+    await Promise.resolve();
+    assert.equal(retried, false);
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 2, 'explicit retry emits a new interactive occurrence');
+  } finally {
+    coordinator.dispose();
+    worktreeNotifications.dispose();
+  }
+});
+
+test('late fork bind failure after dispose is recorded quietly as retired without toast', async () => {
+  worktreeNotifications.dispose();
+  let rejectBind;
+  let started;
+  const bindStarted = new Promise((resolve) => { started = resolve; });
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'late-child',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: () => {
+      started();
+      return new Promise((_, reject) => { rejectBind = reject; });
+    },
+  });
+  const pendingFork = coordinator.fork({ sessionId: 'parent-session' });
+  await bindStarted;
+  coordinator.dispose();
+  rejectBind(Object.assign(new Error('late bind fail'), { code: 'WORKTREE_NOT_FOUND' }));
+  assert.equal(await pendingFork, 'late-child');
+  await Promise.resolve();
+  const [entry] = worktreeDiagnostics.getSnapshot();
+  assert.equal(entry.status, 'inactive');
+  assert.equal(entry.error.code, 'WORKTREE_NOT_FOUND');
+  assert.equal(worktreeNotifications.getSnapshot(), undefined);
+  worktreeNotifications.dispose();
+});
+
+test('fork binding retry resolves every prior failed attempt once binding succeeds', async () => {
+  worktreeNotifications.dispose();
+  let failAttempts = 2;
+  const coordinator = createWorktreeSessionForkCoordinator({
+    fork: async () => 'retry-child',
+    findBindings: async (ids) => bindingLookup(ids, () => binding()),
+    bindSession: async () => {
+      if (failAttempts > 0) {
+        failAttempts -= 1;
+        throw Object.assign(new Error('temporary bind error'), { code: 'WORKTREE_NOT_FOUND' });
+      }
+    },
+  });
+  try {
+    await coordinator.fork({ sessionId: 'parent-session' });
+    await Promise.resolve();
+    const key = coordinator.recovery.getSnapshot().pending[0].key;
+    assert.equal(await coordinator.retry(key), false);
+    await Promise.resolve();
+    assert.equal(worktreeDiagnostics.getSnapshot().length, 2);
+
+    assert.equal(await coordinator.retry(key), true);
+    await Promise.resolve();
+    assert.equal(coordinator.recovery.getSnapshot().pending.length, 0);
+    assert.deepEqual(
+      worktreeDiagnostics.getSnapshot().map((entry) => entry.status),
+      ['resolved', 'resolved'],
+    );
+  } finally {
+    coordinator.dispose();
+    worktreeNotifications.dispose();
   }
 });

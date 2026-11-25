@@ -3,7 +3,6 @@ import { NativeDialogs } from './surface/components/NativeDialogs.js';
 import { RegistrationDialog } from './surface/components/RegistrationDialog.js';
 import { SurfaceContent } from './surface/components/SurfaceContent.js';
 import { ActivityFilterBar } from './surface/components/ActivityFilterBar.js';
-import { NotificationProvider } from './surface/components/NotificationToasts.js';
 import { SurfaceHeader } from './surface/components/SurfaceHeader.js';
 import { useDragActions } from './surface/actions/useDragActions.js';
 import { useLifecycleActions } from './surface/actions/useLifecycleActions.js';
@@ -197,7 +196,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
     source.workspaceIds,
     targetView,
   ]);
-  const mutation = useSurfaceMutation({ read });
+  const mutation = useSurfaceMutation({ read, source });
   const lifecycleState = useLifecycleState({ props, source, mutation });
   const menus = useSurfaceMenus();
   const ordering = useSessionOrdering({ read, source, props });
@@ -358,7 +357,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           ? source.currentSessionId
           : worktreeSessions[0];
       if (targetSessionId === undefined) {
-        mutation.setActionError({ code: 'GIT_FILE_SESSION_REQUIRED', message: props.t('dashboard.git.sessionRequired'), retryable: false });
+        mutation.reportActionError({ code: 'GIT_FILE_SESSION_REQUIRED', message: props.t('dashboard.git.sessionRequired'), retryable: false });
         return;
       }
       let address: string;
@@ -375,7 +374,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
         );
       } catch (error) {
         if (!(error instanceof GitFileAddressError)) throw error;
-        mutation.setActionError({ code: error.code, message: props.t('dashboard.git.outsideSession'), retryable: false });
+        mutation.reportActionError({ code: error.code, message: props.t('dashboard.git.outsideSession'), retryable: false });
         return;
       }
       props.openResource(address, options);
@@ -385,7 +384,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
       props.openResource,
       props.openRightSidebar,
       props.t,
-      mutation.setActionError,
+      mutation.reportActionError,
       dashboardRecord,
       source.currentSessionId,
       source.sessions,
@@ -400,7 +399,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
   const { collapsed } = source;
   const { t } = props;
   return (
-    <NotificationProvider t={t} openSettings={props.openErrorSettings}>
+    <>
       {forgeConfirmation.dialog}
       {props.sidebarSeat && createPortal(<aside
         className={styles.surface}
@@ -474,7 +473,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
             onClose={closeDashboard}
             onRetry={() => {
               void read.refresh({
-                scope: { kind: 'workspace', workspaceId: dashboard.workspaceId },
+                userRequested: true, scope: { kind: 'workspace', workspaceId: dashboard.workspaceId },
                 preserveCurrent: true,
               });
             }}
@@ -583,7 +582,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           onOpenNativeChanges={async (baseBranch, isBaseCurrent = () => true) => {
             const isCurrent = () => isBaseCurrent() && nativeChangesSelection.current === dashboard && dashboard !== undefined &&
               nativeChangesRecord.current === nativeChangesRecordKey;
-            mutation.setActionError(undefined);
+            mutation.clearActionError();
             const ids = dashboardSessionIds(dashboardRecord, source.sessions,
               dashboardView?.bindings ?? [], source.archivedSessionIds, [],
               dashboardWorkspace?.sessionIds ?? [], dashboardView?.knownSessionIds);
@@ -602,12 +601,12 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               switching = true;
               // Native selection can commit before this async action resumes.
               if (nativeChangesSelection.current === dashboard || nativeChangesSelection.current === pending.selection) {
-                mutation.setActionError(nativeChangesError('session-switching'));
+                mutation.reportActionError(nativeChangesError('session-switching'));
               }
             }, forgeConfirmation.confirm, { baseBranch })
               .catch(() => 'verification-failed' as const) ?? 'unavailable';
             if (switching || !isCurrent() || result === 'opened' || result === 'stale' || result === 'cancelled') return;
-            mutation.setActionError(nativeChangesError(result));
+            mutation.reportActionError(nativeChangesError(result));
           }}
           onOpenSession={(sessionId) =>
             session.openWorkspaceSession(dashboardRecord.workspaceId, sessionId)
@@ -658,7 +657,7 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
               ? () => {
                   if (mutation.actionPending) return;
                   lifecycleState.setWorktreeRemoval(dashboardManagedRecord);
-                  mutation.setActionError(undefined);
+                  mutation.clearActionError();
                 }
               : undefined
           }
@@ -668,6 +667,6 @@ export function WorktreeSurface(inputProps: WorktreeSurfaceProps) {
           isRightSidebarExpanded={props.isRightSidebarExpanded}
         />
       )}
-    </NotificationProvider>
+    </>
   );
 }

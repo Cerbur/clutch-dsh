@@ -1,6 +1,7 @@
 import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import { gitWorktreeRoot } from '../../../contract/index.js';
-import { ErrorToast, NotificationToasts } from './NotificationToasts.js';
+import { ErrorRecovery } from './NotificationRecovery.js';
+import { formatWorktreeViewError } from '../../view/worktree-error-copy.js';
 import { GitBranchSelector } from '../../branch/GitBranchSelector.js';
 import { WorktreeSelector } from '../../select/WorktreeSelector.js';
 import { worktreeSetupCommands } from '../../view/worktree-view.js';
@@ -57,7 +58,7 @@ export function WorktreeAdoptBranchDialog({
         </>
       }
     >
-      <ErrorToast error={error} t={t} scope={'adopt:' + worktree.worktreeId}
+      <ErrorRecovery error={error} t={t} scope={'adopt:' + worktree.worktreeId}
         context={t('settings.adopt') + ' · ' + worktree.branch + ' · ' + worktree.absolutePath}
         actions={[{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }]} />
     </Modal>
@@ -134,7 +135,7 @@ export function WorktreeSessionRenameDialog({
           }
         }}
       />
-      <ErrorToast error={error} t={t} scope={'rename-session:' + target?.sessionId}
+      <ErrorRecovery error={error} t={t} scope={'rename-session:' + target?.sessionId}
         describe={(translate) => translate('session.rename') + ' · ' + (target?.currentTitle ?? '')} />
     </Modal>
   );
@@ -185,6 +186,7 @@ export function WorktreeWorkspaceRenameDialog({
         className={styles.renameInput}
         value={draft}
         aria-label={t('workspace.name')}
+        aria-invalid={duplicate}
         autoFocus
         disabled={pending}
         onFocus={(event) => {
@@ -201,13 +203,9 @@ export function WorktreeWorkspaceRenameDialog({
         }}
       />
       {duplicate && (
-        <NotificationToasts
-          notices={[{ key: 'workspace-duplicate', text: t('workspace.duplicate'),
-            context: target.currentTitle,
-            message: (translate) => translate('workspace.duplicate') }]}
-        />
+        <p className={styles.message} role="status">{t('workspace.duplicate')}</p>
       )}
-      <ErrorToast error={error} t={t} scope={'rename-workspace:' + target.workspaceId}
+      <ErrorRecovery error={error} t={t} scope={'rename-workspace:' + target.workspaceId}
         describe={(translate) => translate('workspace.rename') + ' · ' + target.currentTitle} />
     </Modal>
   );
@@ -247,7 +245,7 @@ export function WorktreeWorkspaceDeleteDialog({
         </>
       }
     >
-      <ErrorToast error={error} t={t} scope={'delete-workspace:' + target.workspaceId}
+      <ErrorRecovery error={error} t={t} scope={'delete-workspace:' + target.workspaceId}
         describe={(translate) => translate('workspace.deleteTitle') + ' · ' + target.title} />
     </Modal>
   );
@@ -277,6 +275,7 @@ export function WorktreeCreateDialog({
   onFetchBranches,
   onLoadBranches,
   onNewBranchChange,
+  branchConflict,
   onSubmit,
 }: WorktreeCreateDialogProps) {
   if (workspace === undefined) return null;
@@ -366,7 +365,9 @@ export function WorktreeCreateDialog({
           <div className={styles.worktreeImportCandidates} role="tabpanel">
             {importCandidates.status === 'error' && (
               <div className={styles.recoveryActions}>
-                <ErrorToast
+                <p role="status">{formatWorktreeViewError(importCandidates.error, t)}</p>
+                <Button variant="outline" disabled={actionPending} onClick={onRetryImportCandidates}>{t('action.retry')}</Button>
+                <ErrorRecovery origin="inline"
                   error={importCandidates.error}
                   t={t}
                   scope={'import:' + workspace.workspaceId}
@@ -393,7 +394,11 @@ export function WorktreeCreateDialog({
           </div>
         ) : readError !== undefined ? (
           <div className={styles.gitReadiness} data-worktree-readiness="error">
-            <ErrorToast error={readError} t={t} scope={'modal-read:' + workspace.workspaceId}
+            <p role="status">{formatWorktreeViewError(readError, t)}</p>
+            {readError.retryable && onRetry && (
+              <Button variant="outline" disabled={actionPending} onClick={onRetry}>{t('action.retry')}</Button>
+            )}
+            <ErrorRecovery error={readError} t={t} scope={'modal-read:' + workspace.workspaceId}
               context={t('settings.create') + ' · ' + workspace.title + ' · ' + workspace.path}
               actions={readError.retryable && onRetry !== undefined
                 ? [{ label: t('action.retry'), disabled: actionPending, onClick: onRetry }] : []} />
@@ -421,6 +426,7 @@ export function WorktreeCreateDialog({
                 className={styles.renameInput}
                 aria-label={t('worktree.name')}
                 value={newBranch}
+                aria-invalid={branchConflict !== undefined}
                 placeholder="dsh/12345678"
                 disabled={actionPending}
                 onChange={(event) => {
@@ -428,6 +434,9 @@ export function WorktreeCreateDialog({
                 }}
               />
             </label>
+            {branchConflict && <p role="status">{formatWorktreeViewError(branchConflict, t)}</p>}
+            {branchConflict && <ErrorRecovery origin="inline" error={branchConflict} t={t} scope={'create-branch:' + workspace.workspaceId}
+              context={workspace.title + ' · ' + newBranch} />}
           </>
         ) : (
           <div

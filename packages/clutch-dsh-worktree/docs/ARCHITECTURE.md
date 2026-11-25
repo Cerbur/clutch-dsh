@@ -921,22 +921,26 @@ Surface 已失效 reader 后向 Context 传递 `alreadyInvalidated`，Context �
 Surface 共享该恢复读取，未受影响的 Workspace 缓存保持不变；新连接内通知与调用完成仍正常去重。
 这些身份仅存于运行时，不进入 Sidecar。
 
-绑定、模型、标题、报告准备与 prompt admission 部分失败均进入共享 NotificationToasts，
+绑定、模型、标题、报告准备与 prompt admission 部分失败均进入共享 NotificationRecovery，
 提供阶段对应的双语问题与恢复说明。原始错误及 Workspace、Worktree、requestId、Session、
 失败阶段保留在诊断详情；普通展示仅使用本地化说明。恢复仅打开返回的 Session，
 不重建或重派发。通知位于同步弹窗外，关闭弹窗仍可恢复；Dashboard 卸载后沿用共享诊断的
 inactive 历史与回调撤销语义。
-Dashboard 身份、基线或 manager 更换、组件卸载后才返回的部分失败通过 `recordInactive`
-原子记录原始身份与诊断，不重建通知 source、不保留导航回调。同步请求身份使用普通 HTTP
+Dashboard 身份、基线或 manager 更换、组件卸载后才返回的部分失败以 `retired` 来源上报，
+记录原始身份与诊断，不重建通知 source、不保留导航回调。同步请求身份使用普通 HTTP
 局域网环境也可用的 `crypto.getRandomValues` 生成；随机源异常同样进入错误通知和 busy 清理。
 
-Client 的列表、弹窗和 Dashboard 共用一个 browser-only toast 队列；同一错误持续存在时只通知一次，
-消失后再次发生可重新通知。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并
+Client 组件上报结构化错误、上下文、来源和恢复动作。纯字段校验可由组件就地完成。
+`notification-center` 按微任务的 FIFO 顺序处理各 React root 的错误事件。每次 report 在错误被捕获时分配 reportId；历史按事件顺序追加，相同错误码可重复出现。
+恢复控件在 React 提交后按 reportId 登记，问题解除或组件卸载时撤销。`resolve(reportId)` 可在重试成功时单独标记已解决，迟到的恢复回调不能重新打开该记录。更新控件不会新增历史记录，也不会重新弹出 toast。
+提示层写入诊断，再按错误码、底层 causeCode、批量失败原因和来源选择是否入队。
+shell overlay 中的唯一错误提示组件订阅队首。根目录缺失只保留诊断；局部 checkout 缺失沿用普通错误策略。
+同一原因已有待显示的 toast 时共用该提示，每次实际失败仍各有历史记录。公开错误码完整映射为中英文的问题与恢复指引，未知错误使用本地化兜底并
 附带错误码，原始错误对象继续保留诊断信息。列表顶部不渲染报错窗口或诊断抽屉。
 
 Toast 不截断恢复文案，并给出「设置 → Worktree → 报错与修复」路径。原生 settings.section
 提供概览和报错与修复 Tab，记录包含上下文名称/路径、错误说明、原始诊断与对应重试/恢复操作。
-记录仅存在于浏览器页面内存，最多保留 100 条非活动历史；活动恢复不因历史上限或清除历史丢失。
+记录仅存在于浏览器页面内存，待提示队列和活动恢复之外最多保留 100 条历史。组件持有的上报标识可在渲染提交后重新关联原始诊断，按发生顺序恢复；只有确认成功才显式更新为 resolved。
 源组件卸载时保留诊断但撤销旧回调，并提示重新打开操作视图。错误不再报告时转入历史，不能将此
 等同于操作已修复。Git 相同根因合并 toast，受影响读取各自保留诊断。插件不写入 DSH 日志。
 已知 Workspace 的重试保持目标作用域，只有初始读取、全局重试或无法确定作用域时使用 global。

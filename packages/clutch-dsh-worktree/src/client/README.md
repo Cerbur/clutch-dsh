@@ -546,7 +546,7 @@ start sync. Native permissions remain unchanged; the UI never executes Git or in
 Request IDs use `crypto.getRandomValues`, including on plain-HTTP LAN origins, and random-source
 errors follow the same notification and busy-state cleanup path as admission errors. Late partial
 results retain the original request/Workspace/Worktree/Session identity in inactive diagnostics via
-`recordInactive`, without reactivating a notification source or retaining navigation callbacks.
+`report` with the `retired` origin, which preserves history and drops stale navigation callbacks.
 
 Git details beyond this read-only history projection, and other unconnected
 data and actions are labeled rather than populated with fabricated status. The Worktree/Main
@@ -683,12 +683,15 @@ the Dashboard record's `absolutePath`, never probes the operating system, and fa
 protocol link when no application is available or a Host request fails. The selected application is remembered
 only in current-page memory; after a refresh, the first available application is used.
 
-Surface operation, fork-binding, and read errors are announced by the public
-DSH primitives Toast, serialized through a browser-only queue. Unchanged notice identities
-are announced once while present; resolved entries leave the queue and a later recurrence
-can announce again. Toast disposal is owned by React unmount. The list has no inline error banner or diagnostics drawer. A single NotificationProvider serializes
-notices from the list, native dialogs, instruction/baseline editors and Git Dashboard. It removes
-unmounted sources, retains live action callbacks, and displays complete guidance without truncation.
+The list, dialogs, popover and Dashboard report structured errors and recovery actions to
+`notification-center` from the operation's failure handler. Each call gets a unique report ID
+and is recorded in arrival order through FIFO microtasks. Recovery registration happens separately
+after React commits. A successful retry can resolve its report ID directly. Recovery attaches controls to an existing ID and cannot create a diagnostic or toast.
+Inline field validation can stay local. A single shell overlay subscribes to the queue head
+and renders complete localized guidance with DSH Toast. Equivalent pending toasts share one announcement.
+Source unmount revokes recovery actions. Toast dismissal advances the queue independently.
+`WORKSPACE_ROOT_MISSING`, including a wrapped cause or the sole cause of batch failures,
+stays in diagnostics. The plugin restart advisory has its own connection lifecycle.
 The native settings.section seat exposes General and Errors & recovery tabs. The Worktree
 navigation entry reuses the sidebar's `IconBranchOutline16`. Because the current DSH shell has
 no section-icon slot, a browser overlay portals the native icon into the uniquely labelled
@@ -698,8 +701,7 @@ Ambiguous labels or changed shell markup retain the default icon. Browser-memory
 diagnostics outlive toast dismissal and source unmount. Each entry includes contextual names/paths,
 localized problem/recovery copy, original code/message/details (including Git stderr) and live
 scoped actions. Unmounted sources become inactive and revoke callbacks; absence of a reported
-error moves the record into history, not proof that a retry succeeded. Only inactive history is
-bounded to 100 entries; Clear history preserves active recoveries, and page reload clears all.
+error moves the record into history, not proof that a retry succeeded. An occurrence ID held by a live view can reattach its original diagnostic after history trimming. The 100-entry limit excludes active recoveries and pending toasts; Clear history preserves active recoveries, and page reload clears all.
 The toast's sole action opens the Worktree section through the native rc.1 Settings shell's
 shared viewing store (the winning sidebar.settings ledger entry); it keeps operation dialogs
 mounted so their retry controls remain live. An unavailable store falls back to the written
@@ -979,7 +981,7 @@ All three supply a local-ref read callback. Opening the picker reads candidates 
 window focus and visibility changes never reload them. Fetch already reads the catalog once in Host
 and returns it; clients consume that result directly without a second `listBranches` RPC.
 Dropdown reads start after the loading shell paint; ready rows and search/filter/selection are retained. Read failures
-keep the roster and use the native error toast with retry. The Connection adapter shares concurrent
+keep the roster and expose retry in the picker. The structured error remains in Settings. The Connection adapter shares concurrent
 branch reads by Workspace but never caches settled results. Git comparison uses its controller's
 forced branch read, retaining ready state and avoiding history/file/diff refreshes.
 Workspace navigation uses `readWorkspaceNavigation` to share Git and Sidecar facts within one

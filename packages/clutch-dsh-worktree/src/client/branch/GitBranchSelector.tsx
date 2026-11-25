@@ -1,10 +1,12 @@
+import { worktreeNotifications } from '../surface/notification-center.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { BranchRecord } from '../../contract/index.js';
 import type { WorktreeTranslate } from '../surface/types.js';
 import { IconBranchOutline16, IconDownloadOutline16, IconLoadingOutline16 } from '../dsh-icons.js';
 import { SearchableSingleSelect, SingleSelectPicker } from '../select/SearchableSingleSelect.js';
 import styles from './git-branch.css';
-import { ErrorToast } from '../surface/components/NotificationToasts.js';
+import { ErrorRecovery } from '../surface/components/NotificationRecovery.js';
+import type { ReportId } from '../view/worktree-view-errors.js';
 import { toWorktreeViewError, type WorktreeViewError } from '../view/worktree-view.js';
 
 interface BranchPickerProps {
@@ -30,6 +32,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<WorktreeViewError>();
   const [fetchError, setFetchError] = useState<WorktreeViewError>();
+  const readReportIdsRef = useRef<ReportId[]>([]);
+  const fetchReportIdsRef = useRef<ReportId[]>([]);
   const generation = useRef(0);
   const readRequest = useRef<{ source: readonly BranchRecord[]; generation: number; promise: Promise<void> }>();
   const latestSource = useRef(source);
@@ -46,6 +50,8 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       alive.current = false;
       generation.current++;
       pending.current = false;
+      readReportIdsRef.current = [];
+      fetchReportIdsRef.current = [];
       clearTimeout(resetTimer.current);
     };
   }, []);
@@ -59,7 +65,6 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     if (readRequest.current?.source === source && readRequest.current.generation === generation.current)
       return readRequest.current.promise;
     setReading(true);
-    setReadError(undefined);
     const token = generation.current;
     const request = { source, generation: token, promise: Promise.resolve() };
     readRequest.current = request;
@@ -67,11 +72,19 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       try {
         const next = await onLoad();
         if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
+          for (const reportId of readReportIdsRef.current) worktreeNotifications.resolve(reportId);
+          readReportIdsRef.current = [];
+          setReadError(undefined);
           setFetched({ source, branches: next });
         }
       } catch (error) {
-        if (alive.current && generation.current === token && readRequest.current === request && latestSource.current === source) {
-          setReadError(toWorktreeViewError(error));
+        const current = alive.current && generation.current === token && readRequest.current === request && latestSource.current === source;
+        const reported = worktreeNotifications.reportError(toWorktreeViewError(error), {
+          origin: current ? 'inline' : 'retired', context: t('dashboard.searchBranches'),
+        });
+        if (current) {
+          readReportIdsRef.current.push(reported.reportId);
+          setReadError(reported);
         }
       } finally {
         if (readRequest.current === request && generation.current === token) {
@@ -93,15 +106,25 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       const next = await onFetch();
       if (alive.current && generation.current === token) {
         setFetched({ source, branches: next });
+        for (const reportId of fetchReportIdsRef.current) worktreeNotifications.resolve(reportId);
+        for (const reportId of readReportIdsRef.current) worktreeNotifications.resolve(reportId);
+        fetchReportIdsRef.current = [];
+        readReportIdsRef.current = [];
         setFetchError(undefined);
+        setReadError(undefined);
         setStatus('success');
         resetTimer.current = setTimeout(() => {
           if (alive.current && generation.current === token) setStatus('idle');
         }, 2000);
       }
     } catch (error) {
-      if (alive.current && generation.current === token) {
-        setFetchError(toWorktreeViewError(error));
+      const current = alive.current && generation.current === token;
+      const reported = worktreeNotifications.reportError(toWorktreeViewError(error), {
+        origin: current ? 'inline' : 'retired', context: t('branch.fetch'),
+      });
+      if (current) {
+        fetchReportIdsRef.current.push(reported.reportId);
+        setFetchError(reported);
         setStatus('error');
       }
     } finally { if (generation.current === token) pending.current = false; }
@@ -118,10 +141,10 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
       ? <span role="alert">{t('branch.fetchRetry')}</span>
       : status === 'pending' ? <IconLoadingOutline16 /> : <IconDownloadOutline16 />}
   </button>;
-  return { status, notice: <><ErrorToast error={readError} t={t} scope={'branch-read:' + scope}
+  return { status, notice: <><ErrorRecovery origin="inline" error={readError} t={t} scope={'branch-read:' + scope}
     context={t('dashboard.searchBranches')}
     actions={[{ label: t('action.retry'), disabled: reading, onClick: () => void reload() }]} />
-    <ErrorToast error={fetchError} t={t} scope={'branch-fetch:' + scope}
+    <ErrorRecovery origin="inline" error={fetchError} t={t} scope={'branch-fetch:' + scope}
       context={t('branch.fetch')}
       actions={[{ label: t('branch.fetchRetry'), disabled: props.disabled || props.loading || reading || status === 'pending',
         onClick: () => void fetchBranches() }]} /></>, picker: {
@@ -132,6 +155,9 @@ function useBranchPickerProps({ branches: source, t, emptyLabel, onFetch, onLoad
     loadingLabel: t('select.loading'),
     searchLabel: t('dashboard.searchBranches'),
     noMatchesLabel: t('dashboard.noMatchingBranches'),
+    readFailure: readError && <div role="status">{t('status.branchReadFailed')} {' '}
+      <button type="button" disabled={reading || props.disabled} onClick={() => void reload()}>{t('action.retry')}</button>
+    </div>,
     allLabel: t('branch.all'),
     groups: [{ value: 'local', label: t('branch.local') }, { value: 'remote', label: t('branch.remote'), action }],
     options: [

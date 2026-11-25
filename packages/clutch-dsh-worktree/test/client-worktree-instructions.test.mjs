@@ -1,3 +1,5 @@
+import { worktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
+import * as notifications from '../lib/client/surface/notification-center.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
@@ -56,7 +58,8 @@ function harness(onSave) {
         react,
         'react/jsx-runtime': { jsx, jsxs: jsx },
         './dashboard.css': { default: {} },
-        '../surface/components/NotificationToasts.js': { NotificationToasts: 'toasts' },
+        '../surface/components/NotificationRecovery.js': { NotificationRecovery: 'toasts' },
+        '../surface/notification-center.js': notifications,
         '../view/worktree-view.js': { toWorktreeViewError },
         '../view/worktree-error-copy.js': { formatWorktreeViewError },
       })[name],
@@ -128,6 +131,66 @@ test('instruction editor retains failed drafts, retries with its original witnes
   await settle();
   assert.deepEqual(calls.at(-1), ['', 'changed']);
   h.dispose();
+});
+
+test('replacing a failed save preserves its history and resolves all prior attempts once retry succeeds', async () => {
+  const center = notifications.worktreeNotifications;
+  center.dispose();
+  let settleSave;
+  const h = harness(() => new Promise((ok, fail) => { settleSave = { ok, fail }; }));
+  const render = async () => {
+    const node = h.render();
+    const recovery = nodes(node).find(item => item.type === 'toasts');
+    center.updateRecovery('editor', recovery?.props.notices ?? []);
+    await settle();
+    return node;
+  };
+  edit(h, 'updated');
+  button(await render(), 'Save').onClick();
+  settleSave.fail(new Error('first attempt'));
+  await settle();
+  button(await render(), 'Save').onClick();
+  await render();
+  assert.equal(worktreeDiagnostics.getSnapshot()[0].status, 'active');
+  settleSave.fail(new Error('retry failed'));
+  await settle();
+  button(await render(), 'Save').onClick();
+  await render();
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['reported', 'active']);
+  settleSave.ok('updated');
+  await settle();
+  await render();
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['resolved', 'resolved']);
+  button(await render(), 'Edit').onClick();
+  const reopened = await render();
+  assert.deepEqual(nodes(reopened).find(item => item.type === 'toasts')?.props.notices ?? [], []);
+  // Canceling a failed save abandons it without marking the failed occurrence resolved.
+  nodes(reopened).find((item) => item.type === 'textarea').props.onChange({ target: { value: 'abandoned' } });
+  button(await render(), 'Save').onClick();
+  settleSave.fail(new Error('canceled attempt'));
+  await settle();
+  button(await render(), 'Cancel').onClick();
+  await render();
+  assert.deepEqual(worktreeDiagnostics.getSnapshot().map(entry => entry.status), ['resolved', 'resolved', 'reported']);
+  h.dispose();
+});
+
+test('late instruction save failure survives unmount without a toast or stale recovery', async () => {
+  notifications.worktreeNotifications.dispose();
+  let reject;
+  const h = harness(() => new Promise((_, fail) => { reject = fail; }));
+  edit(h, 'changed');
+  button(h.render(), 'Save').onClick();
+  h.dispose();
+  const writes = h.writes;
+  reject(Object.assign(new Error('stale instructions'), { code: 'WORKTREE_STATE_CONFLICT' }));
+  await settle();
+  const [entry] = worktreeDiagnostics.getSnapshot();
+  assert.equal(entry.error.code, 'WORKTREE_STATE_CONFLICT');
+  assert.equal(entry.status, 'inactive');
+  assert.deepEqual(entry.actions, []);
+  assert.equal(notifications.worktreeNotifications.getSnapshot(), undefined);
+  assert.equal(h.writes, writes);
 });
 
 test('instruction editor coalesces saves and drops late completion after unmount', async () => {

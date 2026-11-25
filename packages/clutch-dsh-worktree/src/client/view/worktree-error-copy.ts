@@ -39,6 +39,13 @@ const DOMAIN_ERROR_COPY = {
   WORKTREE_FORGE_UNAVAILABLE: 'error.forgeUnavailable',
 } as const satisfies Record<WorktreeErrorCode, WorktreeLocaleKey>;
 
+function formatWorkspaceRootMissing(error: WorktreeViewError, t: WorktreeTranslate): string {
+  const rootPath = detail(error, 'rootPath');
+  return rootPath.length > 0
+    ? t('error.workspaceRootMissing', { rootPath })
+    : t('error.workspaceRootMissingNoPath');
+}
+
 function reason(error: WorktreeViewError, t: WorktreeTranslate): string {
   const causeCode = detail(error, 'causeCode');
   const key = Object.hasOwn(DOMAIN_ERROR_COPY, causeCode)
@@ -47,7 +54,7 @@ function reason(error: WorktreeViewError, t: WorktreeTranslate): string {
   return key === undefined
     ? t('error.worktreeDataUnavailable')
     : causeCode === 'WORKSPACE_ROOT_MISSING'
-      ? t(key, { rootPath: detail(error, 'rootPath') })
+      ? formatWorkspaceRootMissing(error, t)
       : t(key);
 }
 
@@ -86,11 +93,14 @@ export function formatWorktreeViewError(error: WorktreeViewError, t: WorktreeTra
     : undefined;
   if (domainKey !== undefined)
     return error.code === 'WORKSPACE_ROOT_MISSING'
-      ? t(domainKey, { rootPath: detail(error, 'rootPath') })
+      ? formatWorkspaceRootMissing(error, t)
       : t(domainKey);
   switch (error.code) {
     case 'WORKTREE_SESSION_ENTRY_NOT_STARTED':
-      return t('error.worktreeEntryNotStarted', { sessionId: detail(error, 'sessionId'), reason: error.message });
+      return t('error.worktreeEntryNotStarted', {
+        sessionId: detail(error, 'sessionId'),
+        reason: detail(error, 'causeCode').length > 0 ? reason(error, t) : error.message,
+      });
     case 'CLIENT_DISPOSED':
       return t('error.connectionDisposed');
     case 'gateway/service-unavailable':

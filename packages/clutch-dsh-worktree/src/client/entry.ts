@@ -39,7 +39,7 @@ import { WorktreeSettingsNavIcon } from './settings/WorktreeSettingsNavIcon.js';
 import { installWorktreeCommandActivity } from './command-activity.js';
 import { installWorktreeSteerActivity, WORKTREE_STEER_TARGET } from './steer/steer-activity.js';
 import { SteerDock } from './steer/SteerDock.js';
-import { worktreeDiagnostics } from './settings/diagnostics.js';
+import { worktreeNotifications } from './surface/notification-center.js';
 import { openWorktreeErrorSettings } from './settings/settings-navigation.js';
 import { createWorktreeContextProjection } from './context/worktree-context-store.js';
 import { createWorktreeExpandStateStore } from './view/worktree-expand-state.js';
@@ -387,7 +387,7 @@ export function apply(ctx: Context): void {
       label: () => ctx.locale.bind(WORKTREE_NS)('settings.title'),
     }, (props) => createElement(WorktreeSettings, { ...props, manager })),
   );
-  ctx.effect(() => () => worktreeDiagnostics.dispose(), 'clutch-dsh-worktree: diagnostics cleanup');
+  ctx.effect(() => () => worktreeNotifications.dispose(), 'clutch-dsh-worktree: diagnostics cleanup');
   const expandState = createWorktreeExpandStateStore(createSnapshotStore);
   const sessionOrder = createWorktreeSessionOrderStore(createSnapshotStore);
   ctx.effect(() => () => sessionOrder.dispose(), 'clutch-dsh-worktree: Session order cleanup');

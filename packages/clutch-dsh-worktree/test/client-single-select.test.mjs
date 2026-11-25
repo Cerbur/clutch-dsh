@@ -5,16 +5,19 @@ import { URL } from 'node:url';
 import ts from 'typescript';
 import { en, zh } from '../lib/client/locales.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view.js';
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
+import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 
 const sources = await Promise.all(['select/SearchableSingleSelect', 'branch/GitBranchSelector', 'select/WorktreeSelector', 'surface/components/dialogs']
   .map(async (name) => [name, await readFile(new URL('../src/client/' + name + '.tsx', import.meta.url), 'utf8')]));
 
 function harness({ deferPreparation = false, geometry } = {}) {
   const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
   const errorToast = (props) => {
-    diagnostics.publish(props.scope, props.error === undefined ? [] : [{
-      key: props.scope + ':' + props.error.code, text: props.error.message, error: props.error, actions: props.actions,
+    center.updateRecovery(props.scope, props.error === undefined ? [] : [{
+      reportId: props.error.reportId, key: props.scope + ':' + props.error.code, text: props.error.message, error: props.error, actions: props.actions,
     }]);
     return jsx('error-toast', props);
   };
@@ -82,8 +85,10 @@ function harness({ deferPreparation = false, geometry } = {}) {
       '../../branch/GitBranchSelector.js': modules['branch/GitBranchSelector'],
       '../../select/WorktreeSelector.js': modules['select/WorktreeSelector'],
       '../../view/worktree-view.js': { worktreeSetupCommands: () => [] },
-      './NotificationToasts.js': { ErrorToast: (props) => jsx('error-toast', props) },
-      '../surface/components/NotificationToasts.js': { ErrorToast: errorToast },
+      '../../view/worktree-error-copy.js': { formatWorktreeViewError },
+      '../surface/notification-center.js': { worktreeNotifications: center },
+      './NotificationRecovery.js': { ErrorRecovery: (props) => jsx('error-toast', props) },
+      '../surface/components/NotificationRecovery.js': { ErrorRecovery: errorToast },
       '../view/worktree-view.js': { toWorktreeViewError },
       '../../worktree.css': { default: {} },
     })[id] ?? {}, exports,
@@ -322,6 +327,10 @@ for (const outcome of ['success', 'failure']) {
         const option = options(node).find((item) => item.props['data-single-select-option'] === expected);
         assert.ok(option);
         assert.equal(option.props.disabled, false);
+        if (outcome === 'failure') {
+          assert.ok(find(node, (item) => item.props?.role === 'status').length > 0);
+          assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.origin, 'inline');
+        }
         option.props.onClick();
         assert.deepEqual(chosen, [expected]);
         const fetch = find(node, (item) => item.props?.['data-branch-fetch'] !== undefined)[0];
@@ -330,6 +339,7 @@ for (const outcome of ['success', 'failure']) {
         await Promise.resolve(); await Promise.resolve();
         assert.equal(fetches, 1);
         assert.deepEqual(options(render()).map((item) => item.props['data-single-select-option']), ['recovered']);
+        assert.equal(find(render(), (item) => item.props?.role === 'status').length, 0);
       });
     }
   }
@@ -531,6 +541,25 @@ test('creation branch picker opens before the Workspace callback and refreshes w
   assert.deepEqual(chosen, ['origin/main']);
 });
 
+test('registration keeps branch conflicts and import read failures in the dialog with diagnostic details', () => {
+  for (const mode of ['create', 'import']) {
+    const h = harness();
+    const error = { code: mode === 'create' ? 'WORKTREE_BRANCH_CONFLICT' : 'WORKTREE_NOT_FOUND', message: 'failure', retryable: true };
+    let retries = 0;
+    const props = { ...registrationProps(), mode, canCreate: true, branchesLoading: false,
+      branchConflict: mode === 'create' ? error : undefined, newBranch: 'main',
+      importCandidates: { status: 'error', candidates: [], error }, onRetryImportCandidates: () => { retries++; } };
+    const node = h.render(['surface/components/dialogs', 'WorktreeCreateDialog'], props);
+    const message = formatWorktreeViewError(error, props.t);
+    assert.ok(find(node, (item) => item.props?.role === 'status' && item.props.children === message).length);
+    assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error === error)[0].props.origin, 'inline');
+    if (mode === 'import') {
+      find(node, (item) => item.type === 'button' && item.props.children === en['action.retry'])[0].props.onClick();
+      assert.equal(retries, 1);
+    }
+  }
+});
+
 test('import picker opens before candidate callback and updates in place', () => {
   const h = harness();
   const chosen = [];
@@ -590,6 +619,18 @@ test('fetch is available with no remote rows, preserves selection, and restores 
   assert.equal(search(node).props.value, 'new');
 });
 
+test('duplicate Workspace name is field feedback and clears when corrected', () => {
+  const h = harness();
+  const render = (duplicate) => h.render(['surface/components/dialogs', 'WorktreeWorkspaceRenameDialog'], {
+    t: (key) => en[key], target: { workspaceId: 'ws', currentTitle: 'old' }, draft: 'draft', duplicate,
+  });
+  const node = render(true);
+  assert.equal(find(node, (item) => item.props?.role === 'status')[0].props.children, en['workspace.duplicate']);
+  assert.ok(find(node, (item) => item.type === 'input')[0].props['aria-invalid']);
+  assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error).length, 0);
+  assert.equal(find(render(false), (item) => item.props?.role === 'status').length, 0);
+});
+
 test('fetch failure keeps old branch rows and exposes an inline retryable localized error', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();
@@ -603,12 +644,30 @@ test('fetch failure keeps old branch rows and exposes an inline retryable locali
   let node = render();
   assert.equal(find(fetchButton(node), (item) => item.props?.role === 'alert')[0].props.children, en['branch.fetchRetry']);
   assert.ok(fetchButton(node).props.title.includes(en['branch.fetchFailed']));
+  assert.equal(find(node, (item) => item.type === 'error-toast' && item.props.error)[0].props.origin, 'inline');
   assert.equal(options(node)[0].props['aria-selected'], true);
   fetchButton(node).props.onClick();
   await Promise.resolve();
   node = render();
   assert.equal(calls, 2);
   assert.equal(find(node, (item) => item.props?.role === 'alert').length, 0);
+});
+
+test('closing the branch picker during Fetch still records its failure', async () => {
+  const h = harness();
+  let reject;
+  const props = { t: key => en[key], value: 'main', branches: [], onChange() {},
+    onFetch: () => new Promise((_, fail) => { reject = fail; }) };
+  const node = h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  find(node, item => item.props?.['data-branch-fetch'] !== undefined)[0].props.onClick();
+  h.dispose();
+  reject(new Error('late fetch failed'));
+  await Promise.resolve();
+  await Promise.resolve();
+  const [entry] = h.diagnostics.getSnapshot();
+  assert.equal(entry.error.message, 'late fetch failed');
+  assert.equal(entry.status, 'inactive');
+  assert.deepEqual(entry.actions, []);
 });
 
 test('Fetch retains diagnostic details and retry history until recovery without a status row', async (t) => {
@@ -626,6 +685,7 @@ test('Fetch retains diagnostic details and retry history until recovery without 
   finish.reject(failure);
   await Promise.resolve();
   const failed = button();
+  await Promise.resolve();
   assert.ok(failed.props.title.includes(failure.code));
   assert.ok(failed.props.title.includes(failure.message));
   assert.ok(failed.props.title.includes(failure.details.gitStderr));
@@ -636,11 +696,13 @@ test('Fetch retains diagnostic details and retry history until recovery without 
   retry(); retry();
   assert.equal(calls, 2);
   assert.equal(button().props['data-fetch-status'], 'pending');
+  await Promise.resolve();
   assert.equal(h.diagnostics.getSnapshot()[0].status, 'active');
   assert.equal(h.diagnostics.getSnapshot()[0].actions[0].disabled, true);
   finish.resolve([{ name: 'main' }, { name: 'origin/new', kind: 'remote' }]);
   await Promise.resolve();
   assert.equal(button().props['data-fetch-status'], 'success');
+  await Promise.resolve();
   assert.equal(h.diagnostics.getSnapshot()[0].status, 'resolved');
   assert.deepEqual(h.diagnostics.getSnapshot()[0].actions, []);
   retry();
@@ -651,11 +713,13 @@ test('Fetch retains diagnostic details and retry history until recovery without 
   finish.reject(failure);
   await Promise.resolve();
   render();
-  const staleRetry = h.diagnostics.getSnapshot()[0].actions[0].onClick;
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot().length, 2);
+  const staleRetry = h.diagnostics.getSnapshot()[1].actions[0].onClick;
   h.dispose();
   staleRetry();
   assert.equal(calls, 3);
-  assert.equal(h.diagnostics.getSnapshot()[0].status, 'inactive');
+  assert.equal(h.diagnostics.getSnapshot()[1].status, 'inactive');
 });
 
 test('branch option identity uses full refs while labels remain short and legacy adapters keep names', () => {
@@ -725,4 +789,76 @@ test('empty results and disabled selection cannot commit, Escape calls the owner
   assert.equal(closed, 0);
   search(node).props.onKeyDown(key('Escape'));
   assert.equal(closed, 1);
+});
+
+test('branch read retry keeps the original diagnostic active while loading and resolves it on success', async () => {
+  const h = harness();
+  let settle;
+  let calls = 0;
+  const props = {
+    t: (name) => en[name],
+    value: 'main',
+    branches: [],
+    onChange() {},
+    onLoad: () => {
+      calls++;
+      return new Promise((resolve, reject) => { settle = { resolve, reject }; });
+    },
+  };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  render();
+  assert.equal(calls, 1);
+  settle.reject(Object.assign(new Error('branch read failed'), { code: 'GIT_OPERATION_FAILED' }));
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot().length, 1);
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'active');
+  const retry = h.diagnostics.getSnapshot()[0].actions[0].onClick;
+  retry();
+  render();
+  await Promise.resolve();
+  assert.equal(calls, 2);
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'active', 'starting retry must keep diagnostic active');
+  assert.equal(h.diagnostics.getSnapshot()[0].actions[0].disabled, true);
+  settle.resolve([{ name: 'main', isCurrent: true }]);
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot()[0].status, 'resolved');
+  assert.deepEqual(h.diagnostics.getSnapshot()[0].actions, []);
+  h.dispose();
+});
+
+test('branch read multi-retry resolves every prior failed diagnostic once loading succeeds', async () => {
+  const h = harness();
+  let settle;
+  const props = {
+    t: (name) => en[name],
+    value: 'main',
+    branches: [],
+    onChange() {},
+    onLoad: () => new Promise((resolve, reject) => { settle = { resolve, reject }; }),
+  };
+  const render = () => h.render(['branch/GitBranchSelector', 'GitBranchPicker'], props);
+  render();
+  settle.reject(Object.assign(new Error('first branch read failed'), { code: 'GIT_OPERATION_FAILED' }));
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  h.diagnostics.getSnapshot()[0].actions[0].onClick();
+  render();
+  settle.reject(Object.assign(new Error('second branch read failed'), { code: 'GIT_OPERATION_FAILED' }));
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.equal(h.diagnostics.getSnapshot().length, 2);
+  h.diagnostics.getSnapshot()[1].actions[0].onClick();
+  render();
+  settle.resolve([{ name: 'main', isCurrent: true }]);
+  await Promise.resolve();
+  render();
+  await Promise.resolve();
+  assert.deepEqual(h.diagnostics.getSnapshot().map((entry) => entry.status), ['resolved', 'resolved']);
+  h.dispose();
 });

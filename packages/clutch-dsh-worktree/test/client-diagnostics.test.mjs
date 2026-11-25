@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createNotificationCenter } from '../lib/client/surface/notification-center.js';
 import { createWorktreeDiagnostics } from '../lib/client/settings/diagnostics.js';
-import { reconcileNotifications, failureToastKey } from '../lib/client/surface/notification-queue.js';
+import { failureToastKey } from '../lib/client/surface/notification-queue.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import { en, zh } from '../lib/client/locales.js';
 import { WorktreeSessionBindingError, toWorktreeViewError } from '../lib/client/view/worktree-view-errors.js';
+
+// Each test chooses explicitly when an occurrence is recorded and when its recovery changes.
+let sequence = 0;
+function attach(store, source, notices) {
+  const records = notices.map(notice => ({ ...notice, reportId: store.getSnapshot().find(entry => entry.key === notice.key)?.reportId ?? { sequence: ++sequence } }));
+  for (const record of records) {
+    if (!store.getSnapshot().some(entry => entry.reportId === record.reportId)) {
+      store.record(source, [record]);
+      // Model a source attaching recovery when its operation completes.
+      store.updateRecovery(source, records);
+    }
+  }
+  store.updateRecovery(source, records);
+}
 
 test('diagnostics outlive toasts and sources, but never execute an unmounted callback', () => {
   const store = createWorktreeDiagnostics();
@@ -15,7 +30,7 @@ test('diagnostics outlive toasts and sources, but never execute an unmounted cal
       details: { gitStderr: 'fatal: repository missing' } },
     actions: [{ label: 'Retry', onClick: () => clicks++ }],
   };
-  store.publish('panel', [notice]);
+  attach(store, 'panel', [notice]);
   assert.equal(store.getSnapshot()[0].error.details.gitStderr, 'fatal: repository missing');
   store.getSnapshot()[0].actions[0].onClick();
   assert.equal(clicks, 1);
@@ -25,22 +40,26 @@ test('diagnostics outlive toasts and sources, but never execute an unmounted cal
   assert.equal(store.getSnapshot()[0].actions.length, 0);
   oldAction.onClick();
   assert.equal(clicks, 1);
-  store.publish('panel', [notice]);
-  store.publish('panel', []);
+  attach(store, 'panel', [notice]);
+  attach(store, 'panel', []);
+  assert.equal(store.getSnapshot()[0].status, 'reported');
+  store.resolve(store.getSnapshot()[0].reportId);
   assert.equal(store.getSnapshot()[0].status, 'resolved');
   assert.equal(store.getSnapshot()[0].text, notice.text);
 });
 
-test('a shared Git failure announces once while retaining all affected operations', () => {
+test('a shared Git failure announces once while retaining all affected operations', async () => {
   const store = createWorktreeDiagnostics();
   const notices = ['history', 'files', 'diff'].map(key => ({
     key, toastKey: 'repo:git:missing', text: 'Repository missing', context: key,
   }));
-  store.publish('git', notices);
+  const center = createNotificationCenter(store);
+  notices.forEach(notice => center.report(notice));
+  await Promise.resolve();
   assert.equal(store.getSnapshot().length, 3);
-  const queue = reconcileNotifications({ seen: [], pending: [] }, notices);
-  assert.equal(queue.pending.length, 1);
-  assert.equal(reconcileNotifications({ ...queue, pending: [] }, notices).pending.length, 0);
+  center.dismiss(center.getSnapshot().key);
+  await Promise.resolve();
+  assert.equal(center.getSnapshot(), undefined);
 });
 
 test('Git root cause grouping ignores command argv but distinguishes diagnostics and targets', () => {
@@ -61,10 +80,10 @@ test('history clear and limits preserve active repairs and live subscribers', ()
   const store = createWorktreeDiagnostics();
   let updates = 0;
   const unsubscribe = store.subscribe(() => updates++);
-  store.publish('active', [{ key: 'repair', text: 'Needs recovery' }]);
+  attach(store, 'active', [{ key: 'repair', text: 'Needs recovery' }]);
   for (let i = 0; i < 110; i++) {
-    store.publish('history', [{ key: 'old-' + i, text: 'Historical failure' }]);
-    store.publish('history', []);
+    attach(store, 'history', [{ key: 'old-' + i, text: 'Historical failure' }]);
+    attach(store, 'history', []);
   }
   assert.equal(store.getSnapshot().length, 101);
   store.clearHistory();
@@ -79,10 +98,10 @@ test('history clear and limits preserve active repairs and live subscribers', ()
 test('a removed retry action never becomes an open-Session action at the same index', () => {
   const store = createWorktreeDiagnostics();
   let opened = false;
-  store.publish('source', [{ key: 'binding', text: 'Failure',
+  attach(store, 'source', [{ key: 'binding', text: 'Failure',
     actions: [{ label: 'Retry binding', onClick() {} }] }]);
   const retry = store.getSnapshot()[0].actions[0];
-  store.publish('source', [{ key: 'binding', text: 'Nonretryable failure',
+  attach(store, 'source', [{ key: 'binding', text: 'Nonretryable failure',
     actions: [{ label: 'Open Session', onClick: () => { opened = true; } }] }]);
   retry.onClick();
   assert.equal(opened, false);
@@ -90,7 +109,7 @@ test('a removed retry action never becomes an open-Session action at the same in
 
 test('closing a source with many active failures applies the history limit immediately', () => {
   const store = createWorktreeDiagnostics();
-  store.publish('panel', Array.from({ length: 150 }, (_, index) => ({
+  attach(store, 'panel', Array.from({ length: 150 }, (_, index) => ({
     key: String(index), text: 'Failure',
   })));
   assert.equal(store.getSnapshot().length, 150, 'active recoveries must not be evicted');
@@ -101,7 +120,7 @@ test('closing a source with many active failures applies the history limit immed
 
 test('late failures are recorded atomically as bounded inactive history without reviving sources', () => {
   const store = createWorktreeDiagnostics();
-  store.publish('active', [{ key: 'repair', text: 'Needs recovery' }]);
+  attach(store, 'active', [{ key: 'repair', text: 'Needs recovery' }]);
   store.deactivate('retired');
   let updates = 0;
   store.subscribe(() => {
@@ -109,14 +128,14 @@ test('late failures are recorded atomically as bounded inactive history without 
     assert.ok(store.getSnapshot().filter((entry) => entry.source === 'retired')
       .every((entry) => entry.status === 'inactive' && entry.actions.length === 0));
   });
-  store.recordInactive('retired', []);
+  store.record('retired', []);
   assert.equal(updates, 0, 'successful late admission produces no diagnostic update');
   const late = Array.from({ length: 110 }, (_, index) => ({
-    key: 'late-' + index, text: 'Late partial failure',
+    reportId: { sequence: ++sequence }, key: 'late-' + index, text: 'Late partial failure',
     error: { code: 'WORKTREE_SYNC_PARTIAL', message: 'raw', details: { sessionId: 'session-' + index } },
     actions: [{ label: 'Must not survive', onClick() { assert.fail('inactive action ran'); } }],
   }));
-  store.recordInactive('retired', late);
+  store.record('retired', late);
   assert.equal(updates, 1);
   assert.equal(store.getSnapshot().length, 101, 'keep 100 historical failures and all active recoveries');
   store.deactivate('retired');

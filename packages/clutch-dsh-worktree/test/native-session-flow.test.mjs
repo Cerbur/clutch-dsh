@@ -18,6 +18,8 @@ import { DshHostReadAdapter } from '../lib/host/dsh-read-adapter.js';
 import { createWorktreeSessionCreation } from '../lib/host/session-creation.js';
 import { FORGE_BUNDLE, registerForgeActivation } from '../lib/host/forge-activation.js';
 import { createWorktreeToolSessionPort, createNativeWorktreeSessionDirectoryPort } from '../lib/tool/native-session.js';
+import { toWorktreeViewError } from '../lib/client/view/worktree-view-errors.js';
+import { shouldAnnounce } from '../lib/client/surface/notification-queue.js';
 import { dispatchWorktreeSession } from '../lib/tool/dispatch-session.js';
 import { assertGeneratedPath, prepareWorktreePool } from '../lib/provider/generated-path.js';
 import { createWorktreeSessionConnector, retryWorktreeSessionBinding } from '../lib/client/session/worktree-session.js';
@@ -601,6 +603,41 @@ test('native capability preflight failure retries after service recovery with th
   ctx.provide('workingDirectory', { set: async () => '/wt' });
   assert.deepEqual(await creation.create(input, signal), { sessionId: 'child', bound: true });
   assert.equal(creates, 1);
+});
+
+for (const source of ['create', 'baseline-sync']) test(`${source} preserves a missing root discovered after Session creation`, async t => {
+  const f = await fixture(t);
+  const signal = new AbortController().signal;
+  const sessions = { ...f.sessions, async enterWorkingDirectory(...args) {
+    await f.sessions.enterWorkingDirectory(...args);
+    await rename(f.workspace, path.join(f.root, 'moved'));
+  } };
+  if (source === 'baseline-sync') {
+    const result = await dispatchWorktreeSession({ record: f.record, manager: f.manager, sessions,
+      model: { provider: 'test', model: 'test' }, prompt: 'sync', signal, check() {} });
+    assert.equal(result.status, 'binding-failed');
+    assert.equal(result.sessionId, 'child');
+    assert.equal(result.causeCode, 'WORKSPACE_ROOT_MISSING');
+    assert.equal(result.rootPath, f.workspace);
+  } else {
+    const host = createWorktreeSessionCreation({ manager: f.manager, sessions, changed() {} });
+    t.after(() => host.dispose());
+    const connector = createWorktreeSessionConnector({
+      manager: f.manager, sessions: { getSnapshot: () => ({ phase: 'ready', ids: [], byId: {} }) },
+      archivedSessionIds: () => [], createBoundSession: request => host.create(request, signal),
+      openSession: () => assert.fail('binding failed'),
+    });
+    t.after(() => connector.dispose());
+    await assert.rejects(connector.create({ workspaceId: 'ws', worktreeId: f.record.worktreeId, cwd: f.record.absolutePath }), cause => {
+      const error = toWorktreeViewError(cause);
+      assert.equal(error.code, 'SESSION_BINDING_FAILED');
+      assert.equal(error.details.sessionId, 'child');
+      assert.equal(error.details.causeCode, 'WORKSPACE_ROOT_MISSING');
+      assert.equal(error.details.rootPath, f.workspace);
+      assert.equal(shouldAnnounce({ key: 'binding', text: '', error }), false);
+      return true;
+    });
+  }
 });
 
 test('browser native creation coalesces identities, keeps partial Session and rejects changed targets', async (t) => {
