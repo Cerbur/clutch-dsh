@@ -1,5 +1,23 @@
 # @cerbur/clutch-dsh-worktree Release Log
 
+## 0.1.44 — 2026-11-26
+
+### 中文
+
+#### 修复
+
+- Agent Worktree 工具加载或注册失败时，仍可创建和打开原生 Session。
+- 工具设置会显示工具启动失败的阶段和原因，并保留已保存的选择，排除故障后重新加载插件即可恢复。
+- 工具状态检查失败时仍可编辑设置，后台返回的旧状态不会覆盖刚保存的选择。
+
+### English
+
+#### Fixed
+
+- You can still create and open native Sessions when Agent Worktree tools fail to load or register.
+- Tool settings show where startup failed and why, and keep your saved choices so you can restore the tools by reloading the plugin after fixing the issue.
+- Tool settings remain editable when a status check fails, and an older background check no longer overwrites a choice you just saved.
+
 ## 0.1.43 — 2026-11-26
 
 ### 中文

@@ -25,6 +25,7 @@ test('publishes the browser-safe Worktree Manager method names', () => {
     'readWorktreeSessionState',
     'syncWorktreeBaseline',
     'getWorkspaceGitState',
+    'getToolRuntime',
     'getToolSettings',
     'updateToolSettings',
     'watchToolChanges',

@@ -11,6 +11,7 @@ import type {
   WorktreeRemoteMethod,
   WorktreeRemoteResult,
   WorktreeToolChangeBatch,
+  WorktreeToolRuntime,
   WorktreeToolSettingsManager,
   WorktreeSessionCreationManager,
 } from '../contract/index.js';
@@ -30,6 +31,7 @@ export const WORKTREE_CONNECTION_ENDPOINTS = Object.freeze({
   syncWorktreeBaseline: 'worktreeManager/syncWorktreeBaseline',
   getWorkspaceGitState: 'worktreeManager/getWorkspaceGitState',
   readWorkspaceNavigation: 'worktreeManager/readWorkspaceNavigation',
+  getToolRuntime: 'worktreeManager/getToolRuntime',
   getToolSettings: 'worktreeManager/getToolSettings',
   updateToolSettings: 'worktreeManager/updateToolSettings',
   watchToolChanges: 'worktreeManager/watchToolChanges',
@@ -87,6 +89,7 @@ export class WorktreeConnectionError extends Error {
 }
 
 export interface WorktreeConnectionAdapter extends WorktreeManager, WorktreeToolSettingsManager, WorktreeSessionCreationManager, NativeChangesManager, NativeForgeManager {
+  getToolRuntime(): Promise<WorktreeToolRuntime>;
   startGitWatch(input: { workspaceId: string; worktreeId: string }, signal: AbortSignal): Promise<string>;
   watchGitChanges(watchId: string, afterRevision: number, signal: AbortSignal): Promise<number>;
   stopGitWatch(watchId: string): Promise<null>;
@@ -188,6 +191,7 @@ export function createWorktreeConnectionAdapter(
 ): WorktreeConnectionAdapter {
   const inFlight = new Set<AbortController>();
   const branchReads = new Map<string, Promise<readonly BranchRecord[]>>();
+  let runtimeRead: Promise<WorktreeToolRuntime> | undefined;
   let disposed = false;
 
   async function request(
@@ -265,6 +269,8 @@ export function createWorktreeConnectionAdapter(
       WORKTREE_CONNECTION_ENDPOINTS.watchGitChanges, await call('watchGitChanges', { watchId, afterRevision }, signal)),
     stopGitWatch: (watchId) => invoke('stopGitWatch', { watchId }),
     syncWorktreeBaseline: (input) => invoke('syncWorktreeBaseline', input),
+    getToolRuntime: () => runtimeRead ??= invoke<WorktreeToolRuntime>('getToolRuntime', undefined)
+      .finally(() => { runtimeRead = undefined; }),
     getToolSettings: (input) => invoke('getToolSettings', input),
     updateToolSettings: (input) => invoke('updateToolSettings', input),
     watchToolChanges: async (afterRevision, signal) =>

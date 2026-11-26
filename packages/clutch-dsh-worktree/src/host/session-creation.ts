@@ -1,12 +1,12 @@
 import { createWorktreeError } from '../contract/index.js';
 import type { WorktreeManager, WorktreeSessionCreationRequest, WorktreeSessionCreationResult } from '../contract/index.js';
-import { createBoundWorktreeSession } from '../tool/create-session.js';
-import { NativeSessionCreationPreflightError, type WorktreeToolSessionPort } from '../tool/native-session.js';
+import { createBoundWorktreeSession } from './create-session.js';
+import { NativeSessionCreationPreflightError, type NativeTaskSessionPort } from './native-session.js';
 
 /** One native admission identity per browser action, without persistent task/message state. */
 export function createWorktreeSessionCreation(options: {
   manager: Pick<WorktreeManager, 'listWorktrees' | 'bindSession' | 'readWorktreeSessionState'>;
-  sessions: Pick<WorktreeToolSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
+  sessions: Pick<NativeTaskSessionPort, 'create' | 'enterWorkingDirectory' | 'initializeWorktreeSession'>;
   changed(workspaceId: string, worktreeId: string, requestId: string): void;
 }) {
   const lifetime = new AbortController();

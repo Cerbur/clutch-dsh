@@ -37,13 +37,13 @@ import { createWorktreeSessionCreation } from './session-creation.js';
 import { createWorktreeError } from '../contract/index.js';
 import type { WorktreeSessionCreationRequest, WorktreeSessionCreationResult } from '../contract/index.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
-import { registerWorktreeTools, createWorktreeToolSessionPort } from '../tool/index.js';
-import { createNativeWorktreeSessionDirectoryPort } from '../tool/native-session.js';
+import { createNativeWorktreeSessionDirectoryPort, createNativeTaskSessionPort } from './native-session.js';
+import { mountAgentTools } from './agent-tools.js';
 import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import { WorkspaceCheckoutWatcher } from './checkout-head-watcher.js';
 import { GitChangeWatches } from './git-change-watch.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
-import type { WorktreeToolSelection, WorktreeToolSettingsScope } from '../contract/tool-settings.js';
+import type { WorktreeToolRuntime, WorktreeToolSelection, WorktreeToolSettingsScope, WorktreeToolSettingsView } from '../contract/tool-settings.js';
 import { WorktreeToolSettings } from './tool-settings.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
 import { registerNativeWorktreeCleanup } from './native-worktree-cleanup.js';
@@ -87,6 +87,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   private readonly gitWatches = new GitChangeWatches();
   private readonly checkoutWatcher: WorkspaceCheckoutWatcher;
   private readonly toolSettings: WorktreeToolSettings;
+  private toolRuntime: WorktreeToolRuntime = { runtime: 'waiting' };
   private baselineSync?: ReturnType<typeof createBaselineSync>;
   private sessionCreation?: ReturnType<typeof createWorktreeSessionCreation>;
 
@@ -159,30 +160,22 @@ export class WorktreeRemoteService extends TypertRemoteService {
         if (this.sessionCreation === creation) this.sessionCreation = undefined;
       });
     });
-    // Optional command composition keeps the read-only Provider adapter unchanged.
-    ctx.inject(
-      ['commands', 'tools', 'sessionController', 'sessionQuery', 'agents', 'llm', 'systemPrompt'],
-      (toolCtx) => {
-        const sessions = createWorktreeToolSessionPort(toolCtx, forge);
-        const sync = createBaselineSync({ manager, sessions,
-          changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
-        this.baselineSync = sync;
-        toolCtx.effect(() => () => {
-          sync.dispose();
-          if (this.baselineSync === sync) this.baselineSync = undefined;
-        }, 'clutch-dsh-worktree: baseline task cleanup');
-        return registerWorktreeTools(toolCtx, {
-          nullableToolProviders: config.nullableToolProviders,
-          manager,
-          samePhysicalPath,
-          dsh,
-          sessions,
-          changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
-          isDisposed: () => disposed,
-          settings: this.toolSettings,
-        });
-      },
-    );
+    ctx.inject(['sessionController', 'agents', 'llm'], (taskCtx) => {
+      const sessions = createNativeTaskSessionPort(taskCtx, forge);
+      const sync = createBaselineSync({ manager, sessions,
+        changed: (workspaceId, worktreeId, requestId) => this.toolChanges.changed(workspaceId, worktreeId, requestId) });
+      this.baselineSync = sync;
+      taskCtx.effect(() => () => {
+        sync.dispose();
+        if (this.baselineSync === sync) this.baselineSync = undefined;
+      }, 'clutch-dsh-worktree: baseline task cleanup');
+    });
+    mountAgentTools(ctx, forge, {
+      nullableToolProviders: config.nullableToolProviders,
+      manager, samePhysicalPath, dsh, settings: this.toolSettings,
+      changed: (workspaceId, worktreeId) => this.toolChanges.changed(workspaceId, worktreeId),
+      isDisposed: () => disposed,
+    }, (status) => { this.toolRuntime = status; });
     registerWorktreeInstructions(
       ctx as unknown as WorktreeInstructionHost,
       (sessionId) => manager.resolveSessionInstructions(sessionId),
@@ -238,9 +231,14 @@ export class WorktreeRemoteService extends TypertRemoteService {
   }
 
   @Remote
-  async getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
+  async getToolRuntime(): Promise<WorktreeRemoteResult<WorktreeToolRuntime>> {
+    return { ok: true, value: this.toolRuntime };
+  }
+
+  @Remote
+  async getToolSettings(input: { scope: WorktreeToolSettingsScope }): Promise<WorktreeRemoteResult<WorktreeToolSettingsView>> {
     await this.validateToolSettingsScope(input.scope);
-    return { ok: true, value: await this.toolSettings.read(input.scope) };
+    return { ok: true, value: { ...await this.toolSettings.read(input.scope), ...this.toolRuntime } };
   }
 
   @Remote
@@ -248,9 +246,9 @@ export class WorktreeRemoteService extends TypertRemoteService {
     scope: WorktreeToolSettingsScope;
     selection: WorktreeToolSelection;
     expected: WorktreeToolSelection;
-  }): Promise<WorktreeRemoteResult<WorktreeToolSelection>> {
+  }): Promise<WorktreeRemoteResult<WorktreeToolSettingsView>> {
     await this.validateToolSettingsScope(input.scope);
-    return { ok: true, value: await this.toolSettings.update(input.scope, input.selection, input.expected) };
+    return { ok: true, value: { ...await this.toolSettings.update(input.scope, input.selection, input.expected), ...this.toolRuntime } };
   }
 
   private async validateToolSettingsScope(scope: WorktreeToolSettingsScope): Promise<void> {

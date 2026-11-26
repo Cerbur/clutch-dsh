@@ -34,8 +34,12 @@ export class DelegationControl {
   private readonly reports = new Map<string, { from: string; to: string }>();
   private readonly disposed = new WeakSet<CallingAgent>();
 
+  isDisposed(agent: CallingAgent): boolean {
+    return this.disposed.has(agent);
+  }
+
   assertAlive(agent: CallingAgent): void {
-    if (this.disposed.has(agent)) reject('AGENT_DISPOSED', 'The calling Agent has been disposed.');
+    if (this.isDisposed(agent)) reject('AGENT_DISPOSED', 'The calling Agent has been disposed.');
   }
 
   register(agent: CallingAgent): void {

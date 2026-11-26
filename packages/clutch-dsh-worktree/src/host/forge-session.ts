@@ -26,7 +26,7 @@ export interface ForgeAgent {
 
 const RECORD = 'plugin:client-ui-forge/worktree';
 
-/** New Sessions only. Native records survive this producer; existing Sessions are never migrated. */
+/** New Sessions only. DSH owns these records after this producer unloads. */
 export async function initializeForgeSession(
   ctx: Context, agent: ForgeAgent, record: WorktreeRecord, signal: AbortSignal,
   bind: (control: AbortSignal) => Promise<void>,

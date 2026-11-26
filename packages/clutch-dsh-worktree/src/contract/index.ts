@@ -498,6 +498,7 @@ export const WORKTREE_REMOTE_METHODS = Object.freeze([
   'readWorktreeSessionState',
   'syncWorktreeBaseline',
   'getWorkspaceGitState',
+  'getToolRuntime',
   'getToolSettings',
   'updateToolSettings',
   'watchToolChanges',
