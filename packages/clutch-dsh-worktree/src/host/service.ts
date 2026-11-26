@@ -43,7 +43,7 @@ import { WorktreeToolChanges } from './worktree-tool-changes.js';
 import { WorkspaceCheckoutWatcher } from './checkout-head-watcher.js';
 import { GitChangeWatches } from './git-change-watch.js';
 import type { WorktreeToolChangeBatch } from '../contract/worktree-tool-changes.js';
-import type { WorktreeToolSelection, WorktreeToolSettingsScope, WorktreeToolSettingsView } from '../contract/tool-settings.js';
+import type { WorktreeToolRuntime, WorktreeToolSelection, WorktreeToolSettingsScope, WorktreeToolSettingsView } from '../contract/tool-settings.js';
 import { WorktreeToolSettings } from './tool-settings.js';
 import { WorkspaceShardedSidecarRepository } from '../provider/sidecar/repository.js';
 import { registerNativeWorktreeCleanup } from './native-worktree-cleanup.js';
@@ -87,7 +87,7 @@ export class WorktreeRemoteService extends TypertRemoteService {
   private readonly gitWatches = new GitChangeWatches();
   private readonly checkoutWatcher: WorkspaceCheckoutWatcher;
   private readonly toolSettings: WorktreeToolSettings;
-  private toolRuntime: Pick<WorktreeToolSettingsView, 'runtime' | 'loadError'> = { runtime: 'waiting' };
+  private toolRuntime: WorktreeToolRuntime = { runtime: 'waiting' };
   private baselineSync?: ReturnType<typeof createBaselineSync>;
   private sessionCreation?: ReturnType<typeof createWorktreeSessionCreation>;
 
@@ -228,6 +228,11 @@ export class WorktreeRemoteService extends TypertRemoteService {
       if (!this.baselineSync) throw new Error('Native Session task capability is unavailable.');
       return this.baselineSync.sync(input, signal);
     });
+  }
+
+  @Remote
+  async getToolRuntime(): Promise<WorktreeRemoteResult<WorktreeToolRuntime>> {
+    return { ok: true, value: this.toolRuntime };
   }
 
   @Remote

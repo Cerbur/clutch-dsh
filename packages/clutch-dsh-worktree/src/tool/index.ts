@@ -357,11 +357,26 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     const events = ctx as unknown as {
       on(name: string, listener: (...args: never[]) => unknown, options: { global: true }): unknown;
     };
+    const prepareAgent = async (agent: CallingAgent, signal = lifetime.signal) => {
+      try {
+        await enable(agent, signal, [], undefined, true);
+      } catch (error) {
+        if (lifetime.signal.aborted || options.isDisposed() || delegation.isDisposed(agent)) return;
+        signal.throwIfAborted();
+        throw error;
+      }
+    };
     events.on('agent/created', (async ({ agent, signal }: Activation) => {
-      await enable(agent, signal ?? lifetime.signal, [], undefined, true);
+      try {
+        await prepareAgent(agent, signal);
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (!options.onRegistrationError) throw error;
+        options.onRegistrationError('agent/created', error);
+      }
     }) as (...args: never[]) => unknown, { global: true });
     const agents = ctx.get('agents') as { list?(): CallingAgent[] } | undefined;
-    for (const agent of agents?.list?.() ?? []) await enable(agent, lifetime.signal, [], undefined, true);
+    await Promise.all((agents?.list?.() ?? []).map((agent) => prepareAgent(agent)));
     // Current DSH owns declarations at the tool provider and freezes loop
     // requests. Its provider adapters own strict wire conversion. The legacy
     // nullable option must neither rewrite that request nor replace an executor.
@@ -419,8 +434,8 @@ export async function registerWorktreeTools(ctx: Context, options: Options): Pro
     try {
       syncCommand(enabled);
     } catch (error) {
-      if (!options.onCommandError) throw error;
-      options.onCommandError(error);
+      if (!options.onRegistrationError) throw error;
+      options.onRegistrationError('/cluworktree', error);
     }
   };
   ctx.effect(() => () => unregister?.(), 'clutch-dsh-worktree: command cleanup');

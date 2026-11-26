@@ -103,6 +103,7 @@ test('exposes the approved Manager and Remote methods', () => {
     'readWorktreeSessionState',
     'syncWorktreeBaseline',
     'getWorkspaceGitState',
+    'getToolRuntime',
     'getToolSettings',
     'updateToolSettings',
     'watchToolChanges',

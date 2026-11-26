@@ -965,6 +965,16 @@ preferences and requires healthy availability. Detached or ambiguous bindings ne
 Delegated Sessions default to result reporting only; other tools follow explicit preferences or
 command activation. Reporting guidance remains independent of delegation guidance.
 
+The optional Agent registration scope owns its command, listeners and per-Agent tools.
+When optional services arrive, the supported Node Host evaluates the shipped synchronous
+ESM graph in the dependency scope and starts registration for every live Agent before
+first-turn tool admission. A Host with synchronous ESM disabled, or a module with asynchronous
+evaluation, uses dynamic import and publishes readiness when registration finishes.
+The native disposal event retires the exact Agent, including during startup backfill.
+A registration failure during a later native Agent creation retires that scope and publishes
+the failure stage to Host memory. The native creation event continues. Settings poll this
+status independently of scoped preference validation and discard reads superseded by a save.
+
 Automatic discovery is a read-only optional boundary in both current step admission and
 legacy prompt assembly. Unavailable Sidecar/settings/Workspace or Git probe data adds no
 capabilities and does not block ordinary native/PTC requests. Existing enabled capabilities

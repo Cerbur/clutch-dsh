@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { createRequire, registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { execPath } from 'node:process';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import { Context } from '@deepseek-ai/cordis';
 import Commands from '@deepseek-ai/dsh-commands';
 import Tools from '@deepseek-ai/dsh-tools';
@@ -28,7 +29,7 @@ async function until(read, accept) {
   assert.fail('Expected state did not arrive: ' + JSON.stringify(await read()));
 }
 
-for (const fault of ['import', 'pending', 'command', 'enable command']) {
+for (const fault of ['import', 'pending', 'pending file', 'command', 'enable command', 'agent/created']) {
   test('public Host isolates Agent tool failure: ' + fault, { timeout: 15000 }, async (t) => {
     const repo = await realpath(await mkdtemp(path.join(tmpdir(), 'worktree-tool-isolation-')));
     const home = path.join(repo, 'home');
@@ -55,7 +56,17 @@ for (const fault of ['import', 'pending', 'command', 'enable command']) {
     ctx.provide('workingDirectory', { get: () => repo });
     ctx.provide('sessionQuery', {});
     ctx.provide('sessionController', {});
-    ctx.provide('agents', { list: () => [agent], get: () => agent });
+    let closing;
+    let closed;
+    ctx.provide('agents', { list: () => {
+      if (!closing) return [agent];
+      const retiring = closing;
+      closing = undefined;
+      globalThis.queueMicrotask(() => {
+        closed = ctx.parallel(retiring.ctx, 'agent/disposed', { agent: retiring });
+      });
+      return [agent, retiring];
+    }, get: () => agent });
     ctx.provide('llm', {});
     await ctx.plugin(Commands);
     const registered = () => ctx.tools.view(agent).knownNames.size;
@@ -91,15 +102,20 @@ for (const fault of ['import', 'pending', 'command', 'enable command']) {
     globalThis.worktreeTestImport = { pending: pending.promise, entered: entered.resolve,
       called: () => { lateRegistrations++; } };
     t.after(() => { pending.resolve(); delete globalThis.worktreeTestImport; });
+    const pendingImport = fault.startsWith('pending');
+    const suspendedModule = 'const gate = globalThis.worktreeTestImport; gate.entered(); await gate.pending; ' +
+      'export const registerWorktreeTools = gate.called; export const createWorktreeToolSessionPort = gate.called;';
+    const pendingFile = path.join(repo, 'pending.mjs');
+    if (fault === 'pending file') await writeFile(pendingFile, suspendedModule);
     const hook = registerHooks({ resolve(specifier, context, next) {
       const resolved = next(specifier, context);
       if (!inject) return resolved;
       if (fault === 'import' && resolved.url.includes('/lib/tool/')) throw new Error('injected module import failure');
       if (!resolved.url.endsWith('/lib/tool/index.js')) return resolved;
-      if (fault === 'pending') {
-        const source = 'const gate = globalThis.worktreeTestImport; gate.entered(); await gate.pending; ' +
-          'export const registerWorktreeTools = gate.called; export const createWorktreeToolSessionPort = gate.called;';
-        return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
+      if (pendingImport) {
+        const url = fault === 'pending file' ? pathToFileURL(pendingFile).href
+          : 'data:text/javascript,' + encodeURIComponent(suspendedModule);
+        return { url, shortCircuit: true };
       }
       return resolved;
     } });
@@ -109,15 +125,37 @@ for (const fault of ['import', 'pending', 'command', 'enable command']) {
     const owner = await mount();
     let service = ctx.get('worktreeManager');
     const read = async () => (await service.getToolSettings({ scope: general })).value;
-    if (fault === 'pending') await entered.promise;
+    if (fault === 'agent/created') {
+      assert.deepEqual(await modelNames(), ['clutch_list_worktrees']);
+      await until(read, (value) => value.runtime === 'ready');
+      const fresh = { session: { id: 'fresh' } };
+      fresh.ctx = createScope(ctx, fresh).ctx;
+      const foreignName = 'clutch_list_sessions';
+      await fresh.ctx.inject(['tools'], (scope) => {
+        scope.tools.register({
+          name: foreignName, description: 'Already owned by another plugin',
+          parameters: { type: 'object', properties: {} },
+          output: { schema: { type: 'object' }, render: () => [] }, execute: async () => ({}),
+        });
+      });
+      let continued = false;
+      const listener = ctx.on('agent/created', () => { continued = true; }, { global: true });
+      await ctx.serial(fresh.ctx, 'agent/created', { agent: fresh, signal });
+      listener();
+      assert.equal(continued, true, 'later native creation listeners still run');
+      assert.deepEqual([...ctx.tools.view(fresh).knownNames], [foreignName]);
+      assert.match((await service.getToolRuntime()).value.loadError, /agent\/created.*already registered/);
+    }
+    if (pendingImport) await entered.promise;
     else if (fault === 'enable command') {
       const off = await until(read, (value) => value.runtime === 'ready');
       assert.equal(off.enabled, false);
       await service.updateToolSettings({ scope: general, selection, expected: off });
     }
-    if (fault !== 'pending') {
+    if (!pendingImport) {
       const failure = await until(read, (value) => value.runtime === 'failed');
-      assert.match(failure.loadError, fault === 'import' ? /import.*injected module/ : /cluworktree.*after command insertion/);
+      assert.match(failure.loadError, fault === 'agent/created' ? /agent\/created.*already registered/
+        : fault === 'import' ? /import.*injected module/ : /cluworktree.*after command insertion/);
       assert.equal(failure.enabled, true);
       assert.deepEqual(failure.tools, selection.tools);
       await until(registered, (count) => count === 0);
@@ -142,7 +180,13 @@ for (const fault of ['import', 'pending', 'command', 'enable command']) {
     const attempts = registrations;
     await owner.dispose();
     inject = false;
+    const retiring = { session: { id: 'closed during reload' } };
+    retiring.ctx = createScope(ctx, retiring).ctx;
+    closing = retiring;
     const reloaded = await mount();
+    assert.deepEqual(await modelNames(), ['clutch_list_worktrees'], 'first native admission immediately after Host mount');
+    await closed;
+    assert.equal(ctx.tools.view(retiring).knownNames.size, 0, 'a retired Agent keeps no registrations');
     service = ctx.get('worktreeManager');
     await until(read, (value) => value.runtime === 'ready');
     pending.resolve();
@@ -164,6 +208,42 @@ for (const fault of ['import', 'pending', 'command', 'enable command']) {
     assert.equal(eventCount(), originalListeners);
   });
 }
+
+test('public Host loads Agent tools with synchronous ESM explicitly disabled', async (t) => {
+  const home = await mkdtemp(path.join(tmpdir(), 'worktree-tools-esm-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const settings = new WorktreeToolSettings(home);
+  await settings.update(general, selection, await settings.read(general));
+  const probe = `
+    import assert from 'node:assert/strict';
+    import { argv, features } from 'node:process';
+    import { setTimeout as delay } from 'node:timers/promises';
+    import { Context } from '@deepseek-ai/cordis';
+    import Commands from '@deepseek-ai/dsh-commands';
+    import Host from './lib/index.js';
+    assert.equal(features.require_module, false);
+    const ctx = new Context();
+    try {
+      await ctx.plugin(Commands);
+      for (const name of ['sessions', 'sessionPersistence', 'workspaceRegistry', 'tools',
+        'agents', 'systemPrompt', 'sessionController', 'sessionQuery', 'llm']) ctx.provide(name, {});
+      await ctx.plugin(Host, { dshHome: argv[1] });
+      const service = ctx.get('worktreeManager');
+      let status;
+      do {
+        status = (await service.getToolRuntime()).value;
+        if (status.runtime === 'loading') await delay(5);
+      } while (status.runtime === 'loading');
+      assert.equal(status.runtime, 'ready', status.loadError);
+      assert.ok(ctx.commands.find({}, 'cluworktree'));
+    } finally {
+      await ctx.fiber.dispose();
+    }
+  `;
+  execFileSync(execPath, ['--no-experimental-require-module', '--input-type=module', '-e', probe, home], {
+    cwd: fileURLToPath(new URL('..', import.meta.url)), timeout: 10000, maxBuffer: 65536,
+  });
+});
 
 test('native entry and Dashboard baseline wait only for the services they use', async (t) => {
   const ctx = new Context();

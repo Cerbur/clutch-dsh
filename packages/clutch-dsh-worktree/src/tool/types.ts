@@ -39,7 +39,7 @@ export interface Options {
   samePhysicalPath(left: string, right: string): Promise<boolean>;
   changed(workspaceId: string, worktreeId: string): void;
   isDisposed(): boolean;
-  onCommandError?(error: unknown): void;
+  onRegistrationError?(stage: '/cluworktree' | 'agent/created', error: unknown): void;
 }
 export interface ToolDefinition {
   name: string;

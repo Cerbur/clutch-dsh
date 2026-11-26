@@ -247,7 +247,12 @@ or a Session at the repository root; already-bound Git-root Sessions keep their 
 
 ### Enable Agent Worktree tools
 
-If the Agent module cannot load or register its command, tool settings show the failing stage and diagnostic alongside your saved switches. You can still change these preferences, open existing Sessions and use the sidebar and Dashboard. Reload the Worktree plugin after correcting the cause to apply the saved selections.
+If the Agent module fails to load, register its command, or register tools for a newly created or restored Agent, tool settings show the failing stage and cause alongside the saved switches. Native Session creation and reopening continue. Reload the Worktree plugin after correcting the cause to restore its tools.
+
+While settings are open, runtime checks read only the Host's in-memory status. Saving a selection takes precedence over an earlier check. A failed background read keeps the switches editable and records the cause and original scope in **Errors & recovery**, including when you have already left the page.
+Retrying a status check reads the runtime status again. Its diagnostic clears when a subsequent status check succeeds in the same settings view. A failed write stays in diagnostics until the same selection is successfully saved in that view.
+
+With Node's default synchronous ESM support, existing Agents can use the selected tools on their first turn after plugin activation. With asynchronous module loading, tools become available when registration finishes. Closing a Session during reload releases that Agent's tools while other live Agents retain theirs.
 
 Open **Settings → Worktree → General** and turn on **Worktree tools**, then select the
 capabilities you want. Both tool switches start off. Run `/cluworktree` in a Session belonging to a

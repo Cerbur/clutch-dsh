@@ -273,6 +273,7 @@ uses this setting for Magpie Responses. Invalid empty/invented request ids still
 ## Tool preferences (2026-10-10 amendment)
 
 The Host reports the Agent registration state separately from the saved selection. A failed import or registration tears down the tool scope, including definitions attached to existing Agents. Reloading mounts a fresh scope and reads the existing preferences. Dashboard Session creation and baseline dispatch own separate native ports.
+On the supported graph, cold activation registers declarations in time for the first native tool snapshot. The native disposal event lets backfill skip an Agent that closes during reload. A registration conflict on a later Agent still tears down the optional scope and allows the native creation event to continue.
 
 General, per-Workspace Local/Main and per-Worktree switches default to off. Each selection normalizes the final
 deselection to disabled. Settings show localized capability names and descriptions, without

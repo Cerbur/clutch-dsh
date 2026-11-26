@@ -8,6 +8,8 @@ import {
   type WorktreeToolSettingsView,
 } from '../../contract/tool-settings.js';
 import type { WorktreeTranslate } from '../surface/types.js';
+import { worktreeNotifications } from '../surface/notification-center.js';
+import { toWorktreeViewError, type ReportId } from '../view/worktree-view-errors.js';
 import styles from './settings.css';
 
 const capabilities = ['create', 'worktrees', 'delegate', 'models', 'sessions', 'message'] as const;
@@ -22,57 +24,138 @@ export function ToolSettings({
   scope: WorktreeToolSettingsScope;
   t: WorktreeTranslate;
 }) {
-  const [value, setValue] = useState<WorktreeToolSettingsView>();
+  const [snapshot, setSnapshot] = useState<{
+    manager: typeof manager; identity: string; value: WorktreeToolSettingsView;
+  }>();
   const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<'settings' | 'runtime'>();
   const [revision, setRevision] = useState(0);
   const alive = useRef(false);
   const busy = useRef(false);
   const generation = useRef(0);
+  const saveVersion = useRef(0);
+  const retryRuntime = useRef(false);
+  const readReports = useRef<ReportId[]>([]);
+  const runtimeReports = useRef(new Set<ReportId>());
+  const saveReports = useRef<{ selection: WorktreeToolSelection; reportId: ReportId }[]>([]);
   const identity = JSON.stringify(scope);
+  const value = snapshot && snapshot.manager === manager && snapshot.identity === identity ? snapshot.value : undefined;
+  const context = scope.kind === 'general' ? 'Worktree · /cluworktree'
+    : scope.workspaceId + ' · ' + (scope.kind === 'local' ? 'Local/Main' : scope.worktreeId);
   useEffect(() => {
     alive.current = true;
     generation.current++;
-    busy.current = false;
-    setPending(false);
+    return () => {
+      alive.current = false;
+      readReports.current = [];
+      runtimeReports.current.clear();
+      saveReports.current = [];
+      retryRuntime.current = false;
+    };
+  }, [manager, identity]);
+  useEffect(() => {
+    busy.current = true;
+    setPending(true);
     let current = true;
-    setFailed(false);
-    if (!manager?.getToolSettings) setFailed(true);
-    else
+    setFailed(undefined);
+    if (!manager?.getToolSettings) {
+      setFailed('settings');
+      setPending(false);
+      busy.current = false;
+    } else {
       void manager.getToolSettings({ scope }).then(
         (selection) => {
-          if (current) setValue(selection);
+          if (current) {
+            setSnapshot({ manager, identity, value: selection });
+            readReports.current.splice(0).forEach(id => worktreeNotifications.resolve(id));
+            busy.current = false;
+            setPending(false);
+          }
         },
-        () => {
-          if (current) setFailed(true);
+        (error) => {
+          const { reportId } = worktreeNotifications.reportError(toWorktreeViewError(error), { context, origin: current ? undefined : 'retired' });
+          if (current) {
+            readReports.current.push(reportId);
+            setFailed('settings');
+            busy.current = false;
+            setPending(false);
+          }
         },
       );
+    }
     return () => {
       current = false;
-      alive.current = false;
     };
     // Serialized scope identity prevents a new inline object from restarting the read.
   }, [manager, identity, revision]);
 
   useEffect(() => {
-    if (failed || pending || (value?.runtime !== 'loading' && value?.runtime !== 'waiting')) return;
-    const timer = window.setTimeout(() => {
-      if (!busy.current) setRevision((current) => current + 1);
-    }, value.runtime === 'loading' ? 500 : 3000);
-    return () => window.clearTimeout(timer);
-  }, [value, failed, pending]);
+    if (failed || pending || !value?.runtime || !manager?.getToolRuntime) return;
+    let current = true;
+    const owner = generation.current;
+    const version = saveVersion.current;
+    const delay = value.runtime === 'loading' ? 500 : value.runtime === 'waiting' ? 3000 : 10000;
+    const poll = async (explicit = false) => {
+      if (!current || busy.current) return;
+      const priorReports = [...runtimeReports.current];
+      try {
+        const { runtime, loadError } = await manager.getToolRuntime!();
+        if (!alive.current || generation.current !== owner) return;
+        for (const id of priorReports) {
+          if (runtimeReports.current.delete(id)) worktreeNotifications.resolve(id);
+        }
+        if (!current || version !== saveVersion.current) return;
+        if (runtime === value.runtime && loadError === value.loadError) {
+          timer = window.setTimeout(poll, delay);
+        } else {
+          setSnapshot(previous => previous?.manager === manager && previous.identity === identity
+            ? { ...previous, value: { ...previous.value, runtime, loadError } } : previous);
+        }
+      } catch (error) {
+        const retired = !alive.current || generation.current !== owner;
+        const { reportId } = worktreeNotifications.reportError(toWorktreeViewError(error), {
+          context, origin: retired ? 'retired' : explicit ? undefined : 'cached-refresh',
+        });
+        if (!retired) runtimeReports.current.add(reportId);
+        if (current && version === saveVersion.current) setFailed('runtime');
+      }
+    };
+    let timer: number | undefined;
+    if (retryRuntime.current) {
+      retryRuntime.current = false;
+      void poll(true);
+    } else {
+      timer = window.setTimeout(poll, delay);
+    }
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [manager, identity, value, failed, pending]);
 
   const save = async (selection: WorktreeToolSelection) => {
     if (!value || !manager?.updateToolSettings || busy.current) return;
     busy.current = true;
+    saveVersion.current++;
     const current = generation.current;
     setPending(true);
-    setFailed(false);
+    setFailed(undefined);
     try {
       const result = await manager.updateToolSettings({ scope, selection, expected: { enabled: value.enabled, tools: value.tools } });
-      if (alive.current && current === generation.current) setValue(result);
-    } catch {
-      if (alive.current && current === generation.current) setFailed(true);
+      if (alive.current && current === generation.current) {
+        setSnapshot({ manager, identity, value: result });
+        saveReports.current = saveReports.current.filter(previous => {
+          const wanted = previous.selection;
+          if (wanted.enabled !== result.enabled || wanted.tools.length !== result.tools.length ||
+            !wanted.tools.every(tool => result.tools.includes(tool))) return true;
+          worktreeNotifications.resolve(previous.reportId);
+          return false;
+        });
+      }
+    } catch (error) {
+      const active = alive.current && current === generation.current;
+      const { reportId } = worktreeNotifications.reportError(toWorktreeViewError(error), { context, origin: active ? undefined : 'retired' });
+      if (active) {
+        saveReports.current.push({ selection, reportId });
+        setFailed('settings');
+      }
     } finally {
       if (current === generation.current) {
         busy.current = false;
@@ -96,7 +179,7 @@ export function ToolSettings({
         <Switch
           label={title}
           checked={value?.enabled ?? false}
-          disabled={!value || pending || failed}
+          disabled={!value || pending || failed === 'settings'}
           onChange={(enabled) =>
             void save({
               enabled,
@@ -128,7 +211,7 @@ export function ToolSettings({
                 <Switch
                   label={t(`tools.${capabilities[index]}.title`)}
                   checked={value.tools.includes(tool)}
-                  disabled={pending || failed}
+                  disabled={pending || failed === 'settings'}
                   onChange={(checked) => {
                     const tools = checked
                       ? [...value.tools, tool]
@@ -143,8 +226,15 @@ export function ToolSettings({
       )}
       {failed && (
         <div role="alert">
-          <p>{t('tools.failed')}</p>
-          <Button size="sm" variant="outline" onClick={() => setRevision((current) => current + 1)}>
+          <p>{t(failed === 'runtime' ? 'tools.runtimeReadFailed' : 'tools.failed')}</p>
+          <Button size="sm" variant="outline" onClick={() => {
+            if (failed === 'runtime') {
+              retryRuntime.current = true;
+              setFailed(undefined);
+            } else {
+              setRevision((current) => current + 1);
+            }
+          }}>
             {t('action.retry')}
           </Button>
         </div>
