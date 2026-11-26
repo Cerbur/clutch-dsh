@@ -2,17 +2,19 @@ import { randomUUID } from 'node:crypto';
 import { createBoundWorktreeSession, sessionFailure } from './create-session.js';
 import type { WorktreeRecord, WorktreeManager } from '../contract/index.js';
 import type { WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
-import type { ToolModel, WorktreeToolSessionPort } from './native-session.js';
-import type { CallingAgent } from './types.js';
+import type { ToolModel, WorktreeToolSessionPort } from '../tool/native-session.js';
+import type { NativeTaskSessionPort } from './native-session.js';
+import type { CallingAgent } from '../tool/types.js';
+
+type Delivery = { sender: CallingAgent; sessions: Pick<WorktreeToolSessionPort, 'sendAgentMessage'> } | { sender?: undefined };
 
 /** Shared by the Agent tool and Dashboard tasks; all mutations use native DSH APIs. */
-export async function dispatchWorktreeSession(input: {
+export async function dispatchWorktreeSession(input: Delivery & {
   readonly record: WorktreeRecord;
   readonly manager: Pick<WorktreeManager, 'bindSession'>;
-  readonly sessions: WorktreeToolSessionPort;
+  readonly sessions: NativeTaskSessionPort;
   readonly model: ToolModel;
   readonly prompt: string;
-  readonly sender?: CallingAgent;
   readonly title?: string;
   readonly signal: AbortSignal;
   readonly check: () => void;
@@ -47,7 +49,7 @@ export async function dispatchWorktreeSession(input: {
     await sessions.assertWorkingDirectory?.(sessionId, record.absolutePath, signal);
     check();
     const message = { sessionId, requestId, mode: 'queue' as const, content: [{ type: 'text' as const, text: input.prompt }] };
-    if (input.sender) await sessions.sendAgentMessage({ ...message, sender: input.sender }, signal);
+    if (input.sender) await input.sessions.sendAgentMessage({ ...message, sender: input.sender }, signal);
     else await sessions.prompt(message, signal);
     status = 'dispatched';
   } catch (cause) {

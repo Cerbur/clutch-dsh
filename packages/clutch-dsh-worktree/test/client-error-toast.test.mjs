@@ -10,6 +10,8 @@ import { WORKTREE_ERROR_CODES } from '../lib/contract/index.js';
 import { formatWorktreeViewError } from '../lib/client/view/worktree-error-copy.js';
 import { en, zh } from '../lib/client/locales.js';
 import { WORKTREE_TOOL_IDS } from '../lib/contract/tool-settings.js';
+import { worktreeNotifications } from '../lib/client/surface/notification-center.js';
+import { toWorktreeViewError } from '../lib/client/view/worktree-view-errors.js';
 
 test('every contract error has translated problem and recovery copy, without raw diagnostics', () => {
   for (const locale of [en, zh]) {
@@ -67,7 +69,7 @@ test('Git failures distinguish local changes, access, locks, naming and timeout 
   }
 });
 
-function hookHarness(source, modules, context) {
+function hookHarness(source, modules, context, timers = globalThis.window) {
   const state = [],
     effects = [];
   let cursor = 0,
@@ -109,12 +111,12 @@ function hookHarness(source, modules, context) {
   const output = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
-  new Function('require', 'exports', output)((name) => {
+  new Function('require', 'exports', 'window', output)((name) => {
     if (name === 'react') return react;
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
     if (name in modules) return modules[name];
     throw new Error('Unexpected import: ' + name);
-  }, exports);
+  }, exports, timers);
   return {
     render(name, props) {
       cursor = 0;
@@ -354,8 +356,18 @@ test('Settings renders contextual explanations, original diagnostics and safe re
   h.dispose();
 });
 
-test('tool preferences expose capabilities, persist selected switches and disable an empty selection', async () => {
+async function toolSettingsHarness(center = worktreeNotifications, timers) {
   const source = await readFile(new URL('../src/client/settings/ToolSettings.tsx', import.meta.url), 'utf8');
+  return hookHarness(source, {
+    '@deepseek-ai/dsh-client-ui-primitives': { Switch: 'switch', Button: 'button', Tag: 'tag' },
+    '../../contract/tool-settings.js': { WORKTREE_TOOL_IDS },
+    '../surface/notification-center.js': { worktreeNotifications: center },
+    '../view/worktree-view-errors.js': { toWorktreeViewError },
+    './settings.css': { default: {} },
+  }, undefined, timers);
+}
+
+test('tool preferences expose capabilities, persist selected switches and disable an empty selection', async () => {
   for (const scope of [{ kind: 'general' }, { kind: 'local', workspaceId: 'ws' }, { kind: 'worktree', workspaceId: 'ws', worktreeId: 'wt' }]) {
     let selection = { enabled: false, tools: [...WORKTREE_TOOL_IDS] };
     const writes = [];
@@ -367,11 +379,7 @@ test('tool preferences expose capabilities, persist selected switches and disabl
         return selection;
       },
     };
-    const h = hookHarness(source, {
-      '@deepseek-ai/dsh-client-ui-primitives': { Switch: 'switch', Button: 'button', Tag: 'tag' },
-      '../../contract/tool-settings.js': { WORKTREE_TOOL_IDS },
-      './settings.css': { default: {} },
-    });
+    const h = await toolSettingsHarness();
     const input = { scope, manager, t: (key) => zh[key] };
     h.render('ToolSettings', input);
     await Promise.resolve();
@@ -415,21 +423,42 @@ test('tool preferences expose capabilities, persist selected switches and disabl
   }
 });
 
+test('Agent load errors show the cause alongside editable saved preferences', async () => {
+  for (const enabled of [true, false]) {
+    const h = await toolSettingsHarness();
+    const manager = { getToolSettings: async () => ({
+      enabled, tools: WORKTREE_TOOL_IDS, runtime: 'failed', loadError: 'import: missing dependency',
+    }) };
+    const input = { scope: { kind: 'general' }, manager, t: (key) => en[key] };
+    h.render('ToolSettings', input);
+    await Promise.resolve();
+    const elements = nodes(h.render('ToolSettings', input));
+    const toggle = elements.find((item) => item.type === 'switch');
+    assert.equal(toggle.props.checked, enabled);
+    assert.equal(toggle.props.disabled, false);
+    const alert = elements.find((item) => item.props?.role === 'alert');
+    assert.ok(alert.props.children.includes(en['tools.loadFailed']));
+    assert.ok(alert.props.children.includes('import: missing dependency'));
+    h.dispose();
+  }
+});
+
 test('tool settings preserve ready content after a failed save and retry reads the latest value', async () => {
-  const source = await readFile(new URL('../src/client/settings/ToolSettings.tsx', import.meta.url), 'utf8');
   let reads = 0;
+  let writes = 0;
+  const diagnostics = createWorktreeDiagnostics();
+  const center = createNotificationCenter(diagnostics);
   const manager = {
     getToolSettings: async () => {
       reads++;
       return { enabled: true, tools: [WORKTREE_TOOL_IDS[0]] };
     },
-    updateToolSettings: async () => { throw new Error('Concurrent edit'); },
+    updateToolSettings: async ({ selection }) => {
+      if (++writes === 1) throw new Error('Concurrent edit');
+      return selection;
+    },
   };
-  const h = hookHarness(source, {
-    '@deepseek-ai/dsh-client-ui-primitives': { Switch: 'switch', Button: 'button', Tag: 'tag' },
-    '../../contract/tool-settings.js': { WORKTREE_TOOL_IDS },
-    './settings.css': { default: {} },
-  });
+  const h = await toolSettingsHarness(center);
   const input = { scope: { kind: 'general' }, manager, t: (key) => en[key] };
   h.render('ToolSettings', input);
   await Promise.resolve();
@@ -446,8 +475,159 @@ test('tool settings preserve ready content after a failed save and retry reads t
   node = h.render('ToolSettings', input);
   assert.equal(reads, 2);
   assert.ok(!nodes(node).some((item) => item.props?.role === 'alert'));
+  assert.equal(diagnostics.getSnapshot()[0].status, 'reported', 'rereading does not complete a failed write');
+  nodes(node).find((item) => item.type === 'switch').props.onChange(false);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(diagnostics.getSnapshot()[0].status, 'resolved', 'the same selection was saved');
+  assert.equal(center.getSnapshot(), undefined);
   h.dispose();
 });
+
+for (const endpoint of ['preferences', 'runtime']) {
+  test('tool settings retry resolves the matching ' + endpoint + ' read', async () => {
+    const diagnostics = createWorktreeDiagnostics();
+    const center = createNotificationCenter(diagnostics);
+    let timer;
+    const h = await toolSettingsHarness(center, {
+      setTimeout(fn) { timer = fn; return 1; }, clearTimeout() { timer = undefined; },
+    });
+    let reads = 0;
+    let polls = 0;
+    const input = { scope: { kind: 'worktree', workspaceId: 'ws', worktreeId: 'wt' }, t: key => en[key], manager: {
+      async getToolSettings() {
+        if (++reads === 1 && endpoint === 'preferences') throw new Error('preferences unavailable');
+        return { enabled: false, tools: WORKTREE_TOOL_IDS, runtime: 'waiting' };
+      },
+      async getToolRuntime() {
+        if (++polls === 1) throw new Error('status unavailable');
+        return { runtime: 'ready' };
+      },
+    } };
+    const render = () => nodes(h.render('ToolSettings', input));
+    render();
+    await Promise.resolve();
+    let tree = render();
+    if (endpoint === 'runtime') {
+      await timer();
+      tree = render();
+      assert.ok(tree.some(item => item.props?.children === en['tools.runtimeReadFailed']));
+    }
+    await Promise.resolve();
+    assert.equal(diagnostics.getSnapshot()[0].status, 'reported');
+    tree.find(item => item.type === 'button').props.onClick();
+    render();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(diagnostics.getSnapshot()[0].status, 'resolved');
+    assert.equal(center.getSnapshot(), undefined);
+    assert.equal(reads, endpoint === 'runtime' ? 1 : 2);
+    assert.equal(polls, endpoint === 'runtime' ? 2 : 0);
+    h.dispose();
+  });
+}
+
+for (const order of ['save first', 'poll fails first']) {
+  test('only a subsequent status check resolves an overlapping poll failure: ' + order, async () => {
+    const diagnostics = createWorktreeDiagnostics();
+    const center = createNotificationCenter(diagnostics);
+    let timer;
+    const h = await toolSettingsHarness(center, {
+      setTimeout(fn) { timer = fn; return 1; }, clearTimeout() { timer = undefined; },
+    });
+    const status = Promise.withResolvers();
+    let polls = 0;
+    const manager = {
+      async getToolSettings() { return { enabled: false, tools: WORKTREE_TOOL_IDS, runtime: 'waiting' }; },
+      async updateToolSettings({ selection }) { return { ...selection, runtime: 'ready' }; },
+      getToolRuntime() { return ++polls === 1 ? status.promise : Promise.resolve({ runtime: 'ready' }); },
+    };
+    const render = () => nodes(h.render('ToolSettings', { manager, scope: { kind: 'general' }, t: key => en[key] }));
+    render();
+    await Promise.resolve();
+    render();
+    const polling = timer();
+    const save = async () => {
+      render().find(item => item.type === 'switch').props.onChange(true);
+      await Promise.resolve();
+      render();
+    };
+    if (order === 'save first') await save();
+    status.reject(new Error('status query failed'));
+    await polling;
+    render();
+    if (order === 'poll fails first') await save();
+    assert.equal(diagnostics.getSnapshot()[0].status, 'reported');
+    assert.equal(render().find(item => item.type === 'switch').props.checked, true);
+    await timer();
+    assert.equal(diagnostics.getSnapshot()[0].status, 'resolved');
+    assert.equal(polls, 2);
+    h.dispose();
+  });
+}
+
+for (const outcome of ['saved', 'background failure', 'target changed', 'unmounted']) {
+  test('runtime poll in managed tool settings: ' + outcome, async () => {
+    const status = Promise.withResolvers();
+    const reports = [];
+    const writes = [];
+    let reads = 0;
+    let polls = 0;
+    let timer;
+    const h = await toolSettingsHarness({ reportError(error, options) {
+      reports.push({ error, options });
+      return { reportId: { sequence: reports.length } };
+    } }, {
+      setTimeout(callback) { timer = callback; return 1; }, clearTimeout() { timer = undefined; },
+    });
+    const manager = {
+      async getToolSettings() {
+        reads++;
+        return { runtime: 'waiting', enabled: false, tools: WORKTREE_TOOL_IDS };
+      },
+      getToolRuntime() { polls++; return status.promise; },
+      async updateToolSettings(input) { writes.push(input); return { ...input.selection, runtime: 'ready' }; },
+    };
+    const input = { scope: { kind: 'worktree', workspaceId: 'ws', worktreeId: 'first' }, manager, t: key => en[key] };
+    const render = () => nodes(h.render('ToolSettings', input));
+    const toggle = () => render().find(item => item.type === 'switch').props;
+    render();
+    await Promise.resolve();
+    assert.equal(toggle().checked, false);
+    const polling = timer();
+    assert.equal(polls, 1);
+    assert.equal(reads, 1, 'polling must not reread scoped preferences or validate the Workspace');
+    if (outcome === 'saved') {
+      toggle().onChange(true);
+      await Promise.resolve();
+      assert.equal(toggle().checked, true);
+      status.resolve({ runtime: 'loading' });
+      await polling;
+      assert.equal(toggle().checked, true);
+      toggle().onChange(false);
+      assert.deepEqual(writes[1].expected, { enabled: true, tools: WORKTREE_TOOL_IDS });
+      await Promise.resolve();
+      assert.equal(reads, 1);
+      assert.equal(reports.length, 0);
+    } else {
+      if (outcome === 'unmounted') h.dispose();
+      if (outcome === 'target changed') {
+        input.scope = { ...input.scope, worktreeId: 'second' };
+        render();
+      }
+      status.reject(Object.assign(new Error('runtime unavailable'), { code: 'CONNECTION_CALL_FAILED' }));
+      await polling;
+      assert.equal(reports.length, 1);
+      const [{ error, options }] = reports;
+      assert.equal(error.code, 'CONNECTION_CALL_FAILED');
+      assert.equal(error.message, 'runtime unavailable');
+      assert.equal(options.origin, outcome === 'background failure' ? 'cached-refresh' : 'retired');
+      assert.equal(options.context, 'ws · first');
+      if (outcome === 'background failure') assert.equal(toggle().disabled, false);
+    }
+    h.dispose();
+  });
+}
 
 test('a pending toast follows a language change even when the notice identity is unchanged', async () => {
   const h = await toastHarness();

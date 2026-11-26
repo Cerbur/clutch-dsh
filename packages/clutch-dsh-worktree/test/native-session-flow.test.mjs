@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { Context } from '@deepseek-ai/cordis';
 import { Session, SessionId, SESSION_FORMAT_VERSION, appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session';
-import { initializeForgeSession } from '../lib/tool/forge-session.js';
+import { initializeForgeSession } from '../lib/host/forge-session.js';
 import { createRequire } from 'node:module';
 import process from 'node:process';
 import { forgeRows, forgePlugins } from './fixtures/forge-inventory.mjs';
@@ -20,7 +20,7 @@ import { FORGE_BUNDLE, registerForgeActivation } from '../lib/host/forge-activat
 import { createWorktreeToolSessionPort, createNativeWorktreeSessionDirectoryPort } from '../lib/tool/native-session.js';
 import { toWorktreeViewError } from '../lib/client/view/worktree-view-errors.js';
 import { shouldAnnounce } from '../lib/client/surface/notification-queue.js';
-import { dispatchWorktreeSession } from '../lib/tool/dispatch-session.js';
+import { dispatchWorktreeSession } from '../lib/host/dispatch-session.js';
 import { assertGeneratedPath, prepareWorktreePool } from '../lib/provider/generated-path.js';
 import { createWorktreeSessionConnector, retryWorktreeSessionBinding } from '../lib/client/session/worktree-session.js';
 import { WorkspaceShardedSidecarRepository } from '../lib/provider/sidecar/repository.js';

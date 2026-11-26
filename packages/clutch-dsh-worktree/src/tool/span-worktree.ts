@@ -5,7 +5,7 @@ import * as output from './outputs.js';
 import { available } from './context.js';
 import { toolHandoff } from './guidance.js';
 
-import { dispatchWorktreeSession } from './dispatch-session.js';
+import { dispatchWorktreeSession } from '../host/dispatch-session.js';
 const common = {
   prompt: prompt.describe('Self-contained task with goal, scope, acceptance criteria and checks; delivered verbatim. Must be nonblank.'),
   model: model.optional(),

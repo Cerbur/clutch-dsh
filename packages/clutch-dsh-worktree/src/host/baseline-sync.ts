@@ -1,9 +1,9 @@
 import { createWorktreeError, type BranchRecord, type WorktreeRecord } from '../contract/index.js';
 import type { WorktreeManagerService } from '../manage/types.js';
 import type { WorktreeBaselineSyncRequest, WorktreeSessionDispatchResult } from '../contract/baseline-sync.js';
-import type { WorktreeToolSessionPort } from '../tool/native-session.js';
-import { dispatchWorktreeSession } from '../tool/dispatch-session.js';
-import { available } from '../tool/context.js';
+import type { NativeTaskSessionPort } from './native-session.js';
+import { dispatchWorktreeSession } from './dispatch-session.js';
+import { available } from '../contract/worktree-availability.js';
 
 export function baselineSyncPrompt(record: WorktreeRecord, baseRef: string, strategy: 'merge' | 'rebase'): string {
   return [
@@ -25,7 +25,7 @@ export function baselineSyncPrompt(record: WorktreeRecord, baseRef: string, stra
 /** Admission only: Git work is performed by the new native Session under its normal policy. */
 export function createBaselineSync(options: {
   manager: Pick<WorktreeManagerService, 'listWorktrees' | 'listBranches' | 'bindSession' | 'withWorktreeBaseline'>;
-  sessions: WorktreeToolSessionPort;
+  sessions: NativeTaskSessionPort;
   changed(workspaceId: string, worktreeId: string, requestId: string): void;
 }) {
   const lifetime = new AbortController();

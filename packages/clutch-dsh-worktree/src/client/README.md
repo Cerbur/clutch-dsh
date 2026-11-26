@@ -1011,7 +1011,7 @@ recommended new local name for either branch kind; remote refs cannot be checked
 Settings → Worktree → General and Local/Main or managed Dashboard → Settings share `ToolSettings`.
 Local/Main addresses `{ kind: 'local', workspaceId }`; managed Worktrees address
 `{ kind: 'worktree', workspaceId, worktreeId }`. These configurations are independent.
-The existing `/api` adapter owns `getToolSettings` and `updateToolSettings`; Host files stay
+The `/api` adapter uses `getToolRuntime` for status checks, and `getToolSettings` and `updateToolSettings` for scoped preferences. Host files stay
 outside the browser boundary. Native switches expose localized capability names and descriptions.
 Both tool-settings headers use the native `Tag` with `tone="info"` for the localized Experimental
 badge, matching the official plugin manager.
